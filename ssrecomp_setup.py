@@ -33,9 +33,29 @@ ANDROID_MAC_NOTE = 'Android builds from macOS are not supported yet; use a Linux
 # Packaged with tools/package_setup.py, the project's source travels
 # inside it and is unpacked into a folder of its own, where the game is then built.
 FROZEN = getattr(sys, 'frozen', False)
-# Portable mode: with a file portable.txt next to the executable (the AppImage on Linux),
-# everything is kept in the folder ssrecomp-data beside it instead of the user's profile.
-EXE_DIR = os.path.dirname(os.path.abspath(os.environ.get('APPIMAGE') or sys.executable)) if FROZEN else None
+
+
+def self_bundle_path():
+    """If running inside a macOS .app bundle, return the path to the bundle directory."""
+    if not DARWIN:
+        return None
+    p = os.path.abspath(sys.executable)
+    while p and p != os.path.dirname(p):
+        if p.endswith('.app'):
+            return p
+        p = os.path.dirname(p)
+    return None
+
+
+def self_path():
+    """The file or bundle to replace: the AppImage on Linux, .app bundle on macOS, else the executable."""
+    return os.environ.get('APPIMAGE') or self_bundle_path() or sys.executable
+
+
+# Portable mode: with a file portable.txt next to the executable (the AppImage on Linux,
+# the .app bundle on macOS), everything is kept in the folder ssrecomp-data beside it
+# instead of the user's profile.
+EXE_DIR = os.path.dirname(os.path.abspath(self_path())) if FROZEN else None
 PORTABLE = FROZEN and os.path.exists(os.path.join(EXE_DIR, 'portable.txt'))
 if PORTABLE:
     HERE = os.path.join(EXE_DIR, 'ssrecomp-data')
@@ -568,6 +588,9 @@ UPDATE_ASSETS = {   # (system, machine) -> the release file for it
     ('win32', 'AMD64'): 'ssrecomp-setup-windows-x86_64.exe',
     ('linux', 'x86_64'): 'ssrecomp-setup-linux-x86_64',
     ('linux', 'aarch64'): 'ssrecomp-setup-linux-aarch64.AppImage',
+    ('darwin', 'arm64'): 'ssrecomp-setup-macos-arm64.zip',
+    ('darwin', 'aarch64'): 'ssrecomp-setup-macos-arm64.zip',
+    ('darwin', 'x86_64'): 'ssrecomp-setup-macos-x86_64.zip',
 }
 
 
@@ -584,11 +607,6 @@ def version():
 
 def version_key(v):
     return tuple(int(x) for x in v.split('.'))
-
-
-def self_path():
-    """The file to replace: the AppImage when running from one, else the executable."""
-    return os.environ.get('APPIMAGE') or sys.executable
 
 
 def https_open(url):
@@ -638,9 +656,10 @@ def install_update(update, progress):
     digest = sums.get(name)
     if not digest:
         raise RuntimeError('The release has no checksum for ' + name + '.')
-    new = target + '.new'
+    is_zip = name.endswith('.zip')
+    download_file = (target + '.download') if is_zip else (target + '.new')
     h = hashlib.sha256()
-    with https_open(url) as r, open(new, 'wb') as f:
+    with https_open(url) as r, open(download_file, 'wb') as f:
         total, done = int(r.headers.get('Content-Length') or 0), 0
         for block in iter(lambda: r.read(1 << 20), b''):
             f.write(block)
@@ -648,8 +667,45 @@ def install_update(update, progress):
             done += len(block)
             progress(done / total if total else None, 'Downloading v%s: %d of %d MB' % (latest, done >> 20, total >> 20))
     if h.hexdigest() != digest:
-        os.remove(new)
+        os.remove(download_file)
         raise RuntimeError('The download was damaged (checksum mismatch). Try again.')
+    if is_zip:
+        extract_dir = tempfile.mkdtemp(prefix='ssrecomp-update-', dir=os.path.dirname(target))
+        try:
+            if shutil.which('ditto'):
+                subprocess.run(['ditto', '-x', '-k', download_file, extract_dir], check=True)
+            else:
+                import zipfile
+                with zipfile.ZipFile(download_file) as z:
+                    for member in z.infolist():
+                        extracted_path = os.path.join(extract_dir, member.filename)
+                        z.extract(member, extract_dir)
+                        mode = member.external_attr >> 16
+                        if mode:
+                            try:
+                                os.chmod(extracted_path, mode)
+                            except OSError:
+                                pass
+            apps = [os.path.join(extract_dir, f) for f in os.listdir(extract_dir) if f.endswith('.app')]
+            if not apps:
+                raise RuntimeError('No .app bundle found in the downloaded archive.')
+            new_app = apps[0]
+            old = target + '.old'
+            if os.path.exists(old):
+                shutil.rmtree(old) if os.path.isdir(old) else os.remove(old)
+            if os.path.exists(target):
+                os.replace(target, old)
+            os.replace(new_app, target)
+            try:
+                shutil.rmtree(old) if os.path.isdir(old) else os.remove(old)
+            except OSError:
+                pass
+        finally:
+            if os.path.exists(download_file):
+                os.remove(download_file)
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir, ignore_errors=True)
+        return target
     if WINDOWS:
         # A running .exe cannot be overwritten, but it can be renamed; the old copy is
         # removed the next time the program starts.
@@ -658,8 +714,8 @@ def install_update(update, progress):
             os.remove(old)
         os.replace(target, old)
     else:
-        os.chmod(new, 0o755)
-    os.replace(new, target)
+        os.chmod(download_file, 0o755)
+    os.replace(download_file, target)
     return target
 
 
@@ -668,16 +724,25 @@ def restart(path):
     env['PYINSTALLER_RESET_ENVIRONMENT'] = '1'   # the new program is a fresh one, not a child of this
     for var in ('APPIMAGE', 'APPDIR', 'OWD', 'ARGV0'):
         env.pop(var, None)
+    if DARWIN and (path.endswith('.app') or os.path.isdir(path)):
+        if shutil.which('open'):
+            subprocess.Popen(['open', '-n', path], env=env, close_fds=True, start_new_session=True)
+            return
+        exe = os.path.join(path, 'Contents', 'MacOS', 'ssrecomp-setup')
+        if os.path.exists(exe):
+            path = exe
     subprocess.Popen([path], env=env, close_fds=True, start_new_session=not WINDOWS,
                      creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0) if WINDOWS else 0)
 
 
 def remove_old_copy():
-    if FROZEN and WINDOWS:
-        try:
-            os.remove(self_path() + '.old')
-        except OSError:
-            pass
+    if FROZEN:
+        old = self_path() + '.old'
+        if os.path.exists(old):
+            try:
+                shutil.rmtree(old) if os.path.isdir(old) else os.remove(old)
+            except OSError:
+                pass
 
 
 def built_from_older_source():

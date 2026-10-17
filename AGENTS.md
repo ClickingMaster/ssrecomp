@@ -30,6 +30,7 @@ Targets: Linux and Windows first, Android second. macOS is community-maintained.
   AI-assisted code: pret does not accept it. Changes belong in this repository.
 - **Don't change the release asset names** (`ssrecomp-setup-linux-x86_64`,
   `ssrecomp-setup-linux-aarch64.AppImage`, `ssrecomp-setup-windows-x86_64.exe`,
+  `ssrecomp-setup-macos-arm64.zip`, `ssrecomp-setup-macos-x86_64.zip`,
   `SHA256SUMS.txt`): the setup program's updater looks for them.
 
 ## Layout

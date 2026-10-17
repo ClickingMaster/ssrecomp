@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The setup program for macOS can now check for updates and update itself from
+  the setup window and with `--update`, matching Linux and Windows.
+
 ## v0.4.0 — Faster again, cleaner menus
 
 **Downloads:** the setup programs for Linux (x86_64 and arm64), Windows and now

@@ -1,6 +1,9 @@
 """ROM-free portability regressions. Run: python3 -m unittest discover -s tests"""
+import hashlib
+import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -110,6 +113,126 @@ class DarwinSetupTests(unittest.TestCase):
             self.assertEqual((data / 'runtime/version.txt').read_text(), 'new source')
             for name in ('soulsilver.sav', 'ssrecomp.cfg', 'ssrecomp.rom'):
                 self.assertEqual((data / name).read_text(), 'keep me')
+
+    def test_self_bundle_path_and_self_path(self):
+        expected = os.path.abspath('/Applications/ssrecomp-setup.app')
+        bundle_exe = os.path.join(expected, 'Contents', 'MacOS', 'ssrecomp-setup')
+        with patch.object(setup, 'DARWIN', True), patch.object(sys, 'executable', bundle_exe):
+            self.assertEqual(setup.self_bundle_path(), expected)
+            self.assertEqual(setup.self_path(), expected)
+        plain_exe = os.path.abspath('/usr/local/bin/ssrecomp-setup')
+        with patch.object(setup, 'DARWIN', True), patch.object(sys, 'executable', plain_exe):
+            self.assertIsNone(setup.self_bundle_path())
+            self.assertEqual(setup.self_path(), plain_exe)
+
+    def test_macos_check_update_finds_assets(self):
+        fake_release = {
+            'tag_name': 'v0.5.0',
+            'html_url': 'https://github.com/ClickingMaster/ssrecomp/releases/tag/v0.5.0',
+            'assets': [
+                {'name': 'ssrecomp-setup-macos-arm64.zip', 'browser_download_url': 'https://dl/arm64.zip'},
+                {'name': 'ssrecomp-setup-macos-x86_64.zip', 'browser_download_url': 'https://dl/x86_64.zip'},
+                {'name': 'SHA256SUMS.txt', 'browser_download_url': 'https://dl/SHA256SUMS.txt'},
+            ]
+        }
+        for arch, expected_asset in (('arm64', 'https://dl/arm64.zip'), ('x86_64', 'https://dl/x86_64.zip')):
+            with patch.object(setup, 'DARWIN', True), patch.object(sys, 'platform', 'darwin'), \
+                 patch.object(platform, 'machine', return_value=arch), \
+                 patch.object(setup, 'FROZEN', True), patch.object(setup, 'version', return_value='0.4.0'), \
+                 patch.object(setup, 'https_open') as mock_open:
+                mock_resp = unittest.mock.MagicMock()
+                mock_resp.read.return_value = json.dumps(fake_release).encode()
+                mock_resp.__enter__.return_value = mock_resp
+                mock_open.return_value = mock_resp
+                res = setup.check_update()
+                self.assertIsNotNone(res)
+                self.assertEqual(res[0], '0.5.0')
+                self.assertEqual(res[2], expected_asset)
+
+    def test_macos_install_update_replaces_app_bundle(self):
+        with tempfile.TemporaryDirectory(prefix='ssrecomp mac update ') as tmp:
+            app = Path(tmp) / 'ssrecomp-setup.app'
+            (app / 'Contents/MacOS').mkdir(parents=True)
+            (app / 'Contents/MacOS/ssrecomp-setup').write_text('#!/bin/sh\necho v1\n')
+            (app / 'Contents/MacOS/ssrecomp-setup').chmod(0o755)
+
+            new_bundle = Path(tmp) / 'new_src/ssrecomp-setup.app'
+            (new_bundle / 'Contents/MacOS').mkdir(parents=True)
+            (new_bundle / 'Contents/MacOS/ssrecomp-setup').write_text('#!/bin/sh\necho v2\n')
+            (new_bundle / 'Contents/MacOS/ssrecomp-setup').chmod(0o755)
+
+            zip_path = Path(tmp) / 'release.zip'
+            import zipfile
+            with zipfile.ZipFile(zip_path, 'w') as z:
+                for base, _, files in os.walk(new_bundle):
+                    for f in files:
+                        full = Path(base) / f
+                        rel = full.relative_to(new_bundle.parent)
+                        zinfo = zipfile.ZipInfo.from_file(full, str(rel))
+                        zinfo.external_attr = 0o100755 << 16
+                        z.writestr(zinfo, full.read_bytes())
+
+            zip_bytes = zip_path.read_bytes()
+            zip_sha256 = hashlib.sha256(zip_bytes).hexdigest()
+            sums_text = f'{zip_sha256}  ssrecomp-setup-macos-arm64.zip\n'
+
+            def fake_open(url):
+                mock_resp = unittest.mock.MagicMock()
+                if url.endswith('SHA256SUMS.txt'):
+                    mock_resp.read.return_value = sums_text.encode()
+                else:
+                    mock_resp.headers = {'Content-Length': str(len(zip_bytes))}
+                    mock_resp.read.side_effect = [zip_bytes, b'']
+                mock_resp.__enter__.return_value = mock_resp
+                return mock_resp
+
+            update_info = ('0.5.0', 'https://page', 'https://dl/ssrecomp-setup-macos-arm64.zip', 'https://dl/SHA256SUMS.txt')
+            with patch.object(setup, 'DARWIN', True), patch.object(setup, 'self_path', return_value=str(app)), \
+                 patch.object(setup, 'https_open', side_effect=fake_open):
+                result = setup.install_update(update_info, lambda f, l: None)
+            self.assertEqual(result, str(app))
+            self.assertEqual((app / 'Contents/MacOS/ssrecomp-setup').read_text(), '#!/bin/sh\necho v2\n')
+            self.assertFalse((Path(tmp) / 'ssrecomp-setup.app.download').exists())
+            self.assertFalse((Path(tmp) / 'ssrecomp-setup.app.old').exists())
+
+    def test_macos_restart_app_bundle(self):
+        with patch.object(setup, 'DARWIN', True), patch.object(setup, 'WINDOWS', False), \
+             patch('shutil.which', return_value='/usr/bin/open'), \
+             patch('subprocess.Popen') as popen:
+            setup.restart('/Applications/ssrecomp-setup.app')
+            popen.assert_called_once()
+            args = popen.call_args[0][0]
+            self.assertEqual(args, ['open', '-n', '/Applications/ssrecomp-setup.app'])
+
+    def test_remove_old_copy_cleans_bundle(self):
+        with tempfile.TemporaryDirectory(prefix='ssrecomp old bundle ') as tmp:
+            app = Path(tmp) / 'ssrecomp-setup.app'
+            old = Path(tmp) / 'ssrecomp-setup.app.old'
+            old.mkdir()
+            (old / 'Contents').mkdir()
+            (old / 'Contents/info.txt').write_text('old')
+            with patch.object(setup, 'FROZEN', True), patch.object(setup, 'self_path', return_value=str(app)):
+                setup.remove_old_copy()
+            self.assertFalse(old.exists())
+
+    def test_windows_and_linux_update_compatibility(self):
+        # Verify self_path and restart on Windows
+        with patch.object(setup, 'DARWIN', False), patch.object(setup, 'WINDOWS', True), \
+             patch.object(sys, 'executable', r'C:\ssrecomp-setup.exe'), \
+             patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(setup.self_path(), r'C:\ssrecomp-setup.exe')
+            with patch('subprocess.Popen') as popen:
+                setup.restart(setup.self_path())
+                self.assertEqual(popen.call_args[0][0], [r'C:\ssrecomp-setup.exe'])
+
+        # Verify self_path and restart on Linux (AppImage)
+        with patch.object(setup, 'DARWIN', False), patch.object(setup, 'WINDOWS', False), \
+             patch.object(sys, 'executable', '/tmp/mount_123/usr/bin/ssrecomp-setup'), \
+             patch.dict(os.environ, {'APPIMAGE': '/home/user/ssrecomp-setup-linux-aarch64.AppImage'}):
+            self.assertEqual(setup.self_path(), '/home/user/ssrecomp-setup-linux-aarch64.AppImage')
+            with patch('subprocess.Popen') as popen:
+                setup.restart(setup.self_path())
+                self.assertEqual(popen.call_args[0][0], ['/home/user/ssrecomp-setup-linux-aarch64.AppImage'])
 
 
 class AssemblyFormatTests(unittest.TestCase):

@@ -117,10 +117,10 @@ from a copy of this repository (then the game is built in that folder).
 out; **Update** downloads it, checks its checksum, replaces the setup program and
 restarts it. Press **Build** once afterwards to rebuild the game with the new
 version (your save and settings are kept). Without a display:
-`ssrecomp-setup-linux-x86_64 --update`, then `--rom` again.
+`ssrecomp-setup-linux-x86_64 --update` (or the Mac app's executable with `--update`), then `--rom` again.
 
 **Portable mode:** put an empty file named `portable.txt` next to the setup
-program (the `.exe`, or the AppImage on Linux). Everything — the unpacked
+program (the `.exe`, the AppImage on Linux, or the `.app` bundle on macOS). Everything — the unpacked
 source, the build, the save and the settings — then goes into a folder
 `ssrecomp-data` beside it instead, so the whole thing can live on a USB stick or
 another drive and move between PCs. Keep the ROM in that folder too (or on the
