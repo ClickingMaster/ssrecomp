@@ -1,0 +1,50 @@
+# Notice and credits
+
+This repository is a fork of **ssrecomp** by ClickingMaster:
+
+- Upstream: https://github.com/ClickingMaster/ssrecomp (GPL-3.0-or-later)
+- Active game source: https://github.com/ClickingMaster/pokeheartgold-single-screen
+
+The upstream ssrecomp is no longer maintained. Its replacement,
+`pokeheartgold-single-screen`, is the single-screen decompilation of Pokémon
+HeartGold/SoulSilver plus the single-screen frontend. This fork keeps the
+recompiler, the melonDS core and the SDL frontend, and adds a build and launcher
+for the TrimUI Smart Pro / CrossMix.
+
+## No game content
+
+This repository contains **no ROM, save, save state, or generated game code**.
+In particular it does not contain:
+
+- a `.nds` ROM;
+- `gen/`, the game's ARM9 code translated to C++ by `tools/recomp.py`;
+- the built binary in `port/soulsilver/` (it contains the recompiled game);
+- `dist/`, saves, save states, or game screenshots beyond the upstream
+  `docs/screenshots`.
+
+You must own Pokémon SoulSilver (USA) and dump it yourself. `layouts/soulsilver-us.json`
+contains addresses and checksums only, as in upstream ssrecomp.
+
+## Licences
+
+- **ssrecomp / this fork:** GPL-3.0-or-later, see `LICENSE`. The melonDS core
+  (`melonDS/`, version 1.1 with this project's changes) is GPL-3.0; the GPLv3
+  licence of the combined work is required by it.
+- **melonDS:** https://github.com/melonDS-emu/melonDS (GPL-3.0).
+- **pret/pokeheartgold:** https://github.com/pret/pokeheartgold — the
+  decompilation used to make the upstream recompiled code. No decompilation
+  source is included here. Do not send AI-assisted changes to pret; their
+  contribution rules do not accept them.
+- **Single-screen frontend/game changes by ClickingMaster**
+  (https://github.com/ClickingMaster/pokeheartgold-single-screen): the
+  `frontend/` there is MIT with an added requirement to credit "ClickingMaster"
+  by name. The `SSR_NO_RENDER_THREAD` option in this fork comes from there.
+- **SDL2** (zlib licence), **libpng** (libpng licence), **zlib** (zlib licence):
+  build dependencies, not vendored.
+
+Pokémon HeartGold/SoulSilver and their data belong to Nintendo, Creatures Inc.
+and GAME FREAK inc. This project is unofficial and not affiliated with or
+endorsed by them, Nintendo, pret or the melonDS project.
+
+**Made with heavy use of AI.** Expect bugs a person would not have made, and
+review the code with that in mind before reusing it.

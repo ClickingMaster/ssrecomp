@@ -23,6 +23,7 @@
 #include <string.h>
 #include "NDS.h"
 #include "GPU.h"
+#include "GPU3D_Wide.h"
 
 namespace melonDS
 {
@@ -1765,7 +1766,8 @@ void SoftRenderer::RenderFrame(GPU& gpu)
     else if (!FrameIdentical)
     {
         ClearBuffers(gpu);
-        RenderPolygons(gpu, false, &gpu.GPU3D.RenderPolygonRAM[0], gpu.GPU3D.RenderNumPolygons);
+        if (Wide.Owner != &gpu.GPU3D)
+            RenderPolygons(gpu, false, &gpu.GPU3D.RenderPolygonRAM[0], gpu.GPU3D.RenderNumPolygons);
     }
 }
 
@@ -1792,6 +1794,14 @@ void SoftRenderer::RenderThreadFunc(GPU& gpu)
         RenderThreadRendering = true;
         if (FrameIdentical)
         { // If no rendering is needed, just say we're done.
+            Platform::Semaphore_Post(Sema_ScanlineCount, 192);
+        }
+        else if (Wide.Owner == &gpu.GPU3D)
+        {
+            // ssrecomp: in widescreen mode, native 3D is dropped by the compositor
+            // in favor of the widescreen picture. Clear buffers for 2D layer tagging
+            // and skip the expensive software rasterization completely.
+            ClearBuffers(gpu);
             Platform::Semaphore_Post(Sema_ScanlineCount, 192);
         }
         else

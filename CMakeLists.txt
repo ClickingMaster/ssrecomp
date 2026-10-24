@@ -13,8 +13,10 @@ set(SSR_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gen" CACHE PATH "Generated ga
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE RelWithDebInfo)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
+
+add_compile_options(-O3 -fomit-frame-pointer)
 
 # melonDS core is the hardware runtime; its own frontend, JIT and GL renderer are not used.
 set(BUILD_QT_SDL OFF CACHE BOOL "" FORCE)

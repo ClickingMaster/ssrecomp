@@ -2,8 +2,13 @@
 
 ## Unreleased
 
-- The setup program for macOS can now check for updates and update itself from
-  the setup window and with `--update`, matching Linux and Windows.
+- TrimUI Smart Pro / CrossMix build (aarch64, glibc 2.33) and a PortMaster launcher.
+- `SSR_NO_RENDER_THREAD=1` turns off the 3D render thread on 4-core handhelds.
+- The adaptive frameskip no longer skips every other frame at a steady 30 fps.
+- Restored the 2048-sample audio buffer for handhelds.
+- The game starts with less memory: its cartridge data is loaded once instead of copied again.
+- Drawing layered panels skips repeated per-pixel edge checks on rows where they cannot apply.
+  For performance testing, `SSR_COMPOSE_PROF=1` reports the time spent preparing and uploading the picture.
 - A single-screen build of the decompilation (the one-screen game) is recognised when it
   starts and shown as the screen the game itself has chosen, with no merging or
   widescreen changes. The choice is not saved in the settings.

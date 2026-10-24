@@ -1,6 +1,10 @@
 # THIS PROJECT IS NOT BEING WORKED ON AND WILL NOT RECEIVE UPDATES
 ## I am working on this now which is superior to this project: [pokeheartgold-single-screen](https://github.com/ClickingMaster/pokeheartgold-single-screen)
 
+> **TrimUI Smart Pro / CrossMix fork.** This fork adds an aarch64 build for the
+> TrimUI firmware (glibc 2.33), a PortMaster launcher and handheld performance
+> fixes. Start with [`port/README.md`](port/README.md). It contains no game code
+> or data; see [`NOTICE`](NOTICE).
 
 # ssrecomp
 

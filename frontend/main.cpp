@@ -15,6 +15,10 @@
 #include <string>
 #include <chrono>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <functional>
 #include "sampler.h"
 #include <vector>
 #include <tuple>
@@ -338,6 +342,27 @@ static std::vector<uint8_t> ReadFile(const std::string& path)
     return data;
 }
 
+// melonDS takes ownership of the cartridge data. Read straight into an owned buffer
+// so a large ROM is not copied and kept twice in memory at startup.
+static std::unique_ptr<uint8_t[]> ReadROM(const std::string& path, u32& length)
+{
+    length = 0;
+    SDL_RWops* rw = SDL_RWFromFile(path.c_str(), "rb");
+    if (!rw) return nullptr;
+    const Sint64 size = SDL_RWsize(rw);
+    std::unique_ptr<uint8_t[]> data;
+    if (size > 0 && size <= UINT32_MAX)
+    {
+        data = std::make_unique<uint8_t[]>((size_t)size);
+        if (SDL_RWread(rw, data.get(), 1, (size_t)size) == (size_t)size)
+            length = (u32)size;
+        else
+            data.reset();
+    }
+    SDL_RWclose(rw);
+    return data;
+}
+
 static void FlushSave(const std::string& path)
 {
     if (!Host::SaveIsDirty || path.empty()) return;
@@ -384,6 +409,7 @@ struct Options
     bool swapped = false;
     bool logSections = false;
     bool noWide = false;                 // turn the widescreen 3D renderer off
+    bool wideOption = false;             // turn the widescreen 3D renderer on
     bool benchCompose = false;           // headless: compose the merged picture every frame, to time it
     bool autoFocus = true;
     bool layoutGiven = false;
@@ -474,6 +500,7 @@ static bool ParseArgs(int argc, char** argv, Options& o)
         else if (a == "--swap") o.swapped = true;
         else if (a == "--log-sections") o.logSections = true;
         else if (a == "--no-wide") o.noWide = true;
+        else if (a == "--wide") o.wideOption = true;
         else if (a == "--bench-compose") o.benchCompose = true;
         else if (a == "--no-auto-focus") o.autoFocus = false;
         else if (a == "--state-save") o.stateSave = next();
@@ -531,7 +558,8 @@ static void SetClock(NDS& nds, bool fixed)
     nds.RTC.SetDateTime(y, mo, d, h, mi, sec);
 }
 
-static std::unique_ptr<NDS> MakeConsole(const std::vector<uint8_t>& rom, const std::vector<uint8_t>& sav, bool fixedClock)
+static std::unique_ptr<NDS> MakeConsole(std::unique_ptr<uint8_t[]>&& rom, u32 romLength,
+    const std::vector<uint8_t>& sav, bool fixedClock)
 {
     NDSCart::NDSCartArgs cartArgs;
     if (!sav.empty())
@@ -540,7 +568,7 @@ static std::unique_ptr<NDS> MakeConsole(const std::vector<uint8_t>& rom, const s
         memcpy(cartArgs.SRAM.get(), sav.data(), sav.size());
         cartArgs.SRAMLength = (u32)sav.size();
     }
-    auto cart = NDSCart::ParseROM(rom.data(), (u32)rom.size(), nullptr, std::move(cartArgs));
+    auto cart = NDSCart::ParseROM(std::move(rom), romLength, nullptr, std::move(cartArgs));
     if (!cart)
     {
         fprintf(stderr, "ROM rejected by the core\n");
@@ -924,8 +952,8 @@ struct Settings
     int focusMode = 0;
     bool fullscreen = false;
     bool smooth = false;
-    bool wide = true;   // widescreen 3D overworld
-    int wideLines = 720; // height the widescreen 3D is drawn at, at most
+    bool wide = false;  // widescreen 3D overworld (off by default for handheld performance)
+    int wideLines = 720;
     bool byLabel = true;
     bool fps60 = true;
     // Right stick as a touch cursor, right trigger as the press, and the stick clicks that
@@ -1066,16 +1094,23 @@ int main(int argc, char** argv)
     }
     if (opt.save.empty()) opt.save = opt.rom + ".sav";
 
-    std::vector<uint8_t> rom = ReadFile(opt.rom);
-    if (rom.empty())
+    u32 romLength = 0;
+    std::unique_ptr<uint8_t[]> rom = ReadROM(opt.rom, romLength);
+    if (!rom)
     {
         fprintf(stderr, "cannot read ROM: %s\n", opt.rom.c_str());
         return 1;
     }
 
     std::vector<uint8_t> sav = ReadFile(opt.save);
-    fprintf(stderr, "ROM %s: %zu bytes; save %s: %zu bytes\n", opt.rom.c_str(), rom.size(), opt.save.c_str(), sav.size());
-    auto nds = MakeConsole(rom, sav, opt.headless);
+    fprintf(stderr, "ROM %s: %u bytes; save %s: %zu bytes\n", opt.rom.c_str(), romLength, opt.save.c_str(), sav.size());
+    std::unique_ptr<uint8_t[]> refRom;
+    if (opt.lockstep)
+    {
+        refRom = std::make_unique<uint8_t[]>(romLength);
+        memcpy(refRom.get(), rom.get(), romLength);
+    }
+    auto nds = MakeConsole(std::move(rom), romLength, sav, opt.headless);
     if (!nds) return 1;
     nds->ARM9.RecompEnable = opt.recomp;
 
@@ -1084,7 +1119,7 @@ int main(int argc, char** argv)
     std::unique_ptr<NDS> ref;
     if (opt.lockstep)
     {
-        ref = MakeConsole(rom, sav, true);
+        ref = MakeConsole(std::move(refRom), romLength, sav, true);
         if (!ref) return 1;
         nds->ARM9.RecompEnable = true;
         rc_single = true;
@@ -1137,10 +1172,16 @@ int main(int argc, char** argv)
     if (!opt.autoFocus) cfg.focusMode = 1;
     if (opt.headless) cfg.fps60 = false; // tests compare images with the plain renderer unless asked
     if (opt.interp60 >= 0) cfg.fps60 = opt.interp60 == 1;
+    if (opt.noWide) cfg.wide = false;
+    if (opt.wideOption) cfg.wide = true;
     nds->GPU.GPU3D.InterpolationEnabled = cfg.fps60 && !opt.lockstep;
     // The DS-resolution 3D picture is drawn on its own thread, alongside the CPU emulation.
     if (!getenv("SSR_NO_RENDER_THREAD"))
-        static_cast<melonDS::SoftRenderer&>(nds->GPU.GetRenderer3D()).SetThreaded(true, nds->GPU);
+        // The 3D render thread overlaps rasterising with emulation. On a 4-core
+        // handheld it can fight the emulation and the widescreen workers for cores;
+        // SSR_NO_RENDER_THREAD=1 turns it off for testing.
+        if (!getenv("SSR_NO_RENDER_THREAD"))
+            static_cast<melonDS::SoftRenderer&>(nds->GPU.GetRenderer3D()).SetThreaded(true, nds->GPU);
 
     // SSR_PERF=1 prints where the time of a frame goes, averaged over 300 frames.
     const bool perfOn = getenv("SSR_PERF") != nullptr;
@@ -1235,7 +1276,7 @@ int main(int argc, char** argv)
         want.freq = 48000;
         want.format = AUDIO_S16SYS;
         want.channels = 2;
-        want.samples = 1024;
+        want.samples = getenv("SSR_AUDIO_SAMPLES") ? atoi(getenv("SSR_AUDIO_SAMPLES")) : 2048;
         audio = SDL_OpenAudioDevice(nullptr, 0, &want, nullptr, 0);
         if (audio) SDL_PauseAudioDevice(audio, 0);
 
@@ -1912,20 +1953,10 @@ int main(int argc, char** argv)
                 const float ease = slide * slide * (3 - 2 * slide);
                 const float picX = L * ease;
                 sc.items[0].dx = picX;
-                for (float x = picX - 2; x > L - 2; x -= 2)
-                {
-                    Element strip = Crop(0, 0, 0, 2, 192);
-                    strip.dx = x;
-                    strip.crisp = true;
-                    sc.items.push_back(strip);
-                }
-                for (float x = picX + 256; x < R; x += 2)
-                {
-                    Element strip = Crop(0, 0, 0, 2, 192);
-                    strip.dx = x;
-                    strip.crisp = true;
-                    sc.items.push_back(strip);
-                }
+                if (picX > L)
+                    sc.items.push_back(FillRect(L, 0, (int)(picX - L) + 1, 192, screens[0].pixels[0] & 0xFFFFFF));
+                if (R > picX + 256)
+                    sc.items.push_back(FillRect(picX + 256, 0, (int)(R - (picX + 256)) + 1, 192, screens[0].pixels[255] & 0xFFFFFF));
                 if (showing)
                 {
                     int x0 = std::max(0, cx0 - 2), y0 = std::max(0, cy0 - 2);
@@ -2379,6 +2410,61 @@ int main(int argc, char** argv)
         perfAcc[phase] += t - perfT;
         perfT = t;
     };
+
+    struct AsyncFrameData {
+        std::vector<uint32_t> topPixels;
+        std::vector<uint32_t> botPixels;
+        std::vector<uint8_t> topFlags;
+        std::vector<uint8_t> botFlags;
+        std::vector<uint32_t> widePixels;
+        WideImage wideImage;
+        Scene scene;
+        Layout layout;
+        SDL_Rect rects[2] = {};
+        bool merged = false;
+        unsigned frame = 0;
+        bool valid = false;
+
+        void Init() {
+            topPixels.resize(256 * 192);
+            botPixels.resize(256 * 192);
+            topFlags.resize(256 * 192);
+            botFlags.resize(256 * 192);
+            widePixels.resize(384 * 216);
+        }
+    };
+    AsyncFrameData asyncFrames[2];
+    asyncFrames[0].Init();
+    asyncFrames[1].Init();
+    int asyncWrite = 0;
+    int asyncRead = 1;
+    // SSR_PERF measures each phase on one thread from start to finish, so it runs without
+    // the pipeline; otherwise the emulation and drawing phases overlap and the numbers
+    // would be meaningless (and both threads would update the same counters).
+    bool asyncPipelined = !opt.headless && !opt.lockstep && opt.shotDir.empty() &&
+        !perfOn && (getenv("SSR_NO_ASYNC") == nullptr);
+
+    std::mutex emulMtx;
+    std::condition_variable cvEmulStart, cvEmulDone;
+    bool emulBusy = false;
+    bool emulExit = false;
+    std::function<void()> emulTask;
+
+    std::thread emulWorker;
+    if (asyncPipelined)
+    {
+        emulWorker = std::thread([&]() {
+            std::unique_lock<std::mutex> lk(emulMtx);
+            while (!emulExit)
+            {
+                cvEmulStart.wait(lk, [&]() { return emulBusy || emulExit; });
+                if (emulExit) break;
+                if (emulTask) emulTask();
+                emulBusy = false;
+                cvEmulDone.notify_one();
+            }
+        });
+    }
 
     while (running && !Host::StopRequested)
     {
@@ -3058,13 +3144,19 @@ int main(int argc, char** argv)
             TracePrevCPSR = nds->ARM9.CPSR;
         }
 
-        perfMark(0);
+        const u32* top = nullptr;
+        const u32* bot = nullptr;
+        ScreenImage screenImages[2] = {};
         int got = 0;
-        if (!paused)
-        {
-            nds->SetKeyMask(~keys & 0xFFF);
-            if (touching) nds->TouchScreen((u16)touchX, (u16)touchY);
-            else nds->ReleaseScreen();
+
+        auto runEmulate = [&]() {
+            perfMark(0);
+            got = 0;
+            if (!paused)
+            {
+                nds->SetKeyMask(~keys & 0xFFF);
+                if (touching) nds->TouchScreen((u16)touchX, (u16)touchY);
+                else nds->ReleaseScreen();
 
             for (int i = 0; i < speed; i++)
             {
@@ -3113,20 +3205,18 @@ int main(int argc, char** argv)
                     frame - 1, TracePos, TraceLog.size());
                 TraceFailed = true;
             }
-            if (TraceFailed) break;
+            if (TraceFailed) return;
             if (frame % 300 == 0)
                 fprintf(stderr, "[lockstep] %u frames identical (%zu instructions in the last one)\n", frame, TraceLog.size());
         }
 
-        const u32* top = nds->GPU.Framebuffer[nds->GPU.FrontBuffer][singleView() ? 1 : 0].get();
-        const u32* bot = nds->GPU.Framebuffer[nds->GPU.FrontBuffer][singleView() ? 0 : 1].get();
+        top = nds->GPU.Framebuffer[nds->GPU.FrontBuffer][singleView() ? 1 : 0].get();
+        bot = nds->GPU.Framebuffer[nds->GPU.FrontBuffer][singleView() ? 0 : 1].get();
         // The two screens with their per-pixel layer flags, for the merged view.
         auto& renderer2d = static_cast<GPU2D::SoftRenderer&>(nds->GPU.GetRenderer2D());
         const int topUnit = topUnitOf();
-        const ScreenImage screenImages[2] = {
-            { top, renderer2d.LayerFlags[topUnit] },
-            { bot, renderer2d.LayerFlags[1 - topUnit] },
-        };
+        screenImages[0] = { top, renderer2d.LayerFlags[topUnit] };
+        screenImages[1] = { bot, renderer2d.LayerFlags[1 - topUnit] };
         const bool fieldNow = rc_probe_last_frame(probeFieldMap) + 1 >= rc_current_frame() && rc_probe_last_frame(probeFieldMap);
         for (u32 sec = 0; sec < rc_num_sections; sec++)
         {
@@ -3295,8 +3385,44 @@ int main(int argc, char** argv)
                 (unsigned long long)fb, (unsigned long long)ram, nds->ARM9.R[15], nds->ARM7.R[15]);
         }
 
-        // Overlay: touch cursor, status message, pause menu.
+        if (merged) takeWideImage();
+
+        if (asyncPipelined)
+        {
+            AsyncFrameData& af = asyncFrames[asyncWrite];
+            if (top) memcpy(af.topPixels.data(), top, 256 * 192 * 4);
+            if (bot) memcpy(af.botPixels.data(), bot, 256 * 192 * 4);
+            memcpy(af.topFlags.data(), screenImages[0].flags, 256 * 192);
+            memcpy(af.botFlags.data(), screenImages[1].flags, 256 * 192);
+            af.wideImage = wideImage;
+            if (wideImage.pixels && wideImage.w > 0 && wideImage.h > 0)
+            {
+                size_t n = (size_t)wideImage.w * wideImage.h;
+                if (af.widePixels.size() < n) af.widePixels.resize(n);
+                memcpy(af.widePixels.data(), wideImage.pixels, n * 4);
+                af.wideImage.pixels = af.widePixels.data();
+            }
+            else af.wideImage.pixels = nullptr;
+
+            af.scene = scene;
+            af.layout = layout;
+            af.rects[0] = rects[0];
+            af.rects[1] = rects[1];
+            af.merged = merged;
+            af.frame = frame;
+            af.valid = true;
+        }
+    };
+
+    // Overlay: touch cursor, status message, pause menu.
         bool overlayUsed = false;
+        bool skipDraw = false;
+        bool wantShot = false;
+        // Builds the pause menu, touch cursor, FPS counter and toast for the frame that is
+        // about to be shown. In the pipelined path this runs before the emulation thread is
+        // started, so it uses the previous frame's number and the current input state.
+        auto prepareOverlay = [&]() {
+        overlayUsed = false;
         canvas.Resize(outW, outH);
         canvas.Clear();
         const SDL_Rect cursorRect = merged
@@ -3362,7 +3488,7 @@ int main(int argc, char** argv)
             overlayUsed = true;
         }
 
-        bool wantShot = !opt.shotDir.empty() &&
+        wantShot = !opt.shotDir.empty() &&
             (opt.shotAt.count(frame) || g_sceneShots.count(frame) || (opt.shotEvery && frame % opt.shotEvery == 0));
         if (wantShot && opt.shotLayers)
         {
@@ -3432,19 +3558,40 @@ int main(int argc, char** argv)
             perfMark(3);
         }
 
-        if (!opt.headless && top && bot)
+        static int skippedFrames = 0;
+        skipDraw = false;
+        if (!opt.headless && !menu.open)
         {
+            uint64_t preCheck = SDL_GetPerformanceCounter();
+            // Only skip when more than two frames behind. At a steady 30 fps the loop is
+            // one frame behind; skipping there halved the presented frames (and looked
+            // choppier) without making the emulation any faster.
+            if (preCheck > nextTick && (preCheck - nextTick) > (uint64_t)(frameTime * perfFreq * 2) && skippedFrames == 0 && !wantShot && opt.shotDir.empty())
+            {
+                skipDraw = true;
+                skippedFrames++;
+            }
+            else
+            {
+                skippedFrames = 0;
+            }
+        }
+        };
+
+        auto drawPresent = [&](const u32* drawTop, const u32* drawBot,
+                               const ScreenImage drawScreens[2], const WideImage* drawWide,
+                               const Scene& drawScene, const Layout& drawLayout, const SDL_Rect drawRects[2],
+                               bool drawMerged) {
+            perfMark(2);
+            if (!drawTop || !drawBot || skipDraw || opt.headless) return;
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
             SDL_RenderClear(renderer);
-            if (merged)
+            if (drawMerged)
             {
-                // The graphics card puts the pieces together (gpucompose.h). SSR_CPU_COMPOSE=1
-                // uses the compositor of the headless tests instead, for comparing the two.
-                takeWideImage();
                 if (!cpuCompose)
                 {
                     if (!gpuCompose) gpuCompose = new GpuCompositor(renderer);
-                    gpuCompose->Draw(scene, screenImages, outW, outH, cfg.smooth, &wideImage);
+                    gpuCompose->Draw(drawScene, drawScreens, outW, outH, cfg.smooth, drawWide);
                     perfMark(3);
                 }
                 else
@@ -3455,7 +3602,7 @@ int main(int argc, char** argv)
                         cw = outW * 768 / outH;
                         ch = 768;
                     }
-                    MergedCompose(scene, screenImages, cw, ch, mergedImage, cfg.smooth, &wideImage);
+                    MergedCompose(drawScene, drawScreens, cw, ch, mergedImage, cfg.smooth, drawWide);
                     perfMark(3);
                     if (!mergedTex || mergedTexW != cw || mergedTexH != ch)
                     {
@@ -3471,13 +3618,13 @@ int main(int argc, char** argv)
             }
             else
             {
-                SDL_UpdateTexture(tex[0], nullptr, top, 256 * 4);
-                SDL_UpdateTexture(tex[1], nullptr, bot, 256 * 4);
-                int first = LayoutDrawFirst(layout);
+                SDL_UpdateTexture(tex[0], nullptr, drawTop, 256 * 4);
+                SDL_UpdateTexture(tex[1], nullptr, drawBot, 256 * 4);
+                int first = LayoutDrawFirst(drawLayout);
                 for (int n = 0; n < 2; n++)
                 {
                     int i = n == 0 ? first : 1 - first;
-                    if (rects[i].w > 0) SDL_RenderCopy(renderer, tex[i], nullptr, &rects[i]);
+                    if (drawRects[i].w > 0) SDL_RenderCopy(renderer, tex[i], nullptr, &drawRects[i]);
                 }
             }
             if (overlayUsed)
@@ -3497,7 +3644,6 @@ int main(int argc, char** argv)
                     SDL_RenderCopy(renderer, overlayTex, &dr, &dr);
                 }
             }
-            // In a window, screenshots are read back from the renderer: exactly what is shown.
             if (wantShot)
             {
                 std::vector<uint32_t> back((size_t)outW * outH);
@@ -3510,7 +3656,6 @@ int main(int argc, char** argv)
             }
             if (touchPadUsed && touchPad.visible)
             {
-                // Lit by what the fingers hold (by label, as drawn).
                 bool held[PAD_COUNT] = {};
                 bool menuHeld = false;
                 touchPad.Apply(held, menuHeld);
@@ -3518,28 +3663,108 @@ int main(int argc, char** argv)
             }
             SDL_RenderPresent(renderer);
             perfMark(4);
-            // Frames shown in the last whole second, for the FPS counter.
-            presented++;
-            const uint32_t ms = SDL_GetTicks();
-            if (ms - fpsSince >= 1000)
+        };
+
+        static bool firstFrame = true;
+        if (asyncPipelined)
+        {
+            if (firstFrame)
             {
-                shownFps = (int)(presented * 1000 / (ms - fpsSince));
-                presented = 0;
-                fpsSince = ms;
+                firstFrame = false;
+                runEmulate();
+                std::swap(asyncRead, asyncWrite);
             }
 
-            nextTick += (uint64_t)(frameTime * perfFreq);
-            uint64_t now = SDL_GetPerformanceCounter();
-            if (now < nextTick)
+            prepareOverlay();
+            emulTask = runEmulate;
             {
-                // Sleep for most of the wait and spin for the last part of a millisecond:
-                // frames then start within a few microseconds of an even 16.7 ms apart.
-                double left = (double)(nextTick - now) / perfFreq;
-                if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
-                while (SDL_GetPerformanceCounter() < nextTick) {}
+                std::lock_guard<std::mutex> lk(emulMtx);
+                emulBusy = true;
+                cvEmulStart.notify_one();
             }
-            else if (now - nextTick > perfFreq / 4) nextTick = now;
-            perfMark(5);
+
+            const AsyncFrameData& pf = asyncFrames[asyncRead];
+            if (pf.valid)
+            {
+                const ScreenImage pScreens[2] = {
+                    { pf.topPixels.data(), pf.topFlags.data() },
+                    { pf.botPixels.data(), pf.botFlags.data() }
+                };
+                drawPresent(pf.topPixels.data(), pf.botPixels.data(), pScreens,
+                            pf.wideImage.pixels ? &pf.wideImage : nullptr,
+                            pf.scene, pf.layout, pf.rects, pf.merged);
+            }
+            else if (skipDraw)
+            {
+                perfMark(4);
+            }
+
+            if (pf.valid && !opt.headless)
+            {
+                presented++;
+                const uint32_t ms = SDL_GetTicks();
+                if (ms - fpsSince >= 1000)
+                {
+                    shownFps = (int)(presented * 1000 / (ms - fpsSince));
+                    presented = 0;
+                    fpsSince = ms;
+                }
+
+                nextTick += (uint64_t)(frameTime * perfFreq);
+                uint64_t now = SDL_GetPerformanceCounter();
+                if (now < nextTick)
+                {
+                    double left = (double)(nextTick - now) / perfFreq;
+                    if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
+                    while (SDL_GetPerformanceCounter() < nextTick) {}
+                }
+                else if (now - nextTick > (uint64_t)(frameTime * perfFreq * 2))
+                {
+                    nextTick = now;
+                }
+                perfMark(5);
+            }
+
+            {
+                std::unique_lock<std::mutex> lk(emulMtx);
+                cvEmulDone.wait(lk, [&]() { return !emulBusy; });
+            }
+            std::swap(asyncRead, asyncWrite);
+        }
+        else
+        {
+            runEmulate();
+            // Lockstep only runs without the pipeline; a mismatch has to stop the loop, not
+            // just the emulation lambda.
+            if (TraceFailed) break;
+            prepareOverlay();
+            drawPresent(top, bot, screenImages, merged ? &wideImage : nullptr, scene, layout, rects, merged);
+            if (skipDraw) perfMark(4);
+            if (!opt.headless && top && bot)
+            {
+                presented++;
+                const uint32_t ms = SDL_GetTicks();
+                if (ms - fpsSince >= 1000)
+                {
+                    shownFps = (int)(presented * 1000 / (ms - fpsSince));
+                    presented = 0;
+                    fpsSince = ms;
+                }
+
+                nextTick += (uint64_t)(frameTime * perfFreq);
+                uint64_t now = SDL_GetPerformanceCounter();
+                if (now < nextTick)
+                {
+                    double left = (double)(nextTick - now) / perfFreq;
+                    if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
+                    while (SDL_GetPerformanceCounter() < nextTick) {}
+                }
+                else if (now - nextTick > (uint64_t)(frameTime * perfFreq * 2))
+                {
+                    nextTick = now;
+                }
+                perfMark(5);
+            }
         }
 
         if (!opt.stateSave.empty() && scriptClock == opt.stateSaveAt && !holdScript)
@@ -3554,6 +3779,16 @@ int main(int argc, char** argv)
             if (!opt.stateSave.empty() && !WriteSnapshot(*nds, opt.stateSave, frame)) fprintf(stderr, "snapshot failed\n");
             running = false;
         }
+    }
+
+    if (asyncPipelined && emulWorker.joinable())
+    {
+        {
+            std::lock_guard<std::mutex> lk(emulMtx);
+            emulExit = true;
+            cvEmulStart.notify_one();
+        }
+        emulWorker.join();
     }
 
     Sampler::Stop();
