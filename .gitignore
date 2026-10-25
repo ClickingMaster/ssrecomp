@@ -17,6 +17,7 @@
 *.nef
 # Per-user settings and test output
 ssrecomp.cfg
+!/port/soulsilver/ssrecomp.cfg
 /build.log
 /game.log
 /test/
@@ -25,3 +26,14 @@ __pycache__/
 /gen.new/
 /dist/
 .DS_Store
+
+# Fork additions: ROM archives and the TSP port staging
+*.zip
+*.7z
+*.rar
+*.nds.*
+*.sav.*
+*.state.*
+*.st.*
+*.log
+port/soulsilver/ssrecomp

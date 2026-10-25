@@ -4,6 +4,11 @@ This file is for AI coding agents (and people) working on ssrecomp. The README
 is the user documentation; read its "How the recompiled code works" and
 "Testing" sections before changing the recompiler.
 
+For this fork's TrimUI Smart Pro work, also read `port/README.md` and
+`port/PERFORMANCE.md`. The async pipeline is already implemented, and the
+recorded A53 benchmark favours the interpreter. Do not substitute the upstream
+PC performance figures for measurements on the console.
+
 ## What this is
 
 A static recompiler for Pokémon SoulSilver (US) built on the melonDS 1.1 core.

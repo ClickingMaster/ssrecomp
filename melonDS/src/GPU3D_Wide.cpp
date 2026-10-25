@@ -647,6 +647,11 @@ struct WideAccess
             // thread of a core slow down the emulation running on the first, and measured
             // (6 cores, 12 threads) 3-5 threads were quicker overall than 10.
             n = (int)std::thread::hardware_concurrency() / 2 - 1;
+#else
+            // On ARM64 SoCs with 4 cores (such as Cortex-A53), now that native 3D software rasterization
+            // is skipped in widescreen mode, 2 worker threads provide the optimal throughput without contention.
+            if (std::thread::hardware_concurrency() == 4) n = 2;
+            else if (std::thread::hardware_concurrency() < 4) n = 1;
 #endif
             if (const char* forced = getenv("SSR_WIDE_THREADS")) n = atoi(forced);
             Pool = std::make_unique<Workers>(std::clamp(n, 1, 16));
@@ -661,14 +666,17 @@ struct WideAccess
             const int rowA = index * stripRows, rowB = std::min(H, rowA + stripRows);
             const size_t stripPixels = (size_t)(rowB - rowA) * W;
             static thread_local StripBuffers buffers;
-            // (a group of pixels at the end of the last row reads a little past it)
-            buffers.Depth.resize((size_t)stripRows * W + Lanes);
-            buffers.Attr.resize((size_t)stripRows * W);
-            buffers.Writer.resize((size_t)stripRows * W + Lanes);
+            const size_t neededDepth = (size_t)stripRows * W + Lanes;
+            if (buffers.Depth.size() < neededDepth)
+            {
+                buffers.Depth.resize(neededDepth);
+                buffers.Attr.resize((size_t)stripRows * W);
+                buffers.Writer.resize(neededDepth);
+            }
             std::fill(Back.begin() + (size_t)rowA * W, Back.begin() + (size_t)rowB * W, clearColor);
             std::fill(buffers.Depth.begin(), buffers.Depth.begin() + stripPixels, clearZ);
-            std::fill(buffers.Attr.begin(), buffers.Attr.begin() + stripPixels, clearAttr);
-            std::fill(buffers.Writer.begin(), buffers.Writer.begin() + stripPixels, 0xFFFF);
+            memset(buffers.Attr.data(), clearAttr, stripPixels);
+            memset(buffers.Writer.data(), 0xFF, stripPixels * sizeof(u16));
 
             // One copy of the loop per kind of triangle (textured or not, Z- or W-buffered,
             // one colour or shaded), so that each pixel tests and keeps live only what its

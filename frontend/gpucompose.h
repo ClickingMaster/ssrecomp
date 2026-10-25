@@ -4,6 +4,8 @@
 // and is what the headless tests use; the two have to be kept in step.
 #pragma once
 
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
 #include <SDL.h>
 #include "merged.h"
@@ -21,6 +23,8 @@ public:
 
     void Draw(const Scene& scene, const ScreenImage screens[2], int outW, int outH, bool smooth, const WideImage* wide)
     {
+        static const bool profile = std::getenv("SSR_COMPOSE_PROF") != nullptr;
+        const Uint64 frameStart = profile ? SDL_GetPerformanceCounter() : 0;
         uint32_t bg = 0;
         if (scene.bgScreen >= 0) bg = screens[scene.bgScreen].pixels[scene.bgY * 256 + scene.bgX] & 0xFFFFFF;
         const bool useWide = scene.wide && wide && wide->pixels && wide->w > 0 && wide->h > 0;
@@ -93,7 +97,9 @@ public:
             if (plain)
             {
                 SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
+                const Uint64 start = profile ? SDL_GetPerformanceCounter() : 0;
                 SDL_UpdateTexture(tex, nullptr, src.pixels + el.sy * 256 + el.sx, 256 * 4);
+                if (profile) UploadTicks += SDL_GetPerformanceCounter() - start;
             }
             else
             {
@@ -102,21 +108,25 @@ public:
                 if (!premul) SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
                 Buf.resize((size_t)el.sw * el.sh);
                 const uint32_t al = el.alpha;
+                const Uint64 packStart = profile ? SDL_GetPerformanceCounter() : 0;
                 for (int y = 0; y < el.sh; y++)
                 {
                     const int sy = el.sy + y;
                     const uint32_t* row = src.pixels + sy * 256 + el.sx;
                     const uint8_t* frow = src.flags ? src.flags + sy * 256 + el.sx : nullptr;
                     uint32_t* out = &Buf[(size_t)y * el.sw];
+                    // A row outside the cut/corner/ring needs no corresponding per-pixel checks.
+                    const bool cutRow = sy >= el.cutY;
+                    const bool cornerRow = spriteKey && std::min(y, el.sh - 1 - y) < el.dropSpriteCorner;
+                    const bool ringRow = !el.keyRing || std::min(y, el.sh - 1 - y) < el.keyRing;
                     for (int x = 0; x < el.sw; x++)
                     {
                         uint32_t c = row[x] & 0xFFFFFF;
-                        bool skip = (el.sx + x >= el.cutX && sy >= el.cutY) ||
+                        bool skip = (cutRow && el.sx + x >= el.cutX) ||
                             (el.drop && frow && (LayerClass(frow[x]) & el.drop)) ||
-                            (spriteKey && LayerClass(frow[x]) == LAYER_OBJ && std::min(x, el.sw - 1 - x) < el.dropSpriteCorner &&
-                                std::min(y, el.sh - 1 - y) < el.dropSpriteCorner) ||
+                            (cornerRow && LayerClass(frow[x]) == LAYER_OBJ && std::min(x, el.sw - 1 - x) < el.dropSpriteCorner) ||
                             (keyed && MergedKeyed(el, c) &&
-                                (!el.keyRing || std::min({ x, el.sw - 1 - x, y, el.sh - 1 - y }) < el.keyRing));
+                                (ringRow || std::min(x, el.sw - 1 - x) < el.keyRing));
                         if (skip)
                             out[x] = premul ? 0 : c;
                         else if (premul && al != 255)
@@ -126,9 +136,24 @@ public:
                             out[x] = (al << 24) | c;
                     }
                 }
+                if (profile) PackTicks += SDL_GetPerformanceCounter() - packStart;
+                const Uint64 uploadStart = profile ? SDL_GetPerformanceCounter() : 0;
                 SDL_UpdateTexture(tex, nullptr, Buf.data(), el.sw * 4);
+                if (profile) UploadTicks += SDL_GetPerformanceCounter() - uploadStart;
             }
             SDL_RenderCopy(R, tex, nullptr, &dst);
+        }
+        if (profile)
+        {
+            TotalTicks += SDL_GetPerformanceCounter() - frameStart;
+            if (++ProfileFrames == 120)
+            {
+                const double ms = 1000.0 / (SDL_GetPerformanceFrequency() * ProfileFrames);
+                std::fprintf(stderr, "compose: total %.2f ms/frame, pixel preparation %.2f, texture uploads %.2f (120 frames)\n",
+                    TotalTicks * ms, PackTicks * ms, UploadTicks * ms);
+                TotalTicks = PackTicks = UploadTicks = 0;
+                ProfileFrames = 0;
+            }
         }
     }
 
@@ -245,4 +270,6 @@ private:
     std::vector<SDL_Rect> Spans;
     std::vector<uint32_t> Buf;
     uint32_t Edge[192];
+    Uint64 TotalTicks = 0, PackTicks = 0, UploadTicks = 0;
+    int ProfileFrames = 0;
 };
