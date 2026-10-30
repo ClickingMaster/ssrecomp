@@ -357,6 +357,7 @@ void ARMv5::JumpTo(u32 addr, bool restorecpsr)
     }
 
     NDS.MonitorARM9Jump(addr);
+    if (RecompWatch) RecompWatchJump(this, addr);
 }
 
 // ssrecomp: the ARM7 runs from main RAM or WRAM almost all the time; those are

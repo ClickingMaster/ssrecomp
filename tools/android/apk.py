@@ -211,6 +211,12 @@ def write_aligned(z, name, data, compress, align):
 
 
 def build(skeleton, abi, libmain, libsdl, rom, key_path, out):
+    return build_multi(skeleton, {abi: (libmain, libsdl)}, rom, key_path, out)
+
+
+def build_multi(skeleton, libs, rom, key_path, out):
+    """libs: ABI -> (libmain.so, libSDL2.so), one pair per CPU type the APK runs on; rom may
+    be None (the TV launcher, whose start menu finds the ROM on the device)."""
     tmp = out + '.unsigned'
     with zipfile.ZipFile(skeleton) as src, zipfile.ZipFile(tmp, 'w') as z:
         for item in src.infolist():
@@ -218,9 +224,11 @@ def build(skeleton, abi, libmain, libsdl, rom, key_path, out):
             # Android 11 and later want resources.arsc uncompressed and 4-byte aligned.
             stored = item.filename == 'resources.arsc' or item.filename.endswith('.png')
             write_aligned(z, item.filename, data, not stored, 4)
-        for path, name in ((libsdl, f'lib/{abi}/libSDL2.so'), (libmain, f'lib/{abi}/libmain.so')):
-            write_aligned(z, name, open(path, 'rb').read(), True, 4)
-        write_aligned(z, 'assets/rom.nds', open(rom, 'rb').read(), True, 4)
+        for abi, (libmain, libsdl) in libs.items():
+            for path, name in ((libsdl, f'lib/{abi}/libSDL2.so'), (libmain, f'lib/{abi}/libmain.so')):
+                write_aligned(z, name, open(path, 'rb').read(), True, 4)
+        if rom:
+            write_aligned(z, 'assets/rom.nds', open(rom, 'rb').read(), True, 4)
     signed = sign_v2(open(tmp, 'rb').read(), load_key(key_path))
     with open(out, 'wb') as f:
         f.write(signed)

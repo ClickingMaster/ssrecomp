@@ -1,5 +1,6 @@
 // Runtime side of the static recompiler: chunk tables and dispatch.
 #pragma once
+#include <cstddef>
 #include "types.h"
 
 namespace melonDS { class ARMv5; }
@@ -57,6 +58,23 @@ extern melonDS::u32 rc_section_last_frame[];
 
 void rc_reset();
 void rc_print_stats();
+
+// Watching the game run on the interpreter, for a build without its recompiled code (the
+// Xbox launcher, tools/xbox/launcher.py): which sections ran each frame and which probes
+// were entered, as the dispatcher records them for recompiled code. The table (one entry
+// per rc_sections index to watch) comes with the generated sources and holds addresses
+// only; the sections' bytes are read from the player's ROM by rc_watch_enable.
+struct RcWatchSection
+{
+    melonDS::u32 section;       // rc_sections index
+    int source;                 // overlay id, or -1 for the main program
+    melonDS::u32 numSamples;
+    const melonDS::u32* samples; // code addresses compared with memory to tell overlays apart
+};
+void rc_watch_register(const RcWatchSection* table, melonDS::u32 count);
+// Reads the sections from the ROM; false if there is no table or the ROM cannot be read.
+// Then set ARMv5::RecompWatch so that every jump is reported (RecompWatchJump).
+bool rc_watch_enable(const melonDS::u8* rom, size_t size);
 
 // Guard failure paths: run the real instruction through the interpreter and drop the stale section.
 void rc_bail_arm(melonDS::ARMv5* cpu, melonDS::u32 section);

@@ -184,6 +184,10 @@ if (NOT MSVC)
     target_compile_options(core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>")
     # These warnings are excessive, and are only triggered in the ARMJIT code
     # (which is fundamentally non-portable, so this is fine)
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    # ssrecomp: clang-cl optimises on signed overflow like Clang; the core relies on it
+    # wrapping, as with GCC and Clang above.
+    target_compile_options(core PUBLIC "$<$<COMPILE_LANGUAGE:C,CXX>:/clang:-fwrapv>")
 endif()
 
 # Fix xxhash compile errors when using -Og
@@ -241,6 +245,10 @@ endif()
 # that have it (the game is compiled on the machine it runs on; not when building for
 # another device, e.g. Android); ARM gets NEON by default.
 set(SSR_WIDE_FLAGS -O3 -ffast-math)
+if(MSVC)
+    # clang-cl: the same options, passed through to Clang.
+    set(SSR_WIDE_FLAGS /clang:-O3 /clang:-ffast-math)
+endif()
 option(SSR_PORTABLE_X86 "Avoid host-specific AVX2/FMA instructions" OFF)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" AND NOT CMAKE_CROSSCOMPILING
    AND NOT SSR_PORTABLE_X86)

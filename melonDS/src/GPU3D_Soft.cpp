@@ -19,6 +19,7 @@
 #include "GPU3D_Soft.h"
 
 #include <algorithm>
+#include <chrono>
 #include <stdio.h>
 #include <string.h>
 #include "NDS.h"
@@ -1796,8 +1797,11 @@ void SoftRenderer::RenderThreadFunc(GPU& gpu)
         }
         else
         {
+            const auto start = std::chrono::steady_clock::now();
             ClearBuffers(gpu);
             RenderPolygons(gpu, true, ThreadPolygons, ThreadNumPolygons);
+            RenderMicros += (u64)std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start).count();
         }
 
         // Tell the main thread that we're done rendering

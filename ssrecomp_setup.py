@@ -6,7 +6,7 @@ machine (nothing of the game is downloaded or shipped) and compiled together wit
 the frontend. Needs Python 3 with Tk, CMake, Ninja, a C++ compiler and the SDL2,
 libpng and zlib development files; the window says what is missing and how to get it.
 
-Without a display: python3 ssrecomp_setup.py --rom <file> [--jobs N]
+Without a display: python3 ssrecomp_setup.py --rom <file> [--jobs N] [--android | --xbox [--xbox-icon <picture>]]
 The packaged program updates itself with --update.
 """
 import glob
@@ -87,6 +87,11 @@ NDK_DOWNLOADS = {   # host -> (url, sha1, size), from Google's repository listin
     'windows': ('https://dl.google.com/android/repository/android-ndk-r27c-windows.zip',
                 'ac5f7762764b1f15341094e148ad4f847d050c38', 781511249),
 }
+# The Xbox build (Windows only, tools/xbox/xbox.py): SDL2 for UWP and the signing key go
+# into XBOX_DIR; the MSIX (with the player's ROM in it) into XBOX_OUT.
+XBOX_DIR = os.path.join(HERE, 'xbox')
+XBOX_OUT = os.path.join(HERE, 'xbox-package')
+XBOX_WINDOWS_NOTE = 'The Xbox build needs Windows (with Visual Studio).'
 SDL2_NAME = 'SDL2-2.32.10'
 SDL2_DOWNLOAD = ('https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.tar.gz',
                  '5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165')
@@ -429,20 +434,25 @@ def forget_moved_build(build):
             os.remove(os.path.join(build, 'build.ninja'))
 
 
-def run_steps(rom, jobs, log, progress, android=False):
-    """Generates and compiles (for Android: and makes the APK). log(text) reports a line,
-    progress(fraction, label) the progress (fraction None: only the label changes).
-    Raises RuntimeError with a message for the user on failure."""
+def run_steps(rom, jobs, log, progress, android=False, xbox=False, icon=None):
+    """Generates and compiles (for Android: and makes the APK; for Xbox: the MSIX).
+    log(text) reports a line, progress(fraction, label) the progress (fraction None: only
+    the label changes). Raises RuntimeError with a message for the user on failure."""
     if DARWIN and android:
         raise RuntimeError(ANDROID_MAC_NOTE)
+    if xbox and not WINDOWS:
+        raise RuntimeError(XBOX_WINDOWS_NOTE)
     if jobs < 1:
         raise RuntimeError('Parallel compile jobs must be at least 1.')
     os.makedirs(HERE, exist_ok=True)
 
-    def run(cmd, parse_ninja=False):
+    def run(cmd, parse_ninja=False, env=None):
+        if env is not None:
+            # A program from that environment's PATH (Windows looks in this process's own).
+            cmd = [shutil.which(cmd[0], path=env.get('Path') or env.get('PATH')) or cmd[0], *cmd[1:]]
         log('$ ' + shlex.join(cmd))
         proc = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                errors='replace', env=child_env())
+                                errors='replace', env=child_env() if env is None else env)
         tail = []
         for line in proc.stdout:
             line = line.rstrip()
@@ -494,6 +504,8 @@ def run_steps(rom, jobs, log, progress, android=False):
     tool('apps.py', '--layout', LAYOUT, GEN)
     if android:
         return android_steps(rom, jobs, log, progress, run)
+    if xbox:
+        return xbox_steps(rom, jobs, log, progress, run, icon)
     progress(0.08, 'Configuring the build')
     forget_moved_build(BUILD)
     prefix = windows_prefix()
@@ -558,6 +570,71 @@ def android_steps(rom, jobs, log, progress, run):
     write_rom_note(rom)
     log('Made ' + ANDROID_APK)
     progress(1.0, 'Done: ' + ANDROID_APK)
+
+
+def xbox_steps(rom, jobs, log, progress, run, icon=None):
+    import tarfile
+    sys.path.insert(0, os.path.join(HERE, 'tools', 'xbox'))
+    import xbox
+    progress(0.08, 'Looking for Visual Studio')
+    vs = xbox.find_visual_studio()
+    env = xbox.uwp_env(vs)
+    log('Visual Studio: ' + vs['root'])
+
+    # SDL2 for UWP, with Visual Studio's own compiler (C++/CX), installed into a folder of its own.
+    sdl_prefix = os.path.join(XBOX_DIR, 'sdl2-uwp')
+    sdl_dll = os.path.join(sdl_prefix, 'bin', 'SDL2.dll')
+    if not os.path.exists(sdl_dll):
+        tar_path = os.path.join(XBOX_DIR, 'downloads', SDL2_NAME + '.tar.gz')
+        download(SDL2_DOWNLOAD[0], SDL2_DOWNLOAD[1], tar_path, log, progress, 'Downloading SDL2', 'sha256')
+        with tarfile.open(tar_path) as t:
+            t.extractall(XBOX_DIR)
+        progress(0.1, 'Compiling SDL2 for UWP')
+        sdl_build = os.path.join(XBOX_DIR, 'build-sdl2-uwp')
+        run(['cmake', '-S', os.path.join(XBOX_DIR, SDL2_NAME), '-B', sdl_build, '-G', vs['generator'], '-A', 'x64',
+             '-DCMAKE_GENERATOR_INSTANCE=' + vs['root'].replace('\\', '/'),
+             '-DCMAKE_SYSTEM_NAME=WindowsStore', '-DCMAKE_SYSTEM_VERSION=10.0', '-DSDL_TEST=OFF', '-DSDL_STATIC=OFF'],
+            env=env)
+        run(['cmake', '--build', sdl_build, '--config', 'Release', '--parallel', str(jobs)], env=env)
+        run(['cmake', '--install', sdl_build, '--config', 'Release', '--prefix', sdl_prefix], env=env)
+
+    # The game, with clang-cl.
+    build = os.path.join(HERE, 'build-xbox')
+    progress(0.12, 'Configuring the Xbox build')
+    forget_moved_build(build)
+    clang = vs['clang_cl'].replace('\\', '/')
+    run(['cmake', '-S', HERE, '-B', build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=RelWithDebInfo', '-DSSR_UWP=ON',
+         '-DCMAKE_C_COMPILER=' + clang, '-DCMAKE_CXX_COMPILER=' + clang, '-DCMAKE_ASM_COMPILER=' + clang,
+         '-DCMAKE_LINKER=' + vs['lld_link'].replace('\\', '/'),
+         '-DCMAKE_PREFIX_PATH=' + sdl_prefix.replace('\\', '/')], env=env)
+    progress(0.14, 'Compiling for Xbox (the first time takes 20-40 minutes)')
+    run(['ninja', '-C', build, '-j', str(jobs)], parse_ninja=True, env=env)
+
+    progress(0.98, 'Packing the MSIX')
+    # Without the ROM: the player copies it to the console (see XBOX_HELP).
+    msix = xbox.package(os.path.join(build, 'ssrecomp.exe'), sdl_dll,
+                        os.path.join(HERE, 'tools', 'appimage', 'ssrecomp-setup.png'), version(),
+                        XBOX_OUT, XBOX_DIR, env, run, log, picture=icon or xbox.custom_icon(XBOX_DIR))
+    write_rom_note(rom)
+    log('Made ' + msix)
+    progress(1.0, 'Done: ' + msix)
+
+
+XBOX_HELP = (
+    'Made the Xbox app in ' + XBOX_OUT + ' (SoulSilver-ssrecomp.msix). The ROM is not in '
+    'it, but its code is made from your game: do not share it.\n\n'
+    'To install it on an Xbox One or Series console in Developer Mode: open the Device Portal '
+    '(its address is shown in Dev Home), choose Add, pick SoulSilver-ssrecomp.msix and, when '
+    'asked for dependencies, Microsoft.VCLibs.x64.14.00.appx from the same folder. Then, in '
+    'Dev Home, select the app, press the View button, choose View details and set its type to Game '
+    '(apps get only a part of the processor and memory).\n\n'
+    'Then copy your ROM to the console: in the Device Portal open File explorer -> '
+    'DevelopmentFiles and upload it there (any name ending in .nds). The app copies it into its '
+    'own folder (LocalAppData -> io.github.clickingmaster.ssrecomp_... -> LocalState) the first '
+    'time it starts; the save, the settings and game.log are kept there too.\n\n'
+    'To install it on this PC instead: double-click SoulSilver-ssrecomp.cer and install it '
+    'for the Local Machine into "Trusted People", then open the .msix; start it once and put the '
+    'ROM in %LOCALAPPDATA%\\Packages\\io.github.clickingmaster.ssrecomp_...\\LocalState.')
 
 
 ANDROID_HELP = (
@@ -861,6 +938,9 @@ def gui():
     windowed_btn.pack(side='left')
     android_btn = ttk.Button(buttons, text='Build for Android')
     android_btn.pack(side='right')
+    xbox_btn = ttk.Button(buttons, text='Build for Xbox')
+    if WINDOWS:
+        xbox_btn.pack(side='right', padx=(0, 6))
 
     def open_folder():
         # The logs (game.log, build.log) are here, for bug reports.
@@ -899,6 +979,8 @@ def gui():
         # Android needs only CMake and Ninja here: its compiler and libraries are downloaded.
         android_ready = not DARWIN and bool(rom) and os.path.isfile(rom) and shutil.which('cmake') and shutil.which('ninja')
         android_btn.state(['!disabled'] if android_ready else ['disabled'])
+        # Xbox: Visual Studio brings its own CMake, Ninja and compilers (checked when building).
+        xbox_btn.state(['!disabled'] if WINDOWS and bool(rom) and os.path.isfile(rom) else ['disabled'])
         built = os.path.exists(EXE) and os.path.exists(ROM_NOTE)
         for b in (play_btn, windowed_btn):
             b.state(['!disabled'] if built else ['disabled'])
@@ -906,9 +988,10 @@ def gui():
             lines.append('Updated: press Build once to update the game (your save is kept).')
             checks.config(text='\n'.join(lines))
 
-    def start(android=False):
+    def start(android=False, xbox=False):
         build_btn.state(['disabled'])
         android_btn.state(['disabled'])
+        xbox_btn.state(['disabled'])
         rom, jobs = rom_var.get().strip(), jobs_var.get()
 
         def worker():
@@ -919,16 +1002,17 @@ def gui():
                         build_log.flush()
                         events.put(('log', text))
                     try:
-                        run_steps(rom, jobs, log, lambda f, l: events.put(('progress', f, l)), android=android)
+                        run_steps(rom, jobs, log, lambda f, l: events.put(('progress', f, l)), android=android, xbox=xbox)
                     except Exception as e:
                         build_log.write('Failed: %s\n' % e)
                         raise
-                events.put(('done', None, android))
+                events.put(('done', None, 'android' if android else 'xbox' if xbox else None))
             except Exception as e:  # shown to the user
-                events.put(('done', str(e), android))
+                events.put(('done', str(e), None))
         threading.Thread(target=worker, daemon=True).start()
     build_btn.config(command=start)
     android_btn.config(command=lambda: start(android=True))
+    xbox_btn.config(command=lambda: start(xbox=True))
 
     def pump():
         try:
@@ -971,8 +1055,10 @@ def gui():
                     if ev[1]:
                         status.config(text='Failed')
                         messagebox.showerror('Build failed', ev[1])
-                    elif ev[2]:
+                    elif ev[2] == 'android':
                         messagebox.showinfo('Android build ready', ANDROID_HELP)
+                    elif ev[2] == 'xbox':
+                        messagebox.showinfo('Xbox build ready', XBOX_HELP)
                     else:
                         messagebox.showinfo('Ready', 'The game is built. Press Play to start it.')
         except queue.Empty:
@@ -994,6 +1080,8 @@ def main():
     args = sys.argv[1:]
     if DARWIN and '--android' in args:
         sys.exit(ANDROID_MAC_NOTE)
+    if not WINDOWS and '--xbox' in args:
+        sys.exit(XBOX_WINDOWS_NOTE)
     if '--update' in args:
         # Without the window: replace this program with the newest release's.
         if not FROZEN:
@@ -1017,7 +1105,9 @@ def main():
         if problem:
             print(problem)
         android = '--android' in args
-        missing = [t for t in ('cmake', 'ninja') if not shutil.which(t)] if android else missing_tools()
+        xbox = '--xbox' in args
+        missing = ([] if xbox else [t for t in ('cmake', 'ninja') if not shutil.which(t)] if android
+                   else missing_tools())
         if missing:
             sys.exit('Missing: ' + ', '.join(missing) + '\n' + install_hint())
         try:
@@ -1030,11 +1120,16 @@ def main():
                 if f is not None:
                     last[0] = f
                 print(f'[{int(last[0] * 100):3d}%] {label}', file=out, flush=True)
-            run_steps(rom, jobs, lambda t: print(t, file=out, flush=True), progress, android=android)
+            icon = args[args.index('--xbox-icon') + 1] if '--xbox-icon' in args else None
+            run_steps(rom, jobs, lambda t: print(t, file=out, flush=True), progress, android=android, xbox=xbox,
+                      icon=icon)
         except RuntimeError as e:
             sys.exit(str(e))
         if android:
             print(ANDROID_HELP)
+            return
+        if xbox:
+            print(XBOX_HELP)
             return
         print('Built. Start the game by running this program again (without --rom) and pressing Play' +
               ('.' if FROZEN else ', or with ./run.sh --fullscreen.'))

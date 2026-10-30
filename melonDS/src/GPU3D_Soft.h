@@ -44,6 +44,8 @@ public:
     void SetupRenderThread(GPU& gpu);
     void EnableRenderThread();
     void StopRenderThread();
+    // ssrecomp: microseconds the render thread has spent drawing, for the frontend's timings.
+    std::atomic<u64> RenderMicros{0};
 private:
     friend void GPU3D::DoSavestate(Savestate* file) noexcept;
     friend struct WideAccess; // ssrecomp: the widescreen renderer shares pixel shading

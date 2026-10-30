@@ -1,0 +1,55 @@
+# Builds the Android TV launcher (tools/android/tv_launcher.py): the Android app without the
+# game in it, which finds the player's ROM on the device. No ROM is used or uploaded. The APK
+# is under the run's artifacts. Started by hand (Actions tab -> Android TV launcher -> Run
+# workflow) or by a push that changes the frontend or the Android build.
+#
+# Updates install over the app only when signed with the same key. Put the contents of a key
+# file made by tools/android/apk.py into the repository secret ANDROID_TV_KEY to keep one;
+# without it every run makes a new key (the save is kept on the device either way).
+name: Android TV launcher
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/android/**'
+      - 'tools/xbox/launcher.py'
+      - 'frontend/**'
+      - 'runtime/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/android-tv-launcher.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build
+          python -m pip install pillow
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;34.0.0" "platforms;android-34" > /dev/null
+      - name: Signing key
+        env:
+          KEY: ${{ secrets.ANDROID_TV_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then printf '%s' "$KEY" > "$RUNNER_TEMP/tv-key.json"; fi
+      - name: Build the launcher
+        run: |
+          python tools/android/tv_launcher.py --build-dir "$RUNNER_TEMP/tv" --sdk "$ANDROID_HOME" \
+            --ndk "$ANDROID_NDK_LATEST_HOME" --key "$RUNNER_TEMP/tv-key.json" --version-code "${{ github.run_number }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoulSilver-ssrecomp-android-tv
+          path: ${{ runner.temp }}/tv/SoulSilver-ssrecomp-tv.apk
+          if-no-files-found: error

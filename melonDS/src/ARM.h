@@ -232,6 +232,8 @@ protected:
 class ARMv5;
 // ssrecomp: provided by the recompiler runtime. Runs recompiled code at the current PC if there is any.
 bool RecompRun(ARMv5* cpu);
+// ssrecomp: provided by the recompiler runtime. Records a jump for the frontend (see RecompWatch).
+void RecompWatchJump(ARMv5* cpu, u32 addr);
 
 class ARMv5 : public ARM
 {
@@ -257,6 +259,9 @@ public:
 
     // ssrecomp: when set, the interpreter loop first tries statically recompiled code.
     bool RecompEnable = false;
+    // ssrecomp: when set, every jump is reported to RecompWatchJump, which tells the frontend
+    // what the game is doing when it runs on the interpreter (it changes nothing here).
+    bool RecompWatch = false;
     // ssrecomp: called after every ARM9 instruction (or recompiled chunk), before IRQ handling.
     void (*TraceHook)(ARMv5* cpu, void* user) = nullptr;
     void* TraceUser = nullptr;

@@ -4,6 +4,7 @@
 // identify code. A chunk is only entered after its bytes have been compared with
 // what is in emulated memory, and every recompiled instruction re-checks its own
 // opcode, so a stale chunk can never execute the wrong instruction.
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -13,6 +14,7 @@
 #include "ARMInterpreter.h"
 #include "recomp_rt.h"
 #include "recomp_api.h"
+#include "ndsrom.h"
 
 using namespace melonDS;
 
@@ -229,8 +231,112 @@ bool RecompRun(ARMv5* cpu)
 }
 }
 
+namespace
+{
+// The watch (see recomp_rt.h): per entry of the table, the section's bytes from the ROM and
+// whether memory matched them when last compared (once per frame at most); per 4 KB page of
+// main RAM, the entries whose sections cover it.
+const RcWatchSection* watchTable = nullptr;
+u32 watchCount = 0;
+std::vector<std::vector<u8>> watchImages;
+std::vector<u32> watchFrame;
+std::vector<u8> watchMatches;
+std::vector<std::vector<u16>> watchPages;
+// Per page, the entries of watchPages whose sections were in memory when the page was last
+// looked at, and the frame that was: many overlays share addresses, and a jump then only
+// looks at the one or two that are loaded.
+std::vector<std::vector<u16>> watchLoaded;
+std::vector<u32> watchPageFrame;
+
+// Whether the section of watch entry w is what is in memory now.
+bool WatchMatches(ARMv5* cpu, u32 w)
+{
+    if (watchFrame[w] == rc_frame) return watchMatches[w];
+    watchFrame[w] = rc_frame;
+    const RcWatchSection& ws = watchTable[w];
+    const RcSection& sec = rc_sections[ws.section];
+    const std::vector<u8>& image = watchImages[w];
+    bool ok = !image.empty() && ws.numSamples;
+    for (u32 i = 0; ok && i < ws.numSamples; i++)
+    {
+        const u32 off = ws.samples[i] - sec.base;
+        ok = off + 4 <= image.size() &&
+            memcmp(&image[off], cpu->NDS.MainRAM + (ws.samples[i] & cpu->NDS.MainRAMMask), 4) == 0;
+    }
+    watchMatches[w] = ok;
+    return ok;
+}
+}
+
+void rc_watch_register(const RcWatchSection* table, u32 count)
+{
+    watchTable = table;
+    watchCount = count;
+}
+
+bool rc_watch_enable(const u8* rom, size_t size)
+{
+    if (!watchCount) return false;
+    std::vector<u8> main;
+    std::vector<std::vector<u8>> overlays;
+    if (!ndsrom::ReadRomCode(rom, size, main, overlays)) return false;
+    watchImages.assign(watchCount, {});
+    watchFrame.assign(watchCount, ~0u);
+    watchMatches.assign(watchCount, 0);
+    watchPages.assign((kMainEnd - kMainBase) >> 12, {});
+    watchLoaded.assign(watchPages.size(), {});
+    watchPageFrame.assign(watchPages.size(), ~0u);
+    for (u32 w = 0; w < watchCount; w++)
+    {
+        const RcWatchSection& ws = watchTable[w];
+        const RcSection& sec = rc_sections[ws.section];
+        if (ws.source == -1) watchImages[w] = main;
+        else if (ws.source >= 0 && (size_t)ws.source < overlays.size()) watchImages[w] = overlays[ws.source];
+        if (sec.base < kMainBase || sec.base >= kMainEnd) continue;
+        const u32 end = std::min<u32>(sec.base + sec.size, kMainEnd);
+        for (u32 page = (sec.base - kMainBase) >> 12; page <= ((end - 1 - kMainBase) >> 12); page++)
+            watchPages[page].push_back((u16)w);
+    }
+    return true;
+}
+
+namespace melonDS
+{
+// Called by ARMv5::JumpTo while RecompWatch is set: the jump's target counts as code of
+// every watched section there that is in memory, as a chunk entry does for recompiled code.
+void RecompWatchJump(ARMv5* cpu, u32 addr)
+{
+    if (addr < kMainBase || addr >= kMainEnd || watchPages.empty()) return;
+    const u32 page = (addr - kMainBase) >> 12;
+    if (watchPageFrame[page] != rc_frame)
+    {
+        watchPageFrame[page] = rc_frame;
+        watchLoaded[page].clear();
+        for (u16 w : watchPages[page])
+            if (WatchMatches(cpu, w)) watchLoaded[page].push_back(w);
+    }
+    for (u16 w : watchLoaded[page])
+    {
+        const u32 s = watchTable[w].section;
+        if (addr < rc_sections[s].base || addr >= rc_sections[s].base + rc_sections[s].size) continue;
+        rc_section_last_frame[s] = rc_frame;
+        if (!probeHead.empty())
+            for (u32 p = probeHead[(addr - kMainBase) >> 1]; p; p = probes[p - 1].next)
+                if (probes[p - 1].section == s) probes[p - 1].lastFrame = rc_frame;
+    }
+}
+}
+
 bool rc_ran_recently(const char* section, unsigned addr, unsigned frames)
 {
+    if (watchCount && !watchPages.empty())
+    {
+        // Watched: the frontend has a probe on each function it asks about.
+        for (const Probe& p : probes)
+            if (p.addr == addr && !strcmp(rc_sections[p.section].name, section))
+                return p.lastFrame && p.lastFrame + frames >= rc_frame;
+        return false;
+    }
     if (chunkLastFrame.empty()) return false;
     for (u32 s = 0; s < rc_num_sections; s++)
     {

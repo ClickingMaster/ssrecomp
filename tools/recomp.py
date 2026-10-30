@@ -218,6 +218,9 @@ def write_images(out_dir, sections):
         f.write('#if defined(__APPLE__)\n'
                 '    .section __TEXT,__const\n'
                 '#define RC_IMAGE(name) _##name\n'
+                '#elif defined(_WIN32)\n'
+                '    .section .rdata,"dr"\n'
+                '#define RC_IMAGE(name) name\n'
                 '#else\n'
                 '    .section .rodata\n'
                 '#define RC_IMAGE(name) name\n'
@@ -228,7 +231,8 @@ def write_images(out_dir, sections):
                 image.write(sec.image)
             f.write(f'    .global RC_IMAGE(rc_image_{si})\n    .balign 16\n'
                     f'RC_IMAGE(rc_image_{si}):\n    .incbin "{img}"\n')
-        f.write('#if defined(__ELF__)\n    .section .note.GNU-stack,"",@progbits\n#endif\n')
+        # (%progbits: on 32-bit ARM, @ starts a comment.)
+        f.write('#if defined(__ELF__)\n    .section .note.GNU-stack,"",%progbits\n#endif\n')
 
 
 def main():

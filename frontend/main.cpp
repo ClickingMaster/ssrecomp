@@ -20,7 +20,8 @@
 #include <tuple>
 #include <deque>
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(_MSC_VER)
+// (SDL's package for Visual Studio has SDL.h directly in its include folder.)
 #include <SDL.h>
 #else
 #include <SDL2/SDL.h>
@@ -34,6 +35,21 @@
 #ifdef __ANDROID__
 #include <atomic>
 #include <jni.h>
+#endif
+#if defined(__ANDROID__) && defined(SSR_LAUNCHER)
+#include "launchmenu.h"
+#endif
+#ifdef SSR_UWP
+#include <windows.h>
+#include <fileapifromapp.h>
+#include <roapi.h>
+// SDL declares these only for a WINAPI_FAMILY_APP build (__WINRT__), which the C++
+// library no longer compiles in; they are in the SDL2.dll built for UWP.
+extern "C" {
+DECLSPEC int SDLCALL SDL_WinRTRunApp(SDL_main_func mainFunction, void* reserved);
+enum { SSR_WINRT_PATH_INSTALLED_LOCATION = 0, SSR_WINRT_PATH_LOCAL_FOLDER = 1 }; // SDL_WinRT_Path
+DECLSPEC const char* SDLCALL SDL_WinRTGetFSPathUTF8(int pathType);
+}
 #endif
 
 #include "NDS.h"
@@ -1031,6 +1047,34 @@ static bool ReadSnapshot(NDS& nds, const std::string& path, uint32_t* frame)
     return true;
 }
 
+#ifdef SSR_UWP
+// The first .nds file in dir or (depth levels down) in a folder in it; empty if none.
+static std::wstring FindDevelopmentRom(const std::wstring& dir, int depth)
+{
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileExFromAppW((dir + L"\\*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0);
+    if (h == INVALID_HANDLE_VALUE) return {};
+    std::wstring found;
+    std::vector<std::wstring> folders;
+    do
+    {
+        const std::wstring name = fd.cFileName;
+        if (name == L"." || name == L"..") continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) folders.push_back(dir + L"\\" + name);
+        else if (name.size() > 4 && _wcsicmp(name.c_str() + name.size() - 4, L".nds") == 0)
+        {
+            found = dir + L"\\" + name;
+            break;
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    if (depth > 0)
+        for (const auto& f : folders)
+            if (found.empty()) found = FindDevelopmentRom(f, depth - 1);
+    return found;
+}
+#endif
+
 int main(int argc, char** argv)
 {
     Options opt;
@@ -1053,10 +1097,144 @@ int main(int argc, char** argv)
             freopen("log.txt", "w", stderr);
         setvbuf(stderr, nullptr, _IOLBF, 0);
         setenv("SSR_PERF", "1", 0);
+#ifdef SSR_LAUNCHER
+        // The TV launcher (tools/android/tv_launcher.py) holds neither the ROM nor the
+        // game's code: its start menu finds the player's ROM on the device. The save and
+        // the settings go in the folder ssrecomp on the shared storage, so that they stay
+        // when the app is uninstalled (an update signed with another key needs that).
+        SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
+        {
+            fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+            return 1;
+        }
+        // Reading the Download folder and USB sticks (the app targets Android 10, whose
+        // storage rules allow it, see tools/android/tv/AndroidManifest.xml).
+        if (!SDL_AndroidRequestPermission("android.permission.WRITE_EXTERNAL_STORAGE"))
+            fprintf(stderr, "no permission to read the shared storage\n");
+        std::string saveDir = "/storage/emulated/0/ssrecomp";
+        std::error_code ec;
+        std::filesystem::create_directories(saveDir, ec);
+        if (ec) saveDir = dir ? dir : ".";
+        std::string last;
+        std::getline(std::ifstream(saveDir + "/last-rom.txt"), last);
+        const std::string rom = LaunchMenu::Run(ext ? ext : "", last);
+        if (rom.empty()) return 0;
+        std::ofstream(saveDir + "/last-rom.txt") << rom << "\n";
+        fprintf(stderr, "ROM: %s\n", rom.c_str());
+        androidArgs = { "ssrecomp", rom, "--save", saveDir + "/soulsilver.sav", "--config", saveDir + "/ssrecomp.cfg",
+                        "--fullscreen", "--interp" };
+#else
         androidArgs = { "ssrecomp", "rom.nds", "--save", std::string(dir ? dir : ".") + "/soulsilver.sav", "--fullscreen" };
+#endif
         for (auto& a : androidArgs) androidArgv.push_back(a.data());
         argc = (int)androidArgv.size();
         argv = androidArgv.data();
+    }
+#endif
+#ifdef SSR_UWP
+    // Started from the Xbox's (or Windows') app list. The player puts the ROM in the app's
+    // own folder (LocalState, which the Xbox Device Portal's file explorer can open; the
+    // package from tools/xbox/xbox.py does not hold it); the save, the settings and the
+    // messages go there too.
+    std::vector<std::string> uwpArgs;
+    std::vector<char*> uwpArgv;
+    if (argc < 2)
+    {
+        const char* installed = SDL_WinRTGetFSPathUTF8(SSR_WINRT_PATH_INSTALLED_LOCATION);
+        const char* local = SDL_WinRTGetFSPathUTF8(SSR_WINRT_PATH_LOCAL_FOLDER);
+        const std::string dir = local ? local : ".";
+        // Files the emulator core keeps by relative name go there too.
+        std::error_code ec;
+        std::filesystem::current_path(std::filesystem::u8path(dir), ec);
+        if (freopen((dir + "\\game.log").c_str(), "w", stderr))
+            setvbuf(stderr, nullptr, _IONBF, 0); // Windows has no line buffering
+        // Frame timings in game.log every 5 seconds, for reports from the console. And the
+        // widescreen 3D's drawing threads: Xbox One's Jaguar runs one thread per core (the
+        // renderer counts on two, as PC processors have), with the emulation and the 3D
+        // thread on two of the cores a game gets.
+        if (!getenv("SSR_PERF")) _putenv_s("SSR_PERF", "1");
+        // The console reports all 8 cores, but a game gets only some of them: Windows' CPU
+        // sets may say how many (those allocated to this process).
+        // With more busy threads than cores, the 3D threads take turns and the emulation
+        // waits for them (measured: a DS-size 3D frame took 14-23 ms beside 4 drawing threads).
+        int cores = 0, total = 0, mine = 0, taken = 0;
+        {
+            ULONG len = 0;
+            GetSystemCpuSetInformation(nullptr, 0, &len, GetCurrentProcess(), 0);
+            std::vector<char> buf(len);
+            if (len && GetSystemCpuSetInformation((PSYSTEM_CPU_SET_INFORMATION)buf.data(), len, &len, GetCurrentProcess(), 0))
+                for (ULONG off = 0; off < len;)
+                {
+                    const auto* info = (const SYSTEM_CPU_SET_INFORMATION*)(buf.data() + off);
+                    if (!info->Size) break;
+                    if (info->Type == CpuSetInformation)
+                    {
+                        total++;
+                        if (info->CpuSet.AllocatedToTargetProcess) mine++;
+                        else if (info->CpuSet.Allocated || info->CpuSet.Parked) taken++;
+                    }
+                    off += info->Size;
+                }
+            cores = mine;
+        }
+        fprintf(stderr, "processor threads: %u; CPU sets: %d, allocated to this app %d, taken or parked %d\n",
+            std::thread::hardware_concurrency(), total, mine, taken);
+        if (!getenv("SSR_WIDE_THREADS"))
+        {
+            // The emulation and the DS-size 3D thread each need a core of their own; the
+            // widescreen drawing gets what is left, and 2 when the count is unknown (the 8
+            // reported cores are not all the game's).
+            const int wide = cores > 0 ? std::clamp(cores - 2, 1, 4) : 2;
+            _putenv_s("SSR_WIDE_THREADS", std::to_string(wide).c_str());
+            fprintf(stderr, "widescreen drawing threads: %d\n", wide);
+        }
+        // rom.nds in the package (if it was packed with one) or in that folder, else the
+        // first .nds file there, whatever it is called.
+        std::string rom;
+        for (const std::string& p : { std::string(installed ? installed : ".") + "\\rom.nds", dir + "\\rom.nds" })
+            if (rom.empty() && std::filesystem::exists(std::filesystem::u8path(p), ec)) rom = p;
+        if (rom.empty())
+            for (const auto& e : std::filesystem::directory_iterator(std::filesystem::u8path(dir), ec))
+            {
+                std::string ext = e.path().extension().u8string();
+                for (char& c : ext) c = (char)tolower((unsigned char)c);
+                if (ext == ".nds" && e.is_regular_file(ec)) { rom = e.path().u8string(); break; }
+            }
+        if (rom.empty())
+        {
+            // On a Developer Mode Xbox the Device Portal's file explorer can also upload into
+            // DevelopmentFiles, which is easier to find. Only "FromApp" file functions reach
+            // it (with the broadFileSystemAccess capability); the ROM is copied into the
+            // app's folder once, so that everything else reads it as before.
+            const std::wstring dev = FindDevelopmentRom(L"D:\\DevelopmentFiles", 1);
+            const std::string copy = dir + "\\rom.nds";
+            if (!dev.empty())
+            {
+                fprintf(stderr, "copying the ROM from %s\n", std::filesystem::path(dev).u8string().c_str());
+                if (CopyFileFromAppW(dev.c_str(), std::filesystem::u8path(copy).wstring().c_str(), FALSE)) rom = copy;
+                else fprintf(stderr, "could not copy it (error %lu)\n", GetLastError());
+            }
+        }
+        if (rom.empty())
+        {
+            const std::string say = "Put your Pokemon SoulSilver (US) ROM, a file ending in .nds, in the Xbox's "
+                "DevelopmentFiles folder (Device Portal -> File explorer -> DevelopmentFiles) or in this app's "
+                "folder, and start it again:\n\n" + dir;
+            fprintf(stderr, "%s\n", say.c_str());
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "SoulSilver: no ROM yet", say.c_str(), nullptr);
+            return 1;
+        }
+        fprintf(stderr, "ROM: %s\n", rom.c_str());
+        uwpArgs = { "ssrecomp", rom, "--save", dir + "\\soulsilver.sav", "--fullscreen" };
+#ifdef SSR_LAUNCHER
+        // Built without the game's code (tools/xbox/launcher.py): all of it runs on the
+        // interpreter.
+        uwpArgs.push_back("--interp");
+#endif
+        for (auto& a : uwpArgs) uwpArgv.push_back(a.data());
+        argc = (int)uwpArgv.size();
+        argv = uwpArgv.data();
     }
 #endif
     if (!ParseArgs(argc, argv, opt))
@@ -1078,6 +1256,13 @@ int main(int argc, char** argv)
     auto nds = MakeConsole(rom, sav, opt.headless);
     if (!nds) return 1;
     nds->ARM9.RecompEnable = opt.recomp;
+    // On the interpreter with a table to watch (the Xbox launcher has no recompiled code):
+    // every jump tells the scene detection what the game is doing, from the ROM's own code.
+    if (!opt.recomp && !opt.lockstep && rc_watch_enable(rom.data(), rom.size()))
+    {
+        nds->ARM9.RecompWatch = true;
+        fprintf(stderr, "watching the game's code on the interpreter\n");
+    }
 
     // Lockstep: a second console on the plain interpreter runs each frame first and
     // records the CPU state after every instruction; the recompiled console must match.
@@ -1180,6 +1365,12 @@ int main(int argc, char** argv)
         // HIDAPI drivers on, a pad one of them claims (a Backbone One, a PlayStation pad) is
         // left out of Android's list, and is lost if SDL cannot open it over USB itself.
         SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
+#endif
+#ifdef SSR_UWP
+        // On the Xbox the controller's B is also the system's "back", which would send the
+        // game to the background; SDL keeps it in the game when this is set (see the
+        // SDLK_AC_BACK it then reports, below).
+        SDL_SetHint(SDL_HINT_WINRT_HANDLE_BACK_BUTTON, "1");
 #endif
         // The controller keeps working while another window has the focus (on Windows SDL
         // otherwise ignores it then, as when the game was started from the setup window).
@@ -2300,6 +2491,19 @@ int main(int argc, char** argv)
         M_RESUME, M_LAYOUT, M_LARGE, M_FPS60, M_FULLSCREEN, M_SMOOTH, M_WIDE, M_WIDELINES, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_FAST, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT
     };
     bool fastLock = false;
+#if defined(SSR_UWP) || defined(SSR_LAUNCHER)
+    // On the consoles and TVs these builds are for, the processor may not keep up with every
+    // setting: when frames keep coming late, the costliest are lowered one step at a time
+    // (see where frames are paced), until the player changes one of them in the menu.
+    bool autoDetail = true;
+#else
+    bool autoDetail = false;
+#endif
+    // Per 4-second window: frames whose work took nearly a whole frame or more, and the
+    // work time summed; whether a raise has been undone (then no more raises).
+    int slowFrames = 0, pacedFrames = 0;
+    double workSum = 0;
+    bool raised = false, raiseUndone = false;
     // World detail choices: the most lines the widescreen 3D is drawn at (192 is the DS's own).
     static const int detailLines[] = { 192, 288, 384, 540, 720, 1080, 1440 };
     const int detailCount = (int)(sizeof(detailLines) / sizeof(detailLines[0]));
@@ -2339,7 +2543,7 @@ int main(int argc, char** argv)
         toast = msg;
         toastUntil = frame + 120;
     };
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(SSR_LAUNCHER) // (the launcher is not rebuilt on a PC)
     bool updateSaid = false;
     UpdateCheck::Start();
 #endif
@@ -2354,6 +2558,10 @@ int main(int argc, char** argv)
     bool touchPadUsed = false, touchMenuHeld = false, prevTouchMenu = false;
 #ifdef __ANDROID__
     touchPadUsed = true;
+#ifdef SSR_LAUNCHER
+    // A TV has no touch screen: no on-screen controls over the picture there.
+    touchPadUsed = SDL_GetNumTouchDevices() > 0;
+#endif
 #endif
     // Touch cursor for devices without a touchscreen: moved with the right stick or IJKL,
     // pressed with the right trigger or Space.
@@ -2372,6 +2580,15 @@ int main(int argc, char** argv)
     double perfWorst = 0;
     int perfN = 0;
     auto perfNow = []() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+    // Parts of the scene and present phases (screen analysis, scene choice, audio, handing the
+    // frame to the graphics card), printed on a second line: where those phases spend it.
+    double perfPart[4] = {};
+    auto perfTimed = [&](int part, auto&& work) {
+        if (!perfOn) return work();
+        const double t = perfNow();
+        work();
+        perfPart[part] += perfNow() - t;
+    };
     double perfT = perfNow(), perfFrameStart = perfT;
     auto perfMark = [&](int phase) {
         if (!perfOn) return;
@@ -2382,6 +2599,7 @@ int main(int argc, char** argv)
 
     while (running && !Host::StopRequested)
     {
+        const uint64_t frameWorkStart = opt.headless ? 0 : SDL_GetPerformanceCounter();
         if (perfOn)
         {
             double t = perfNow();
@@ -2392,7 +2610,13 @@ int main(int argc, char** argv)
                 fprintf(stderr, "[perf] input %.2f  emulate %.2f  scene %.2f  compose %.2f  present %.2f  wait %.2f ms; worst frame %.1f ms\n",
                     perfAcc[0] / perfN, perfAcc[1] / perfN, perfAcc[2] / perfN, perfAcc[3] / perfN, perfAcc[4] / perfN,
                     perfAcc[5] / perfN, perfWorst);
+                // (3D: drawing time of the DS-resolution 3D on its own thread, alongside emulate.)
+                auto& soft3d = static_cast<melonDS::SoftRenderer&>(nds->GPU.GetRenderer3D());
+                fprintf(stderr, "[perf parts] screens %.2f  scene choice %.2f  audio %.2f  present call %.2f  3D %.2f ms\n",
+                    perfPart[0] / perfN, perfPart[1] / perfN, perfPart[2] / perfN, perfPart[3] / perfN,
+                    soft3d.RenderMicros.exchange(0) / 1000.0 / perfN);
                 for (double& a : perfAcc) a = 0;
+                for (double& a : perfPart) a = 0;
                 perfN = 0;
                 perfWorst = 0;
             }
@@ -2415,6 +2639,11 @@ int main(int argc, char** argv)
             touchPad.NextFrame();
             while (SDL_PollEvent(&ev))
             {
+#ifdef SSR_UWP
+                // That "back" is the B button, which also arrives from the controller as
+                // itself: as a key it must not open the menu as well.
+                if ((ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) && ev.key.keysym.sym == SDLK_AC_BACK) continue;
+#endif
                 if (ev.type == SDL_QUIT) running = false;
                 else if (ev.type == SDL_APP_WILLENTERBACKGROUND || ev.type == SDL_APP_TERMINATING)
                 {
@@ -2740,6 +2969,7 @@ int main(int argc, char** argv)
             case M_FPS60:
                 cfg.fps60 = !cfg.fps60;
                 nds->GPU.GPU3D.InterpolationEnabled = cfg.fps60;
+                autoDetail = false; // the player's choice from now on
                 break;
             case M_FULLSCREEN:
                 cfg.fullscreen = !cfg.fullscreen;
@@ -2758,6 +2988,7 @@ int main(int argc, char** argv)
                 break;
             case M_WIDELINES:
                 cfg.wideLines = detailLines[(detailIndex() + (dir < 0 ? detailCount - 1 : 1)) % detailCount];
+                autoDetail = false;
                 break;
             case M_SHOWFPS:
                 cfg.showFps = !cfg.showFps;
@@ -3140,7 +3371,7 @@ int main(int argc, char** argv)
         for (const RcApp* app : focus.bottomApps)
             if (appActive(app->name)) appBottom = true;
         appBottomNow = appBottom;
-        if (top && bot && !paused) focus.Update(top, bot, fieldNow, appBottom);
+        if (top && bot && !paused) perfTimed(0, [&] { focus.Update(top, bot, fieldNow, appBottom); });
         layout.swapped = focus.Swapped();
         // While the touch cursor is in use the bottom screen has to be big enough to aim at.
         if (!merged && focus.mode == 0 && frame < cursorShownUntil) layout.swapped = true;
@@ -3153,7 +3384,8 @@ int main(int argc, char** argv)
             // game stops polling it while its buttons animate between menus.
             const bool writing = saveWriting();
             fieldHeldBySave = writing && fieldActive();
-            Scene picked = pickScene(frame < cursorShownUntil, view.width, screenImages);
+            Scene picked;
+            perfTimed(1, [&] { picked = pickScene(frame < cursorShownUntil, view.width, screenImages); });
             // An application's own layout stays while it fades out: the game is still ending it
             // (and its picture is still what is on the screens) when only a general layout
             // would be chosen, until the overworld runs again or a moment has passed.
@@ -3252,8 +3484,10 @@ int main(int argc, char** argv)
         if (audio && got > 0)
         {
             // Drop audio rather than let latency grow if the queue backs up.
-            if (SDL_GetQueuedAudioSize(audio) < 48000 * 4 / 4)
-                SDL_QueueAudio(audio, audioBuf.data(), got * 4);
+            perfTimed(2, [&] {
+                if (SDL_GetQueuedAudioSize(audio) < 48000 * 4 / 4)
+                    SDL_QueueAudio(audio, audioBuf.data(), got * 4);
+            });
         }
         if (opt.audioStats && got > 0)
         {
@@ -3333,7 +3567,7 @@ int main(int argc, char** argv)
             canvas.Text(outW - Canvas::TextWidth(">>", sc) - 4 * sc, cornerY + 4 * sc, ">>", sc, 0xFFFFFFFF);
             overlayUsed = true;
         }
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(SSR_LAUNCHER)
         if (!updateSaid && UpdateCheck::g_done)
         {
             updateSaid = true;
@@ -3516,7 +3750,7 @@ int main(int argc, char** argv)
                 touchPad.Apply(held, menuHeld);
                 touchPad.Draw(renderer, held, menuHeld);
             }
-            SDL_RenderPresent(renderer);
+            perfTimed(3, [&] { SDL_RenderPresent(renderer); });
             perfMark(4);
             // Frames shown in the last whole second, for the FPS counter.
             presented++;
@@ -3530,6 +3764,62 @@ int main(int argc, char** argv)
 
             nextTick += (uint64_t)(frameTime * perfFreq);
             uint64_t now = SDL_GetPerformanceCounter();
+            if (autoDetail && speed == 1 && !menu.open && frame > 600)
+            {
+                // What a frame's work took (not whether it started late: after one slow
+                // frame, such as a loading hitch, the next ones catch up and would all count).
+                const double work = (double)(now - frameWorkStart) / perfFreq;
+                slowFrames += work > frameTime * 0.95;
+                workSum += work;
+                if (++pacedFrames == 240)
+                {
+                    const double share = workSum / pacedFrames / frameTime; // of a frame, on average
+                    std::string change;
+                    if (slowFrames > 48)
+                    {
+                        // More than a fifth of the frames too slow: first the in-between frames go
+                        // (they draw the 3D a second time), then the widescreen 3D gets fewer lines.
+                        if (raised) raiseUndone = true;
+                        if (cfg.fps60)
+                        {
+                            cfg.fps60 = false;
+                            nds->GPU.GPU3D.InterpolationEnabled = false;
+                            change = "FOR SPEED: 60 FPS FRAMES OFF";
+                        }
+                        else if (detailIndex() > 1)
+                        {
+                            cfg.wideLines = detailLines[std::min(detailIndex() - 1, 3)];
+                            change = "FOR SPEED: WORLD DETAIL " + std::to_string(cfg.wideLines);
+                        }
+                    }
+                    else if (!slowFrames && share < 0.6 && !raiseUndone)
+                    {
+                        // Plenty of time to spare: back up, the other way round, to the defaults
+                        // (720 lines, then the in-between frames). If that is too much, the step
+                        // down undoes it and the setting stays there.
+                        if (cfg.wideLines < 720)
+                        {
+                            cfg.wideLines = detailLines[std::min(detailIndex() + 1, 4)];
+                            change = "WORLD DETAIL " + std::to_string(cfg.wideLines);
+                        }
+                        else if (!cfg.fps60)
+                        {
+                            cfg.fps60 = true;
+                            nds->GPU.GPU3D.InterpolationEnabled = true;
+                            change = "60 FPS FRAMES ON";
+                        }
+                        if (!change.empty()) raised = true;
+                    }
+                    if (!change.empty())
+                    {
+                        say(change);
+                        fprintf(stderr, "[auto detail] %d of 240 frames slow, work %.0f%% of a frame: fps60 %d, wide lines %d\n",
+                            slowFrames, share * 100, cfg.fps60, cfg.wideLines);
+                    }
+                    slowFrames = pacedFrames = 0;
+                    workSum = 0;
+                }
+            }
             if (now < nextTick)
             {
                 // Sleep for most of the wait and spin for the last part of a millisecond:
@@ -3582,3 +3872,14 @@ int main(int argc, char** argv)
     }
     return 0;
 }
+
+#ifdef SSR_UWP
+// A UWP program starts in CoreApplication, and SDL runs main (renamed SDL_main by
+// SDL_main.h) inside it. SDL's own entry point for this, SDL_winrt_main_NonXAML.cpp, is
+// C++/CX, which clang-cl cannot compile; this does the same.
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
+{
+    if (FAILED(RoInitialize(RO_INIT_MULTITHREADED))) return 1;
+    return SDL_WinRTRunApp(SDL_main, nullptr);
+}
+#endif

@@ -1,0 +1,36 @@
+# Builds the Xbox launcher (tools/xbox/launcher.py): the app without the game's code, which
+# runs the game on the interpreter. No ROM is used or uploaded. The MSIX, its certificate and
+# Microsoft's C++ runtime package are under the run's artifacts. Started by hand (Actions
+# tab -> Xbox launcher -> Run workflow) or by a push to a branch that changes the Xbox build.
+name: Xbox launcher
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/xbox/**'
+      - 'frontend/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/xbox-launcher.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the launcher
+        env:
+          # Each run gets a higher package version, so a new one installs over the old.
+          SSR_BUILD_NUMBER: ${{ github.run_number }}
+        run: python tools/xbox/launcher.py --build-dir "${{ runner.temp }}/xbox-launcher"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoulSilver-ssrecomp-xbox-launcher
+          path: ${{ runner.temp }}/xbox-launcher/package/
+          if-no-files-found: error

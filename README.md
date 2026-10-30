@@ -115,6 +115,74 @@ When a newer version is released, the app says so at start (it asks GitHub,
 its only use of the internet): update the setup program, press **Build for
 Android** again and install the new APK over the old one.
 
+**Android TV (launcher, no PC needed):** GitHub also builds a TV version without
+any of the game in it (Actions tab → **Android TV launcher** → the newest run →
+`SoulSilver-ssrecomp-android-tv`). Install the APK on the TV (with a file manager
+or an app such as "Downloader", allowing unknown apps when asked), put your ROM in
+the TV's **Download** folder or on a USB stick, and start **SoulSilver** from the
+home screen: its menu lists the ROMs it finds; choose one with the remote or a
+controller. Like the Xbox launcher it runs the game on the ordinary emulator
+(slower; a TV's processor may struggle) while the single-screen and widescreen
+views still follow the game. The save and settings are in the folder `ssrecomp` on
+the TV's storage, so they stay when the app is reinstalled.
+
+### Xbox (experimental, untested on a console)
+
+The Xbox version is a UWP app built on a Windows PC by the same setup program,
+from your ROM, and installed on an Xbox One or Xbox Series console in
+**Developer Mode** (Microsoft's developer account, a one-off fee; retail mode
+cannot install apps from a PC). It is compiled with clang-cl and packed into a
+signed MSIX:
+
+1. On the PC, install [Visual Studio 2022](https://visualstudio.microsoft.com/)
+   (Community is enough) and in the Visual Studio Installer choose **Desktop
+   development with C++** with **C++ Clang tools for Windows**, and **Windows
+   application development** (UWP) with **C++ (v143) Universal Windows Platform
+   tools**. MSYS2 is not needed for this build.
+2. In the setup program, choose your ROM and press **Build for Xbox** (or
+   `--rom your-rom.nds --xbox` without the window). The first time it downloads
+   SDL2 and compiles it for UWP; the build takes about as long as the PC one.
+   It needs your ROM to make the game's code, but does not put the ROM in the
+   app. The result is in the folder `xbox-package` of the setup program's folder:
+   `SoulSilver-ssrecomp.msix`, its certificate `SoulSilver-ssrecomp.cer` and
+   Microsoft's C++ runtime package `Microsoft.VCLibs.x64.14.00.appx`.
+3. On the console, open Dev Home and the **Device Portal** address it shows in a
+   browser on the PC. Choose **Add**, pick the `.msix` and, when asked for
+   dependencies, the `Microsoft.VCLibs` package from the same folder.
+4. In Dev Home, select the app, press the View button, choose **View details**
+   and set its type to **Game**: as an app it gets only part of the processor
+   and memory.
+5. In the Device Portal open **File explorer** → **DevelopmentFiles** and
+   upload your ROM there (any name ending in `.nds`, also in a folder inside
+   it). The first time the app starts it copies the ROM into its own folder,
+   `LocalState` (LocalAppData → `io.github.clickingmaster.ssrecomp_…`), where you
+   can also put it directly.
+
+**Without a Windows PC (the launcher):** GitHub builds a version of the Xbox app
+without any of the game in it (Actions tab → **Xbox launcher** → the newest run →
+the `SoulSilver-ssrecomp-xbox-launcher` download). It needs no ROM to build, so it
+can be downloaded on a phone and installed through the Device Portal as in steps
+3–5; your ROM goes in DevelopmentFiles as there. It runs the game on
+melonDS's ordinary emulator instead of the recompiled code, so it is slower. The
+single-screen and widescreen views still follow the game (battle, bag, menus,
+the map): the app reads the game's code from your ROM when it starts and watches
+which parts of it run.
+
+**Your own icon:** put a picture (PNG or JPEG, square works best) named
+`icon.png` or `icon.jpg` in the `xbox` folder of the setup program's folder, or
+pass `--xbox-icon <picture>`, and build again; the app's tiles are made from it.
+It stays on your PC and in your package only.
+
+The ROM is not in the MSIX, but the app's code is made from your copy of the
+game, so do not share it either; it works with that ROM only. It is signed with a
+certificate made on your PC and kept in `xbox/`; later builds use it again and
+install over the old app, keeping the ROM and the save. The save, the settings
+and the messages (`game.log`, for bug reports) are in the same `LocalState`
+folder. Play with the controller as on a
+PC; B does not leave the game. The same package also installs on Windows 10/11
+after the `.cer` is installed for the Local Machine into "Trusted People" (the
+ROM then goes in `%LOCALAPPDATA%\Packages\io.github.clickingmaster.ssrecomp_…\LocalState`).
+
 The setup program carries this project's source and unpacks it into a folder of
 its own (`~/.local/share/ssrecomp` on Linux, `%LOCALAPPDATA%\ssrecomp` on
 Windows, `~/Library/Application Support/ssrecomp` on macOS), where the game is
@@ -161,9 +229,18 @@ needed for compiling is missing, with the command to install it (with
   instead of the download, also install `mingw-w64-ucrt-x86_64-python` and
   `mingw-w64-ucrt-x86_64-tk` and start it from that window.)
 
+  The game also builds with **clang-cl** (Visual Studio's "C++ Clang tools for
+  Windows") from a "x64 Native Tools" prompt, with an SDL2 for Visual Studio
+  (`SDL2-devel-*-VC.zip` from SDL's releases); libpng is optional there (without
+  it, test screenshots are off):
+
+      cmake -S . -B build-clang-cl -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_ASM_COMPILER=clang-cl -DSDL2_DIR=<SDL2>/cmake
+      ninja -C build-clang-cl
+
 Without a display: `ssrecomp-setup-linux-x86_64 --rom your-rom.nds` (or
 `python3 ssrecomp_setup.py --rom ...`) does the same in the terminal; add
-`--android` for the Android build on Linux or Windows.
+`--android` for the Android build on Linux or Windows, or `--xbox` for the Xbox
+build on Windows.
 
 Making the setup programs: `pip install "pyinstaller>=6" certifi pillow && python tools/package_setup.py`
 on the system they are for; `tools/make_appimage.sh` wraps the Linux one into an
@@ -579,4 +656,6 @@ changes to existing melonDS files are listed in `melonDS-ssrecomp.patch`.
 `tools/android/skeleton.apk` contains SDL 2.32.10's Android Java code
 (`org.libsdl.app`, zlib license, copyright Sam Lantinga and contributors),
 compiled by `tools/android/make_skeleton.sh`. The Android build also downloads
-and builds SDL2 and uses Google's Android NDK under their own licenses.
+and builds SDL2 and uses Google's Android NDK under their own licenses. The Xbox
+build downloads and builds SDL2 for UWP, and its package depends on Microsoft's
+C++ runtime package (Microsoft.VCLibs), which comes with Visual Studio.
