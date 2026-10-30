@@ -191,6 +191,8 @@
 - **New: iPhone and iPad.** A sideloaded app (`pokemon-ds-wide-ios.ipa`, iOS 14 or newer): the
   same game list and games as on Android, with the ROMs, saves and settings in the Files app
   (On My iPhone > Pokemon DS Widescreen).
+- **HeartGold in Italian** (Pokémon Versione Oro HeartGold) plays with all its one-screen layouts,
+  as the US copy does; its save is `heartgold-it.sav`.
 - **KEYS AND BUTTONS in the game list too:** its settings page (CONTROLS) changes the keys and
   buttons before you play, as the pause menu does; on the Switch as well (any controller it
   takes, sys-con and MissionControl ones included), and its list follows the buttons changed.

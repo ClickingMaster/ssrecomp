@@ -63,7 +63,7 @@ cartridge. Copy it in under the game's name, in this folder:
 |---|---|
 | Black 2 / White 2 | `black2.sav` / `white2.sav` |
 | Black / White | `black.sav` / `white.sav` |
-| SoulSilver / HeartGold | `soulsilver.sav` / `heartgold.sav` |
+| SoulSilver / HeartGold | `soulsilver.sav` / `heartgold.sav` (Italian: `heartgold-it.sav`) |
 | Platinum | `platinum.sav` |
 
 - **Which files work:** a plain `.sav`, as melonDS, DeSmuME (Export Backup

@@ -220,6 +220,9 @@ const char* rc_portable_load(const char code[4], const unsigned char* (*overlay)
         portableImages[s].assign(data, data + size);
         portableImageBase[s] = ram;
         rc_sections[s].image = portableImages[s].data();
+        // (Loaded elsewhere in another game: the Italian HeartGold's main program is shorter.
+        // Its chunks' addresses are the shifted ones, so the image is placed where they are.)
+        rc_sections[s].base = ram;
         // (An overlay can be a little longer in another game: HeartGold's title screen.)
         if (size > rc_sections[s].size) rc_sections[s].size = size;
         loaded++;
