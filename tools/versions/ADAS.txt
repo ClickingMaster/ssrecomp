@@ -6,7 +6,8 @@ main 0200b7b8 +0x4c StringTemplate_Format
 main 020343a8 +0x48 MapMatrixData_Load
 main 02041194 +0x70 ScrCmd_GetJubilifeLotteryTrainerID
 main 02061a70 +0x5c sub_0206DD1C
-ov4 021d76ac +0x1a0 NintendoWFC_ConnectToDWCServer
+itcm 01ff84a4 +0x0 OSi_DoResetSystem
+ov4 021d7660 +0x1a0 NintendoWFC_Cleanup
 ov5 021d74e0 +0x1a0 fieldmap
 ov5 021f3ab4 +0x16c SizeContest_UpdateRecordFromPartyMon
 ov5 021f3b4c +0x158 SizeContest_SetRecordSizeStrParams
@@ -50,7 +51,7 @@ ov18 0223e8a8 +0x1bc Traps_LoadCurrentPlayerPlacedTraps
 ov18 02243e18 +0x218 TouchRadar_StartTask
 ov18 0224d56c +0x1d8 UndergroundRecords_ExitTrainerCase
 ov19 02252440 +0x100 PoketchUnavailableScreen_Init
-ov20 02252448 +0x100 PoketchSystem_Create
+ov20 02252440 +0x100 PoketchSystem_GetFromFieldSystem
 ov21 02254840 +0x100 NitroStaticInit
 ov22 02254840 +0x100 NitroStaticInit
 ov23 02254840 +0x100 NitroStaticInit
@@ -95,7 +96,7 @@ ov59 021d8058 +0x1c0 RowanIntro_LoadInitialTilemaps
 ov60 021d74e0 +0x1a0 OptionsMenu_Init
 ov61 021d74e0 +0x1a0 MailViewer_Init
 ov62 0222d5d0 +0x220 SealPlacement_SealTouchRange
-ov62 0222df5c +0x22c CapsuleGraphics_LoadPageSprites
+ov62 0222def8 +0x22c CapsuleGraphics_PopulateSealPage
 ov63 021d74e0 +0x1a0 TitleScreen_Init
 ov63 021d8adc +0x17c ov77_021D2724
 ov63 021d9360 +0xec ov77_021D3360
@@ -123,7 +124,7 @@ ov80 0222d5c0 +0x220 GTSNetworking_InitCredentials
 ov80 02235782 +0x218 GTSNetworkHandler_FlagGeonetCommunicatedWith
 ov81 02237e40 +0x220 TradeSequence_Init
 ov82 0222d5c0 +0x220 BattleTowerHttp_Init
-ov83 0222d5c4 +0x220 ShowWFCUserInfoErasedMsg
+ov83 0222d5c0 +0x220 CheckWFCUserInfoErased
 ov83 022307b4 +0x228 MysteryGiftApp_ShowWiFiCommError
 ov83 02231f88 +0x24c ShowWindowFromTemplateIndex
 ov85 021d74e0 +0x1a0 ov101_021D0D80

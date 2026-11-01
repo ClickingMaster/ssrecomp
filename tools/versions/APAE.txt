@@ -2,7 +2,8 @@
 # APAE: where ADAE's functions are, as shifts: <module> <ADAE address from which> <shift> <the first function so moved>.
 # Made by tools/port_version.py; read by tools/shift_table.py.
 main 02000800 +0x0 _start
-ov4 021d76ac +0x0 NintendoWFC_ConnectToDWCServer
+itcm 01ff84a4 +0x0 OSi_DoResetSystem
+ov4 021d7660 +0x0 NintendoWFC_Cleanup
 ov5 021d74e0 +0x0 fieldmap
 ov6 022396bc +0x0 ov6_0223E140
 ov6 0223a020 +0x4 ov6_0223E8D0
@@ -20,7 +21,7 @@ ov16 021d74e0 +0x0 PokedexMain_Init
 ov17 021d74e0 +0x0 ov22_02254DE0
 ov18 022396a0 +0x0 Mining_InitGameState
 ov19 02252440 +0x0 PoketchUnavailableScreen_Init
-ov20 02252448 +0x0 PoketchSystem_Create
+ov20 02252440 +0x0 PoketchSystem_GetFromFieldSystem
 ov21 02254840 +0x0 NitroStaticInit
 ov22 02254840 +0x0 NitroStaticInit
 ov23 02254840 +0x0 NitroStaticInit
@@ -78,6 +79,6 @@ ov79 02211e60 +0x0 SeedKeyStream
 ov80 0222d5c0 +0x0 GTSNetworking_InitCredentials
 ov81 02237e40 +0x0 TradeSequence_Init
 ov82 0222d5c0 +0x0 BattleTowerHttp_Init
-ov83 0222d5c4 +0x0 ShowWFCUserInfoErasedMsg
+ov83 0222d5c0 +0x0 CheckWFCUserInfoErased
 ov85 021d74e0 +0x0 ov101_021D0D80
 ov86 021d74e0 +0x0 Diploma_Init

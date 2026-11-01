@@ -230,6 +230,123 @@ def increasing(points):
     return out[::-1]
 
 
+def templates(ref, other, names, mapped, pair_of):
+    """Functions pointed to from a table of three (an application's init, main and exit, as
+    OverlayManager templates hold them): where both neighbours are mapped, the other ROM's table
+    with those two says exactly where the middle one is. Fixes `mapped` in place; returns how many
+    it found or corrected, and how many it confirmed."""
+    thumb = {}
+    for (mod, a), (arm, _n) in names.items():
+        if not arm:
+            thumb.setdefault(a | 1, []).append(mod)
+
+    def resolve(ptr, near):
+        mods = thumb.get(ptr, ())
+        mod = near if near in mods else "main" if "main" in mods else mods[0] if len(mods) == 1 else None
+        return (mod, ptr - 1) if mod else None
+
+    other_words = {m: np.frombuffer(d[:len(d) & ~3], dtype="<u4") for m, (_b, d) in other.mods.items()}
+    ptrs = np.array(sorted(thumb), dtype=np.uint32)
+    fixed = confirmed = 0
+    for mod, (_base, data) in ref.mods.items():
+        w = np.frombuffer(data[:len(data) & ~3], dtype="<u4")
+        ok = np.isin(w, ptrs)
+        for i in np.nonzero(ok[:-2] & ok[1:-1] & ok[2:])[0] + 1:
+            a, f, b = (resolve(int(w[k]), mod) for k in (i - 1, i, i + 1))
+            if not (a and f and b) or a not in mapped or b not in mapped or f[0] not in pair_of:
+                continue
+            ta, tb = mapped[a][1] | 1, mapped[b][1] | 1
+            hits = []
+            for ow in other_words.values():
+                j = np.nonzero((ow[:-2] == ta) & (ow[2:] == tb))[0]
+                hits += [int(ow[k + 1]) - 1 for k in j if int(ow[k + 1]) & 1]
+            if len(set(hits)) != 1:
+                continue
+            want = (pair_of[f[0]], hits[0])
+            if mapped.get(f) == want:
+                confirmed += 1
+            else:
+                mapped[f] = want
+                fixed += 1
+    return fixed, confirmed
+
+
+def bl_targets(base, data, start, end, arm):
+    """The targets of the calls (BL, BLX) in [start, end), in order."""
+    out = []
+    o, stop = start - base, min(end - base, len(data))
+    if o < 0:
+        return out
+    if arm:
+        while o + 4 <= stop:
+            w = int.from_bytes(data[o:o + 4], "little")
+            if (w >> 24) == 0xEB or (w >> 25) == 0x7D:
+                off = (w & 0xFFFFFF) - ((w & 0x800000) << 1)
+                t = base + o + 8 + off * 4
+                out.append((t | 1) + ((w >> 23) & 2) if (w >> 25) == 0x7D else t)
+            o += 4
+        return out
+    while o + 4 <= stop:
+        h1 = data[o] | data[o + 1] << 8
+        h2 = data[o + 2] | data[o + 3] << 8
+        if h1 >> 11 == 0x1E and h2 >> 11 in (0x1F, 0x1D):
+            off = ((h1 & 0x7FF) << 12 | (h2 & 0x7FF) << 1)
+            off -= (off & 0x400000) << 1
+            t = base + o + 4 + off
+            out.append(t & ~3 if h2 >> 11 == 0x1D else t | 1)
+            o += 4
+        else:
+            o += 2
+    return out
+
+
+def calls(ref, other, names, mapped):
+    """Functions called by those found, found where the other ROM's same function makes the same
+    call (its n-th call, when both make as many): small ones too, which have no key of their own.
+    Adds to `mapped`; returns how many."""
+    starts = {}  # ref: (address | thumb) -> [(mod, address)]
+    for (mod, a), (arm, _n) in names.items():
+        starts.setdefault(a if arm else a | 1, []).append((mod, a))
+    ends = {}
+    for (mod, a) in names:
+        ends.setdefault(mod, []).append(a)
+    for v in ends.values():
+        v.sort()
+    oends = {}
+    for (om, ta) in mapped.values():
+        oends.setdefault(om, []).append(ta)
+    for v in oends.values():
+        v.sort()
+    import bisect
+
+    def end_of(lst, a, limit):
+        i = bisect.bisect_right(lst, a)
+        return min(lst[i] if i < len(lst) else a + limit, a + limit)
+
+    votes = {}
+    for (mod, a), (om, ta) in list(mapped.items()):
+        arm = names[(mod, a)][0]
+        if mod not in ref.mods or om not in other.mods:
+            continue
+        rb, rd = ref.mods[mod]
+        ob, od = other.mods[om]
+        x = bl_targets(rb, rd, a, end_of(ends[mod], a, 0x1000), arm)
+        y = bl_targets(ob, od, ta, end_of(oends[om], ta, 0x1000), arm)
+        if not x or len(x) != len(y):
+            continue
+        for t, u in zip(x, y):
+            for f in starts.get(t, ()):
+                if f[0] in (mod, "main", "itcm"):
+                    tm = om if f[0] == mod else f[0]
+                    votes.setdefault(f, set()).add((tm, u & ~1))
+    added = 0
+    for f, v in votes.items():
+        if f not in mapped and len(v) == 1:
+            mapped[f] = next(iter(v))
+            added += 1
+    return added
+
+
 def module_key(module):
     m = re.match(r"ov0*(\d+)$", module)
     return "ov%s" % m.group(1) if m else module
@@ -294,16 +411,51 @@ def main():
     with get_context("fork").Pool(jobs) as pool:
         results = pool.map(match_module, jobs_list, chunksize=1)
     names = {(mod, a): (arm, n) for mod, fs in by_module.items() for a, arm, n in fs}
+    mapped = {(mod, a): (om, ta) for mod, om, found in results for a, ta in found.items()}
+    pair_of = {mod: om for mod, om, _f, _a in jobs_list}
+    fixed, confirmed = templates(ref, other, names, mapped, pair_of)
+    called = 0
+    for _round in range(4):
+        n = calls(ref, other, names, mapped)
+        called += n
+        if not n:
+            break
+    # A place outside the module it was taken in is not one (a call into another overlay).
+    for f, (om, ta) in list(mapped.items()):
+        ob, od = other.mods[om]
+        if not ob <= ta < ob + len(od):
+            del mapped[f]
+    # Two functions taken for the same place: the one more alike stays.
+    by_target = {}
+    for f, t in mapped.items():
+        by_target.setdefault(t, []).append(f)
+    dropped = 0
+    for (om, ta), fs in by_target.items():
+        if len(fs) < 2:
+            continue
+
+        def likeness(f, om=om, ta=ta):
+            arm = names[f][0]
+            rb, rd = ref.mods[f[0]]
+            ob, od = other.mods[om]
+            mask = mask_arm if arm else mask_thumb
+            n = COMPARED
+            return similar(mask(rd[f[1] - rb:f[1] - rb + n]), mask(od[ta - ob:ta - ob + n]))
+        keep = max(fs, key=likeness)
+        for f in fs:
+            if f != keep:
+                del mapped[f]
+                dropped += 1
     out_rows, total = [], sum(len(f) for f in funcs_of.values())
-    for mod, om, found in results:
-        for a, ta in found.items():
-            arm, name = names[(mod, a)]
-            out_rows.append((ta, "a" if arm else "t", om, "?" if om.startswith("ov") else "-", name))
+    for (mod, a), (om, ta) in mapped.items():
+        arm, name = names[(mod, a)]
+        out_rows.append((ta, "a" if arm else "t", om, "?" if om.startswith("ov") else "-", name))
     with open(out_path, "w") as f:
         for r in sorted(out_rows):
             f.write("%08x %s %s %s %s\n" % r)
     paired = ", ".join(f"{m}->{om}" for m, om, _f, _a in sorted(jobs_list, key=lambda j: (len(j[0]), j[0]))[:12])
-    print(f"{other.code}: {len(out_rows)} of {total} functions mapped ({len(jobs_list)} modules paired: {paired}, ...)")
+    print(f"{other.code}: {len(out_rows)} of {total} functions mapped ({len(jobs_list)} modules paired: {paired}, ...); "
+          f"by their tables of pointers: {confirmed} confirmed, {fixed} found or corrected; {called} by the calls of those found; {dropped} dropped (another in the same place)")
 
 
 if __name__ == "__main__":
