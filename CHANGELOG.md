@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Switch Android gameplay explicitly to landscape for DS and GBA, restoring portrait on return to the launcher.
+
+- Report cartridge save failures on screen, log successful save writes, and flush Linux save data and directory changes to storage. Steam Deck rollback investigation remains open.
+- Keep the SoulSilver overworld through a door or Dark Cave fade instead of sticking on the X menu / touch screen (#5).
+- Show black at once when a Switch ROM starts, instead of the uninitialised white swapchain (#20).
+- **Dark caves no longer go completely black** (HeartGold and SoulSilver, Dark Cave before you
+  have Flash) with the world drawn by the graphics chip (PC, Switch): the circle of light around
+  you shows again. The white flash of a cave's entrance fills the whole widescreen view instead of
+  showing black bars at the sides for a second.
+
+- Android launcher opens in portrait, with bounded rendering resolution and remembered console tab.
+- Check ROM banner and artwork bounds, skip repeated ROM paths and reduce background scanning.
+- Back up existing saves before launching and report missing ROMs or unwritable save folders.
+- Write launcher settings through a temporary file and fail Android builds on Java errors.
+- Check official GitHub releases from Settings > Help and offer the Android APK download.
+
+
 - **A new address: github.com/mamesj/pokemon-fulldex** (the old pokemon-ds-widescreen address
   still leads there). The bug report link, the PC download's `README.txt` and the Linux
   AppImage's updates use it.

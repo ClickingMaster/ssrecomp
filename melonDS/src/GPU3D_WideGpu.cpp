@@ -647,13 +647,13 @@ void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int W, int H,
     // of both kinds is drawn on its own.
     struct Kind
     {
-        bool Opaque, Translucent, Lequal, WriteDepth;
+        bool Opaque, Translucent, Lequal, WriteDepth, Fog;
         s32 Bias;
         u8 Id;
         bool operator==(const Kind& o) const
         {
             return Opaque == o.Opaque && Translucent == o.Translucent && Lequal == o.Lequal && WriteDepth == o.WriteDepth &&
-                Bias == o.Bias && Id == o.Id;
+                Fog == o.Fog && Bias == o.Bias && Id == o.Id;
         }
     };
     Kind group {};
@@ -692,7 +692,10 @@ void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int W, int H,
             d.Early = earlyTrans && !group.WriteDepth;
             d.DepthWrite = group.WriteDepth;
             d.WriteDepthAttr = group.WriteDepth;
-            d.WriteFogAttr = false;
+            // A translucent pixel keeps the fog only if the polygon has it too (GPU3D_Wide.cpp's
+            // pattr & fogBit): one without it writes its 0. SoulSilver's dark caves rely on this,
+            // their darkness polygons taking the black fog off the lit circle around the player.
+            d.WriteFogAttr = !group.Fog;
             d.StencilRef = (u8)(0x80 | group.Id);
             if (blendEnabled)
             {
@@ -731,6 +734,7 @@ void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int W, int H,
         kind.Lequal = attr & (1 << 14);
         kind.Bias = kind.Lequal ? (poly->WBuffer ? 0xFF : 0x200) : 0;
         kind.WriteDepth = attr & (1 << 11);
+        kind.Fog = attr & (1 << 15);
         kind.Id = kind.Translucent ? (u8)(((attr >> 24) & 0x3F) + 1) : 0;
         if (!kind.Translucent) kind.WriteDepth = true;
         const bool mixed = kind.Opaque && kind.Translucent;

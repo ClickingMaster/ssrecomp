@@ -37,7 +37,7 @@
             android:label="Pokémon Fulldex"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleTask"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="portrait"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:preferMinimalPostProcessing="true"
             android:exported="true">

@@ -33,6 +33,7 @@
 #endif
 #if defined(__linux__) || defined(__SWITCH__) // (Android too)
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 #ifndef SSR_NO_PNG
 #include <png.h>
@@ -413,15 +414,21 @@ static std::vector<uint8_t> ReadFile(const std::string& path)
     return data;
 }
 
-static void FlushSave(const std::string& path)
+static bool FlushSave(const std::string& path)
 {
-    if (!Host::SaveIsDirty || path.empty()) return;
+    if (!Host::SaveIsDirty) return true;
+    if (path.empty()) return false;
     std::string tmp = path + ".tmp";
     FILE* f = fopen(tmp.c_str(), "wb");
-    if (!f) return;
+    if (!f) { fprintf(stderr, "cannot open save temporary file %s\n", tmp.c_str()); return false; }
     bool ok = fwrite(Host::SaveData.data(), 1, Host::SaveData.size(), f) == Host::SaveData.size();
+    // A completed stdio write alone does not ask Linux to persist the data to storage.
+#if defined(__linux__)
+    if (ok) ok = fflush(f) == 0;
+    if (ok) ok = fsync(fileno(f)) == 0;
+#endif
     ok = fclose(f) == 0 && ok;
-    if (!ok) return;
+    if (!ok) { fprintf(stderr, "cannot finish writing save %s\n", tmp.c_str()); return false; }
 #ifdef __SWITCH__
     // The Switch's file system will not rename onto an existing file, so the old save steps
     // aside first, and comes back if the new one cannot take its place.
@@ -432,7 +439,7 @@ static void FlushSave(const std::string& path)
     {
         if (hadOld) rename(old.c_str(), path.c_str());
         fprintf(stderr, "cannot write save %s\n", path.c_str());
-        return;
+        return false;
     }
     if (hadOld) remove(old.c_str());
 #else
@@ -443,10 +450,23 @@ static void FlushSave(const std::string& path)
     if (err)
     {
         fprintf(stderr, "cannot write save %s: %s\n", path.c_str(), err.message().c_str());
-        return;
+        return false;
     }
 #endif
+#if defined(__linux__)
+    // Persist the directory entry after replacing the file. Leave the save dirty on error
+    // so the next periodic flush retries instead of silently accepting an uncertain write.
+    const std::string parent = std::filesystem::path(path).parent_path().empty()
+        ? "." : std::filesystem::path(path).parent_path().string();
+    const int dir = open(parent.c_str(), O_RDONLY | O_DIRECTORY);
+    bool synced = dir >= 0;
+    if (synced) { synced = fsync(dir) == 0; if (close(dir) != 0) synced = false; }
+    if (!synced) { fprintf(stderr, "cannot sync save directory %s\n", parent.c_str()); return false; }
+#endif
+    fprintf(stderr, "[save] persisted %zu bytes to %s\n", Host::SaveData.size(), path.c_str());
+    fflush(stderr);
     Host::SaveIsDirty = false;
+    return true;
 }
 
 struct Options
@@ -1018,10 +1038,21 @@ struct AutoFocus
         }
         else if (topBlank)
         {
-            // A top screen of one colour is also what a flash or fade looks like for a
-            // moment, so this has to last before the bottom screen is shown instead.
-            want = true;
-            hold = 45;
+            if (fieldNow)
+            {
+                // Overworld fade or a cave load: the top screen is one colour for a while.
+                // Stay on the world. Treating that darkness as an application left Dark Cave
+                // on the touch screen (GitHub #5).
+                want = false;
+                hold = 1;
+            }
+            else
+            {
+                // A top screen of one colour is also what a flash or fade looks like for a
+                // moment, so this has to last before the bottom screen is shown instead.
+                want = true;
+                hold = 45;
+            }
         }
         else if (botBlank)
             want = false;
@@ -2035,6 +2066,14 @@ int main(int argc, char** argv)
             if (SDL_GetRendererInfo(renderer, &info) == 0)
                 fprintf(stderr, "SDL renderer %s, video driver %s\n", info.name, SDL_GetCurrentVideoDriver());
         }
+#ifdef __SWITCH__
+        // The OpenGL ES swapchain starts uninitialised (often white). Show black at once so
+        // opening a ROM does not sit on a white screen until the first pipelined present
+        // (GitHub #20).
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_RenderPresent(renderer);
+#endif
         if (opt.dekoProbe)
         {
 #if defined(__SWITCH__) && defined(SSR_DEKO3D)
@@ -2121,6 +2160,9 @@ int main(int argc, char** argv)
     // Whether the overworld was running when the save write began: it counts as running
     // until the write ends, so the widescreen picture does not drop out meanwhile.
     bool fieldHeldBySave = false;
+    // Door and cave warps pause FieldMap_Main while both screens fade. Keep the overworld
+    // layout for that fade so the view does not stick on the X menu (GitHub #5).
+    bool fieldHeldByFade = false;
     // The overworld's main function is not entered for stretches of about ten frames while
     // some scripts run (a nurse bowing, for one), so it gets a longer memory than the rest:
     // otherwise the widescreen picture and the menu layout drop out for those frames.
@@ -2134,13 +2176,14 @@ int main(int argc, char** argv)
     auto fieldActive = [&]() {
         if (opt.forceField) return true; // test aid for other games: treat every frame as the overworld
         unsigned last = rc_probe_last_frame(probeFieldMap);
-        return (last && last + 16 >= rc_current_frame()) || fieldHeldBySave;
+        return (last && last + 16 >= rc_current_frame()) || fieldHeldBySave || fieldHeldByFade;
     };
     // Coming back from the Bag, the Pokegear and so on, the game fades the overworld in with
     // the X menu already drawn, a little before the menu's task runs again. The strip it
     // puts along the bottom of the top screen gives that away; while this counts down, the
     // menu layout is used although the task's probe is still silent.
     int menuReturn = 0;
+    unsigned lastMenuishFrame = 0;
     // SoulSilver and HeartGold: the Running Shoes button. The game has it on the touch screen
     // beside its menu (x 182-255, y 89-130), but greys it out while the X menu is open, and the
     // single-screen view shows the touch screen only then. So its picture is kept from the last
@@ -3211,7 +3254,8 @@ int main(int argc, char** argv)
         // The safety net below must not flash up for the few frames in which the field map is
         // not running during a door transition, so its condition has to hold for a while.
         static int spreadFrames = 0;
-        if (std::any_of(std::begin(probeTouch), std::end(probeTouch), probeActive) && !fieldActive() &&
+        const bool topFading = screens && screens[0].pixels && AutoFocus::Blank(screens[0].pixels);
+        if (std::any_of(std::begin(probeTouch), std::end(probeTouch), probeActive) && !fieldActive() && !topFading &&
             !appActive("Battle") && !appActive("TitleScreen") && !appActive("IntroMovie") && !appActive("Credits"))
             spreadFrames++;
         else
@@ -5823,7 +5867,12 @@ int main(int argc, char** argv)
             const u32 dispA = nds->GPU.GPU2D_A.DispCnt;
             const bool show3D = ((dispA >> 16) & 3) == 1 && (dispA & (1 << 8)) && (dispA & (1 << 3));
             const auto& wideUnit = topUnitOf() == 0 ? nds->GPU.GPU2D_A : nds->GPU.GPU2D_B;
-            if (wideFrames > 3 && melonDS::Wide.Front && show3D)
+            // (But while the screen is wholly white or black, the picture is kept: the fade below
+            // covers it entirely, and the sides then match. SoulSilver turns the 3D layer off
+            // while a cave's map loads behind the white of its warp, which showed black bars.)
+            const int wideBright = (wideUnit.MasterBrightness >> 14) & 3;
+            const bool fullFade = (wideBright == 1 || wideBright == 2) && (wideUnit.MasterBrightness & 0x1F) >= 16;
+            if (wideFrames > 3 && melonDS::Wide.Front && (show3D || fullFade))
             {
                 wideImage.pixels = melonDS::Wide.Front;
                 wideImage.w = melonDS::Wide.FrontW;
@@ -6383,7 +6432,17 @@ int main(int argc, char** argv)
             { top, renderer2d.LayerFlags[topUnit], renderer2d.EdgeColour[topUnit], renderer2d.EdgeBlend[topUnit], renderer2d.EdgeFlat[topUnit] },
             { bot, renderer2d.LayerFlags[1 - topUnit], renderer2d.EdgeColour[1 - topUnit], renderer2d.EdgeBlend[1 - topUnit], renderer2d.EdgeFlat[1 - topUnit] },
         };
-        const bool fieldNow = rc_probe_last_frame(probeFieldMap) + 1 >= rc_current_frame() && rc_probe_last_frame(probeFieldMap);
+        bool appBottom = false;
+        for (const RcApp* app : focus.bottomApps)
+            if (appActive(app->name)) appBottom = true;
+        appBottomNow = appBottom;
+        {
+            const unsigned last = rc_probe_last_frame(probeFieldMap);
+            const unsigned now = rc_current_frame();
+            fieldHeldByFade = last && last + 90 >= now && top && AutoFocus::Blank(top) && !appBottom;
+        }
+        const bool fieldNow = (rc_probe_last_frame(probeFieldMap) + 1 >= rc_current_frame() && rc_probe_last_frame(probeFieldMap)) ||
+            fieldHeldByFade;
         for (u32 sec = 0; sec < rc_num_sections; sec++)
         {
             // (A section that misses a frame or two still counts as running; only a gap of
@@ -6392,10 +6451,6 @@ int main(int argc, char** argv)
             if (!last || last + 3 < rc_current_frame()) sectionStreak[sec] = 0;
             else if (last == rc_current_frame()) sectionStreak[sec]++;
         }
-        bool appBottom = false;
-        for (const RcApp* app : focus.bottomApps)
-            if (appActive(app->name)) appBottom = true;
-        appBottomNow = appBottom;
         if (top && bot && !paused) focus.Update(top, bot, fieldNow, appBottom);
         sceneMark(0);
         layout.swapped = focus.Swapped();
@@ -6477,8 +6532,10 @@ int main(int argc, char** argv)
                 const bool strip = tf && sectionActive("field") && !sectionActive("OVY_12") &&
                     is2D(0, 152) && is2D(255, 152) && is2D(0, 189) && is2D(255, 189) && LayerClass(tf[170 * 256 + 128]) == LAYER_OBJ &&
                     LayerClass(tf[60 * 256 + 128]) == LAYER_3D && LayerClass(tf[100 * 256 + 20]) == LAYER_3D;
+                if (probeActive(probeStartMenu) || appBottomNow) lastMenuishFrame = frame;
                 if (probeActive(probeStartMenu) && fieldActive()) menuReturn = 0;
-                else if (strip && merged) menuReturn = 30;
+                else if (strip && merged && lastMenuishFrame && frame - lastMenuishFrame < 180)
+                    menuReturn = 30;
                 else if (menuReturn > 0) menuReturn--;
                 bool menuOpen = merged && ((probeActive(probeStartMenu) && fieldActive()) || menuReturn > 0);
                 rc_hide_layers[topUnit] = menuOpen ? 0x18 : 0;
@@ -7001,7 +7058,8 @@ int main(int argc, char** argv)
             if (!WriteSnapshot(*nds, opt.stateSave, scriptClock)) fprintf(stderr, "snapshot failed\n");
         }
 
-        if (!opt.noSave && frame % 120 == 0) FlushSave(opt.save);
+        if (!opt.noSave && frame % 120 == 0 && !FlushSave(opt.save))
+            say("SAVE FAILED - CHECK DISK SPACE AND SAVE FOLDER");
         if (opt.frames && scriptClock >= opt.frames) running = false;
         if (opt.stopAt && frame >= opt.stopAt)
         {
@@ -7021,7 +7079,9 @@ int main(int argc, char** argv)
         fflush(stderr);
     };
     exitStep("saving");
-    if (!opt.noSave) FlushSave(opt.save);
+    if (!opt.noSave && !FlushSave(opt.save) && !opt.headless)
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "FullDex save failed",
+            "Your latest progress could not be written reliably. Check disk space and save-folder permissions. Keep the save and .tmp files for recovery.", window);
     Achievements::Stop();
     if (!opt.headless)
     {

@@ -11,6 +11,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,6 +36,100 @@ public class GameActivity extends SDLActivity {
     protected void onCreate(Bundle state) {
         self = this;
         super.onCreate(state);
+    }
+
+    // The launcher and both game engines share one activity. Keep its orientation tied to
+    // the current screen, including when SDL recreates its window with a stale size/hint.
+    private static volatile boolean playingGame;
+
+    private void applyScreenOrientation() {
+        runOnUiThread(() -> setRequestedOrientation(playingGame
+            ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+    }
+
+    public static void showLauncherOrientation() {
+        playingGame = false;
+        if (self != null) self.applyScreenOrientation();
+    }
+
+    public static void showGameOrientation() {
+        playingGame = true;
+        if (self != null) self.applyScreenOrientation();
+    }
+
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        applyScreenOrientation();
+    }
+
+    // Manual check: network work never blocks the SDL or Android UI thread.
+    public static void checkUpdates() {
+        if (self == null) return;
+        final GameActivity activity = self;
+        new Thread(() -> {
+            javax.net.ssl.HttpsURLConnection connection = null;
+            try {
+                connection = (javax.net.ssl.HttpsURLConnection) new java.net.URL(
+                    "https://api.github.com/repos/mamesj/pokemon-fulldex/releases?per_page=30").openConnection();
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(10000);
+                connection.setInstanceFollowRedirects(false);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "FullDex-Android");
+                if (connection.getResponseCode() != 200) throw new java.io.IOException("GitHub HTTP " + connection.getResponseCode());
+                java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+                try (java.io.InputStream input = connection.getInputStream()) {
+                    byte[] buffer = new byte[8192];
+                    int n;
+                    while ((n = input.read(buffer)) != -1) {
+                        if (bytes.size() + n > 2 * 1024 * 1024) throw new java.io.IOException("Response too large");
+                        bytes.write(buffer, 0, n);
+                    }
+                }
+                org.json.JSONArray releases = new org.json.JSONArray(bytes.toString("UTF-8"));
+                String download = null;
+                long newest = 0;
+                java.text.SimpleDateFormat dates = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                dates.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                for (int i = 0; i < releases.length(); i++) {
+                    org.json.JSONObject release = releases.getJSONObject(i);
+                    if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue;
+                    org.json.JSONArray assets = release.optJSONArray("assets");
+                    if (assets == null) continue;
+                    for (int j = 0; j < assets.length(); j++) {
+                        org.json.JSONObject asset = assets.getJSONObject(j);
+                        if (!"pokemon-ds-wide-android.apk".equals(asset.optString("name")) || asset.optLong("size") <= 0) continue;
+                        String url = asset.optString("browser_download_url");
+                        if (!url.startsWith("https://github.com/mamesj/pokemon-fulldex/releases/download/")) continue;
+                        long time = dates.parse(asset.getString("updated_at")).getTime();
+                        if (time > newest) { newest = time; download = url; }
+                    }
+                }
+                final String url = download;
+                final boolean newer = newest > BuildInfo.BUILT_AT;
+                activity.runOnUiThread(() -> {
+                    if (activity.isFinishing() || activity.isDestroyed()) return;
+                    android.app.AlertDialog.Builder dialog = new android.app.AlertDialog.Builder(activity)
+                        .setTitle("FullDex updates")
+                        .setMessage(url == null ? "No Android APK found in the latest releases." : newer ? "A newer Android APK is available. Open the official download?" : "No newer APK was found. You can open the current official download.")
+                        .setNegativeButton("Close", null);
+                    if (url != null) dialog.setPositiveButton("Open download", (d, which) -> {
+                        try { activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
+                        catch (Exception e) { Log.e(TAG, "Cannot open download", e); }
+                    });
+                    dialog.show();
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Update check failed", e);
+                activity.runOnUiThread(() -> {
+                    if (!activity.isFinishing() && !activity.isDestroyed())
+                        new android.app.AlertDialog.Builder(activity).setTitle("FullDex updates")
+                            .setMessage("Could not check GitHub. Check your connection and try again later.")
+                            .setPositiveButton("OK", null).show();
+                });
+            } finally { if (connection != null) connection.disconnect(); }
+        }, "FullDex-update-check").start();
     }
 
     private static SharedPreferences prefs() {
@@ -130,6 +225,7 @@ public class GameActivity extends SDLActivity {
     // The file path of a folder chosen in the picker: its tree id is "<volume>:<path>", e.g.
     // "primary:Download/ROMs" (the phone's own storage) or "1A2B-3C4D:ROMs" (an SD card).
     static String pathOf(Uri tree) {
+        if (!"com.android.externalstorage.documents".equals(tree.getAuthority())) return null;
         String id;
         try {
             id = DocumentsContract.getTreeDocumentId(tree);
@@ -141,7 +237,12 @@ public class GameActivity extends SDLActivity {
         String rel = colon < 0 ? "" : id.substring(colon + 1);
         String base = volume.equalsIgnoreCase("primary") ? Environment.getExternalStorageDirectory().getPath()
                 : "/storage/" + volume;
-        return rel.isEmpty() ? base : base + "/" + rel;
+        try {
+            java.io.File root = new java.io.File(base).getCanonicalFile();
+            java.io.File folder = new java.io.File(root, rel).getCanonicalFile();
+            if (!folder.equals(root) && !folder.getPath().startsWith(root.getPath() + "/")) return null;
+            return folder.isDirectory() && folder.canRead() ? folder.getPath() : null;
+        } catch (java.io.IOException e) { return null; }
     }
 
     // Starts the app again in a new process (Restart, in a process of its own, ends this one

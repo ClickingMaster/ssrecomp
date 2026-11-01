@@ -477,6 +477,18 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
         }
         framebufferEnd(&fb);
     }
+    {
+        u32 stride;
+        if (u32* out = (u32*)framebufferBegin(&fb, &stride))
+        {
+            for (int y = 0; y < 720; y++)
+            {
+                u32* dst = out + (size_t)y * (stride / 4);
+                for (int x = 0; x < 1280; x++) dst[x] = 0xFF000000u;
+            }
+            framebufferEnd(&fb);
+        }
+    }
     framebufferClose(&fb);
     return result;
 }
