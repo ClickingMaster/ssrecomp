@@ -76,9 +76,6 @@ int main()
         assert(buttons.screen == 1 && buttons.sy == 0 && buttons.sh == 192);
         assert(buttons.dy + buttons.sh * buttons.scale < 144); // Clear of the question.
     }
-    const Element moves = BattleMoveCrop();
-    assert(moves.screen == 1 && moves.sx == 0 && moves.sw == 256);
-    assert(moves.sy <= 32 && moves.sy + moves.sh == 192); // All moves, Back and Shift.
     SDL_Quit();
-    puts("Gen 5 layouts: Bag text, battle choices, move controls and compositors passed.");
+    puts("Gen 5 layouts: Bag text, battle choices and compositors passed.");
 }

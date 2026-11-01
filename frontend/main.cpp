@@ -3300,18 +3300,17 @@ int main(int argc, char** argv)
             if (wideView && screens && !bw1.on && kind == 2) style = 2;
             if ((moves || command || target) && style == 2)
             {
-                // PANEL: against the right edge in the message box's band. Moves use its
-                // full height to include Back and Shift without shrinking their text further.
-                Element c = moves ? BattleMoveCrop() : target ? Crop(1, 0, 22, 256, 110) : Crop(1, 0, 78, 256, 114);
-                c.scale = (moves ? 53.0f : 43.0f) / c.sh;
+                // PANEL: the corner panel's piece as tall as the message box (rows 147-189),
+                // against the view's right edge.
+                Element c = moves ? Crop(1, 0, 30, 256, 98) : target ? Crop(1, 0, 22, 256, 110) : Crop(1, 0, 78, 256, 114);
+                c.scale = 43.0f / c.sh;
                 c.dx = viewRight - 2 - c.sw * c.scale;
-                c.dy = moves ? 137 : 147;
+                c.dy = 147;
                 c.border = true;
                 sc.items.push_back(c);
             }
             else if (moves)
-                // Keep Back (and Shift in triples) below the moves: the D-pad can select them.
-                cornerPanel(BattleMoveCrop(), 53.0f / 162);
+                cornerPanel(Crop(1, 0, 30, 256, 98), 0.5f);   // the four moves, two by two (49 high)
             else if (command)
                 cornerPanel(Crop(1, 0, 78, 256, 114), 0.44f); // FIGHT above BAG, RUN and POKEMON (50 high)
             else if (target)

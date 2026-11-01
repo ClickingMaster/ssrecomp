@@ -462,12 +462,6 @@ inline Element Crop(int screen, int sx, int sy, int sw, int sh)
     return { screen, sx, sy, sw, sh, 0, 0, 1.0f, 0, 255, false };
 }
 
-// The move screen also has Back (and, in triples, Shift) below its four move buttons.
-inline Element BattleMoveCrop()
-{
-    return Crop(1, 0, 30, 256, 162);
-}
-
 // A battle's question stays at full size. Its touch-screen choices stand above the
 // message box, so neither the text nor the buttons disappear behind another piece.
 inline Scene BattleChoiceScene(float viewWidth)
