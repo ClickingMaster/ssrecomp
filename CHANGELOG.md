@@ -13,6 +13,11 @@
   showing black bars at the sides for a second.
 - **A move's power, accuracy and description show on the summary's moves page** (HeartGold and
   SoulSilver): choosing a move puts them where the stats were, until you go back (#11).
+- **HeartGold and SoulSilver: the Pokédex's cover no longer shows twice** while it slides open or
+  shut (#12). In the wide view the closed cover fills the screen, its buttons bar runs edge to
+  edge, and it slides across the whole screen from the right edge to the left as it opens.
+  On a touch screen, swipe the closed cover to the left to open it, and swipe the list to the
+  right to close it.
 - **Windows: a game started from the game list takes the keyboard and controller at once**; until
   its window was clicked, they did nothing.
 

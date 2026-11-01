@@ -193,6 +193,22 @@ static void Start()
 // With --log-sections and a shot directory, a screenshot is taken around every change of merged scene.
 static std::set<uint32_t> g_sceneShots;
 
+// The Pokedex's closed cover in HeartGold and SoulSilver (both screens), kept while it is shown:
+// the wide view slides it further than the screens do, so it needs the parts the game has
+// already scrolled off them (pickScene). Drawn as screens 2 and 3.
+static uint32_t g_dexCover[2][256 * 192];
+static bool g_dexCoverKept = false;
+// Its list page as last shown (both screens), with its paper and ruling: what the cover uncovers
+// as it slides away is laid out as the list page, and the screens only show the part of it that
+// has come onto them. Drawn as screens 4 and 5.
+static uint32_t g_dexPages[2][256 * 192];
+static bool g_dexPagesKept = false;
+static uint32_t g_dexPaper = 0xFBFBFB;
+static std::vector<uint32_t> g_dexRuling;
+// What of it the view shows (pickScene), for the touch screen's swipes: 1 the cover, closed and
+// still, 2 the list page, 0 neither.
+static int g_dexShown = 0;
+
 // Defined in the 2D renderer: layers not to draw, per engine (see GPU2D_Soft.cpp).
 extern unsigned rc_hide_layers[2];
 extern bool rc_frame_hidden, rc_wide_render_skip; // melonDS/src/GPU.cpp
@@ -3166,6 +3182,7 @@ int main(int argc, char** argv)
 
     auto pickScene = [&](bool cursorInUse, float viewWidth, const ScreenImage* screens) {
         Scene sc;
+        g_dexShown = 0;
         auto only = [&](const char* name, int screen) {
             sc.name = name;
             sc.items = { FullScreen(screen) };
@@ -3498,6 +3515,21 @@ int main(int argc, char** argv)
             uint32_t tab = screens[1].pixels[176 * 256 + 63];
             bool tabPage = !light(title) && (tab & 0xFF) > 150 && ((tab >> 16) & 0xFF) < 120 && !listPage &&
                 (((title >> 16) & 0xFF) < 200 || ((title >> 8) & 0xFF) > 90);
+            // The cover is one picture over both screens that slides away to the left as the
+            // Pokedex opens (and back as it closes, the screens fading out meanwhile). While it
+            // is still at the bottom screen's left edge the tall picture stays: as a spread its
+            // two halves beside the pages looked like the Pokedex twice (GitHub #12).
+            {
+                static uint32_t coverFrame = 0;
+                const uint32_t now = rc_current_frame();
+                const uint32_t e = screens[1].pixels[100 * 256 + 10];
+                const int er = (e >> 16) & 0xFF, eg = (e >> 8) & 0xFF, eb = e & 0xFF;
+                const bool coverEdge = er >= 60 && er * 2 > eg * 5 && er * 2 > eb * 5; // (red, or darkened by a fade)
+                if (cover)
+                    coverFrame = now;
+                else if (!listPage && !tabPage && coverEdge && coverFrame && now - coverFrame < 40)
+                    cover = true;
+            }
             auto put = [&](Element e, float x, float y, float scale) {
                 e.dx = x;
                 e.dy = y;
@@ -3505,14 +3537,167 @@ int main(int argc, char** argv)
                 sc.items.push_back(e);
             };
             const float W = viewWidth, L = 128 - W / 2;
-            if (cover || W < 300)
-                sc = Stack("pokedex", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, !cover, viewWidth);
+            // The list as one page: the pieces of the entry on the top screen are laid out
+            // again around the number grid. A title bar runs across the top; on the left are
+            // the name, the picture and the type and size card; on the right the description
+            // sits above the grid and its buttons. From screens `top` and `bot`, moved right by
+            // `off`.
+            auto listPieces = [&](int top, int bot, float off) {
+                auto putKeyed = [&](Element e, float x, float y, float scale) {
+                    for (size_t k = 0; k < 4 && k < g_dexRuling.size(); k++) e.keys[k] = g_dexRuling[k];
+                    put(e, x, y, scale);
+                };
+                const float l = L + off, t = 0.77f, barH = 17 * t;
+                for (float x = l; x < l + W; x += 100 * t) put(Crop(top, 140, 0, 100, 17), x, 0, t);
+                put(Crop(top, 0, 0, 80, 17), l, 0, t);
+                const float leftW = W * 0.43f, rightW = W - leftW, rx = l + leftW;
+                const float nameW = 156 * t;
+                putKeyed(Crop(top, 100, 21, 156, 39), l + (leftW - nameW) / 2, barH + 3, t);
+                const float statsY = 192 - 64 * t - 2;
+                putKeyed(Crop(top, 100, 62, 156, 64), l + (leftW - nameW) / 2, statsY, t);
+                const float picTop = barH + 3 + 39 * t, picS = std::min((statsY - picTop) / 102, leftW / 96);
+                putKeyed(Crop(top, 4, 24, 96, 102), l + (leftW - 96 * picS) / 2, picTop + (statsY - picTop - 102 * picS) / 2, picS);
+                const float descS = std::min(t, (rightW - 4) / 248), descH = 56 * descS;
+                putKeyed(Crop(top, 4, 132, 248, 56), rx + (rightW - 248 * descS) / 2, barH + 2, descS);
+                const float gridTop = barH + 2 + descH + 1, gridS = std::min((192 - gridTop) / 192, rightW / 256);
+                put(Crop(bot, 0, 0, 256, 192), rx + (rightW - 256 * gridS) / 2, 192 - 192 * gridS, gridS);
+            };
+            // The screens show a strip of the cover 256 pixels wide followed by the pages,
+            // scrolled left by `shift` as the Pokedex opens (8 pixels a frame) and back as it
+            // closes. It is found by matching the kept cover, allowing for the fade that ends
+            // the closing.
+            const auto& unit = topUnitOf() == 0 ? nds->GPU.GPU2D_A : nds->GPU.GPU2D_B;
+            const int fadeMode = (unit.MasterBrightness >> 14) & 3;
+            const int fade = (fadeMode == 1 || fadeMode == 2) ? std::min<int>(unit.MasterBrightness & 0x1F, 16) : 0;
+            auto faded = [&](uint32_t c) {
+                uint32_t out = 0;
+                for (int sh = 0; sh < 24; sh += 8)
+                {
+                    int v = (c >> sh) & 0xFF;
+                    v = fadeMode == 1 ? v + (255 - v) * fade / 16 : v - v * fade / 16;
+                    out |= (uint32_t)v << sh;
+                }
+                return out;
+            };
+            auto alike = [&](uint32_t a, uint32_t b) {
+                if (!fade) return (a & 0xFFFFFF) == (b & 0xFFFFFF);
+                for (int sh = 0; sh < 24; sh += 8)
+                    if (std::abs((int)((a >> sh) & 0xFF) - (int)((b >> sh) & 0xFF)) > 12) return false;
+                return true;
+            };
+            int shift = -1;
+            for (int d = 0; g_dexCoverKept && d <= 240 && shift < 0; d++)
+            {
+                bool same = true;
+                for (int y : { 20, 150 })
+                    for (int x = 0; x + d < 256 && same; x += 3)
+                        same = alike(screens[0].pixels[y * 256 + x], faded(g_dexCover[0][y * 256 + x + d]));
+                if (same) shift = d;
+            }
+            // Kept while it is shown closed (red at both left edges, the green slot in its
+            // circle, no fade), unless it has already started to move.
+            const uint32_t slot = screens[0].pixels[95 * 256 + 128];
+            const bool closedNow = !fade && (screens[0].pixels[100 * 256 + 10] & 0xFFFFFF) == 0xEB3030 &&
+                (screens[1].pixels[100 * 256 + 10] & 0xFFFFFF) == 0xEB3030 && ((slot >> 8) & 0xFF) > 180 && ((slot >> 16) & 0xFF) < 100;
+            if (closedNow && shift <= 0)
+            {
+                memcpy(g_dexCover[0], screens[0].pixels, sizeof g_dexCover[0]);
+                memcpy(g_dexCover[1], screens[1].pixels, sizeof g_dexCover[1]);
+                g_dexCoverKept = true;
+                shift = 0;
+            }
+            if (W >= 300 && (shift >= 0 || cover))
+            {
+                // A wide view: the cover fills it, the edge of the pages under it (a dark line
+                // and an arrow) at the view's right edge and its button bar continued to both
+                // edges, and it slides across the whole view in step with the screens, the
+                // pages coming in behind it where the screens show them (GitHub #12).
+                const int d = std::max(shift, 0);
+                const bool live = d == 0; // (the screens show the whole cover)
+                const int st = live ? 0 : 2, sb = live ? 1 : 3;
+                const float k = 0.5f, T = d / 256.0f * W, right = L + W - T;
+                sc.name = "pokedex-cover";
+                sc.items.clear();
+                if (live) g_dexShown = 1;
+                auto add = [&](Element e, float x, float y, float stretch) {
+                    e.dx = x;
+                    e.dy = y;
+                    e.scale = k;
+                    e.stretchX = stretch;
+                    sc.items.push_back(e);
+                };
+                if (!live)
+                {
+                    // The list page beside it, joined to its edge: as last shown, or before
+                    // it has been, the part that the screens show (the pages stay still under
+                    // the sliding cover, so that is their right `d` columns; while it closes
+                    // the bottom screen's are not quite the list page's).
+                    sc.items.push_back(FillRect(L - 1, -1, (int)W + 3, 194, g_dexPaper));
+                    if (g_dexPagesKept) listPieces(4, 5, right - L);
+                    const size_t first = sc.items.size();
+                    if (!g_dexPagesKept && !fade) listPieces(0, 1, right - L);
+                    for (size_t i = first; i < sc.items.size();)
+                    {
+                        Element& e = sc.items[i];
+                        const int cut = 256 - d - e.sx;
+                        if (cut >= e.sw)
+                        {
+                            sc.items.erase(sc.items.begin() + i);
+                            continue;
+                        }
+                        if (cut > 0)
+                        {
+                            e.sx += cut;
+                            e.sw -= cut;
+                            e.dx += cut * e.scale;
+                        }
+                        i++;
+                    }
+                }
+                const uint32_t red = live ? screens[0].pixels[100 * 256 + 10] & 0xFFFFFF : 0xEB3030;
+                sc.items.push_back(FillRect(L - 1, -1, (int)std::ceil(right - L) + 1, 194, red));
+                add(Crop(st, 0, 0, 240, 192), 64 - T, 0, 1);
+                add(Crop(sb, 0, 0, 240, 20), 64 - T, 96, 1);
+                add(Crop(sb, 0, 20, 256, 132), 64 - T, 96 + 20 * k, 1);
+                add(Crop(sb, 0, 189, 256, 3), 64 - T, 96 + 189 * k, 1);
+                // The pages' edge: the line down the top screen and the arrow at the top of the
+                // bottom one (the rest of the bottom screen's right edge is the cover's red).
+                add(Crop(st, 240, 0, 16, 192), right - 8, 0, 1);
+                add(Crop(sb, 240, 0, 16, 20), right - 8, 96, 1);
+                // (The bar's end columns are plain: they are stretched to the view's edges.)
+                add(Crop(sb, 0, 152, 1, 37), L - T, 96 + 152 * k, (64 - L) / k);
+                add(Crop(sb, 0, 152, 256, 37), 64 - T, 96 + 152 * k, 1);
+                add(Crop(sb, 255, 152, 1, 37), 192 - T, 96 + 152 * k, (L + W - 192) / k);
+                if (!live && fade)
+                {
+                    // The kept cover and page have no fade of their own.
+                    Element f = FillRect(L - 1, -1, (int)W + 3, 194, fadeMode == 1 ? 0xFFFFFF : 0);
+                    f.alpha = (uint8_t)(fade * 255 / 16);
+                    sc.items.push_back(f);
+                }
+            }
+            else if (cover || W < 300)
+            {
+                sc = Stack(cover ? "pokedex-cover" : "pokedex", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, !cover, viewWidth);
+                if (cover) g_dexShown = 1;
+                // The view beside the tall cover in its red, not black bars: from wherever the
+                // cover is in a row of the bottom screen (its edge, light at times, moves while
+                // it slides; the red darkens with a fade).
+                for (int x = 0; cover && x < 256; x++)
+                {
+                    const uint32_t c = screens[1].pixels[100 * 256 + x];
+                    const int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+                    if (r >= 60 && r * 2 > g * 5 && r * 2 > b * 5)
+                    {
+                        sc.bgScreen = 1;
+                        sc.bgX = x;
+                        sc.bgY = 100;
+                        break;
+                    }
+                }
+            }
             else if (listPage)
             {
-                // The list as one page: the pieces of the entry on the top screen are laid out
-                // again around the number grid. A title bar runs across the top; on the left
-                // are the name, the picture and the type and size card; on the right the
-                // description sits above the grid and its buttons.
                 sc.name = "pokedex-list";
                 sc.items.clear();
                 // The page is drawn on plain paper: the two most common colours in an empty
@@ -3563,24 +3748,17 @@ int main(int argc, char** argv)
                             break;
                         }
                 }
-                auto putKeyed = [&](Element e, float x, float y, float scale) {
-                    for (size_t k = 0; k < 4 && k < ruling.size(); k++) e.keys[k] = ruling[k].second;
-                    put(e, x, y, scale);
-                };
-                const float t = 0.77f, barH = 17 * t;
-                for (float x = L; x < L + W; x += 100 * t) put(Crop(0, 140, 0, 100, 17), x, 0, t);
-                put(Crop(0, 0, 0, 80, 17), L, 0, t);
-                const float leftW = W * 0.43f, rightW = W - leftW, rx = L + leftW;
-                const float nameW = 156 * t;
-                putKeyed(Crop(0, 100, 21, 156, 39), L + (leftW - nameW) / 2, barH + 3, t);
-                const float statsY = 192 - 64 * t - 2;
-                putKeyed(Crop(0, 100, 62, 156, 64), L + (leftW - nameW) / 2, statsY, t);
-                const float picTop = barH + 3 + 39 * t, picS = std::min((statsY - picTop) / 102, leftW / 96);
-                putKeyed(Crop(0, 4, 24, 96, 102), L + (leftW - 96 * picS) / 2, picTop + (statsY - picTop - 102 * picS) / 2, picS);
-                const float descS = std::min(t, (rightW - 4) / 248), descH = 56 * descS;
-                putKeyed(Crop(0, 4, 132, 248, 56), rx + (rightW - 248 * descS) / 2, barH + 2, descS);
-                const float gridTop = barH + 2 + descH + 1, gridS = std::min((192 - gridTop) / 192, rightW / 256);
-                put(Crop(1, 0, 0, 256, 192), rx + (rightW - 256 * gridS) / 2, 192 - 192 * gridS, gridS);
+                g_dexPaper = paper;
+                g_dexRuling.clear();
+                for (auto& r : ruling) g_dexRuling.push_back(r.second);
+                if (!fade && shift < 0)
+                {
+                    memcpy(g_dexPages[0], screens[0].pixels, sizeof g_dexPages[0]);
+                    memcpy(g_dexPages[1], screens[1].pixels, sizeof g_dexPages[1]);
+                    g_dexPagesKept = true;
+                }
+                g_dexShown = 2;
+                listPieces(0, 1, 0);
             }
             else if (!tabPage)
             {
@@ -4334,6 +4512,16 @@ int main(int argc, char** argv)
 #ifdef SSR_PHONE
     touchPadUsed = true;
 #endif
+    // On a touch screen, the Pokedex's cover is pushed across as on the DS: a swipe to the left
+    // from the right half of the closed cover opens it (A), and a swipe to the right from the left
+    // half of the list closes it (B). (A quarter of the screen across, more across than down.)
+    struct
+    {
+        SDL_FingerID id = 0;
+        bool down = false;
+        float x0 = 0, y0 = 0;
+    } dexSwipe;
+    int dexSwipeKey = 0, dexSwipeFrames = 0;
 #ifdef __SWITCH__
     // The Switch's touch screen: its SDL sends finger events and no mouse events made from them,
     // so a finger is followed here (the first one down) and taken as the mouse below.
@@ -4401,7 +4589,7 @@ int main(int argc, char** argv)
         SDL_Rect rects[2] {};
         const u32* top = nullptr;
         const u32* bot = nullptr;
-        ScreenImage screens[2] {};
+        ScreenImage screens[6] {}; // (2 to 5: g_dexCover and g_dexPages)
         Scene scene;
         WideImage wide;
         bool battleRender = false; // the widened battle picture is still to be made (BattleRender)
@@ -4895,6 +5083,34 @@ int main(int argc, char** argv)
             };
             while (SDL_PollEvent(&ev))
             {
+                if ((ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERUP) && !menu.open)
+                {
+                    const float x = ev.tfinger.x, y = ev.tfinger.y;
+                    if (ev.type == SDL_FINGERDOWN && !dexSwipe.down)
+                    {
+                        dexSwipe.id = ev.tfinger.fingerId;
+                        dexSwipe.down = true;
+                        dexSwipe.x0 = x;
+                        dexSwipe.y0 = y;
+                    }
+                    else if (ev.type == SDL_FINGERUP && dexSwipe.down && ev.tfinger.fingerId == dexSwipe.id)
+                    {
+                        dexSwipe.down = false;
+                        const float dx = x - dexSwipe.x0, dy = y - dexSwipe.y0;
+                        if (std::fabs(dx) >= 0.25f && std::fabs(dx) > 2 * std::fabs(dy))
+                        {
+                            if (g_dexShown == 1 && dx < 0 && dexSwipe.x0 > 0.5f) dexSwipeKey = KEY_A;
+                            else if (g_dexShown == 2 && dx > 0 && dexSwipe.x0 < 0.5f) dexSwipeKey = KEY_B;
+                            else dexSwipeKey = -1;
+                            if (dexSwipeKey >= 0)
+                            {
+                                dexSwipeFrames = 6;
+                                fprintf(stderr, "[dex] swipe: %s\n", dexSwipeKey == KEY_A ? "open" : "close");
+                            }
+                        }
+                    }
+                }
+                else if (ev.type == SDL_FINGERUP && ev.tfinger.fingerId == dexSwipe.id) dexSwipe.down = false;
                 if (ev.type == SDL_QUIT) running = false;
                 else if (ev.type == SDL_TEXTINPUT && menu.open && raTyping)
                 {
@@ -5839,7 +6055,7 @@ int main(int argc, char** argv)
             // which can be up for longer: going back from them to the X menu showed the
             // overworld at 4:3 for a few frames while the renderer started again. It draws
             // nothing meanwhile, the world being paused.)
-            static const char* const keepNames[] = { "bag", "party", "pokedex", "pokedex-list", "trainer-card", "options",
+            static const char* const keepNames[] = { "bag", "party", "pokedex", "pokedex-cover", "pokedex-list", "trainer-card", "options",
                 "summary", "town-map", "start-menu" };
             const bool fromMenu = std::any_of(std::begin(keepNames), std::end(keepNames), [&](const char* n) { return !strcmp(scene.name, n); });
             if (funcWatchOn && (scene.wide || (fromMenu && lastWideScene && frame - lastWideScene < 300))) lastWideScene = frame;
@@ -6183,6 +6399,12 @@ int main(int argc, char** argv)
             }
         }
 
+        if (dexSwipeFrames > 0 && !paused)
+        {
+            keys |= 1u << dexSwipeKey;
+            dexSwipeFrames--;
+        }
+
         if (ref && !paused)
         {
             TraceLog.clear();
@@ -6461,9 +6683,13 @@ int main(int argc, char** argv)
         // The two screens with their per-pixel layer flags, for the merged view.
         auto& renderer2d = static_cast<GPU2D::SoftRenderer&>(nds->GPU.GetRenderer2D());
         const int topUnit = topUnitOf();
-        ScreenImage screenImages[2] = {
+        ScreenImage screenImages[6] = {
             { top, renderer2d.LayerFlags[topUnit], renderer2d.EdgeColour[topUnit], renderer2d.EdgeBlend[topUnit], renderer2d.EdgeFlat[topUnit] },
             { bot, renderer2d.LayerFlags[1 - topUnit], renderer2d.EdgeColour[1 - topUnit], renderer2d.EdgeBlend[1 - topUnit], renderer2d.EdgeFlat[1 - topUnit] },
+            { g_dexCover[0], nullptr },
+            { g_dexCover[1], nullptr },
+            { g_dexPages[0], nullptr },
+            { g_dexPages[1], nullptr },
         };
         bool appBottom = false;
         for (const RcApp* app : focus.bottomApps)
@@ -6535,7 +6761,7 @@ int main(int argc, char** argv)
                 static Scene lastApp;
                 static uint32_t lastAppFrame = 0;
                 static const char* const appScenes[] = { "bag", "summary", "phone", "pc-box", "map", "pokedex",
-                    "pokedex-list", "pokedex-page", "mart", "naming" };
+                    "pokedex-cover", "pokedex-list", "pokedex-page", "mart", "naming" };
                 // (Platinum's own: frontend/platinum.h.)
                 const bool isApp = std::any_of(std::begin(appScenes), std::end(appScenes),
                     [&](const char* n) { return !strcmp(picked.name, n); }) || (pt.on && PtFuncs::AppScene(picked.name));
@@ -6578,7 +6804,7 @@ int main(int argc, char** argv)
             // bottom screen (the party).
             auto menuScene = [&](const char* n) {
                 static const char* const names[] = { "start-menu", "bottom", "bag", "summary", "phone", "pc-box", "map",
-                    "pokedex", "pokedex-list", "pokedex-page", "mart", "naming" };
+                    "pokedex", "pokedex-cover", "pokedex-list", "pokedex-page", "mart", "naming" };
                 return std::any_of(std::begin(names), std::end(names), [&](const char* m) { return !strcmp(n, m); }) ||
                     (pt.on && PtFuncs::AppScene(n));
             };
@@ -6591,6 +6817,9 @@ int main(int argc, char** argv)
                 // (Back from a menu to the X menu: at once, not the menu's layout over the X menu's
                 // screens for a few frames.)
                 (!strcmp(picked.name, "start-menu") && menuScene(shownName.c_str())) ||
+                // (To the Pokedex's closed cover from its other layouts: at once, or the list's cut
+                // the closing cover into pieces for a few frames.)
+                (!strcmp(picked.name, "pokedex-cover") && !shownName.compare(0, 7, "pokedex")) ||
                 // Between menus, with both screens black nothing on screen changes, so the new
                 // layout can take over at once and is in place when the picture fades in.
                 // (Not around battles: there the timing of the layouts decides which buttons
@@ -7063,8 +7292,7 @@ int main(int argc, char** argv)
             job.rects[1] = rects[1];
             job.top = top;
             job.bot = bot;
-            job.screens[0] = screenImages[0];
-            job.screens[1] = screenImages[1];
+            for (int s = 0; s < 6; s++) job.screens[s] = screenImages[s];
             job.scene = scene;
             job.wide = wideImage;
             job.battleRender = battleRenderLater;
