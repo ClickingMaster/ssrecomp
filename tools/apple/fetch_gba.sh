@@ -6,6 +6,7 @@
 # DS-only, as before.
 set -euo pipefail
 IN="${1:?which inputs folder? tools/apple/fetch_gba.sh INPUTS}"
+IN="$(cd "$IN" && pwd)"
 SRC="$IN/gba"
 ENVF="$IN/gba.env"
 rm -f "$ENVF"
