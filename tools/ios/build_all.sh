@@ -69,6 +69,8 @@ python3 tools/bw2/funcmap.py build-decomp-pokew2/config/w2_us/arm9 - "$DATA/func
 python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv - "$DATA/funcs/IRBO.txt"
 python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv - "$DATA/funcs/IRAO.txt" --white
 cp tools/platinum/CPUE.txt "$DATA/funcs/CPUE.txt"
+# The other languages' tables (tools/versions: Spanish White, Platinum, ...), from the English ones.
+python3 tools/shift_table.py --all "$DATA/funcs"
 
 if [ "$TARGET" = simulator ]; then
     SDK=iphonesimulator

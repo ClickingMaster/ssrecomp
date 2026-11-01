@@ -32,6 +32,8 @@
 #include <string>
 #include <vector>
 
+#include "gamecode.h"
+
 #include "ARM.h"
 #include "NDS.h"
 #include "funcwatch.h"
@@ -47,8 +49,9 @@ public:
 
     // SoulSilver and HeartGold, as the game starts, with its ROM file and the hook API ready (rc
     // tables loaded).
-    void Init(const std::string& romPath, const std::string& code, melonDS::NDS& nds)
+    void Init(const std::string& romPath, const std::string& gameCode, melonDS::NDS& nds)
     {
+        const std::string code = BaseGameCode(gameCode);
         if (code != "IPGE" && code != "IPKE") return;
         Nds = &nds;
         std::vector<std::vector<uint8_t>> hg, ss;
@@ -72,8 +75,9 @@ public:
 
     // Black, White, Black 2 and White 2, with the function table (before it is attached: the
     // function is added to those watched).
-    void Init(const std::string& code, FuncWatch& watch, std::vector<std::string>& names, melonDS::NDS& nds)
+    void Init(const std::string& gameCode, FuncWatch& watch, std::vector<std::string>& names, melonDS::NDS& nds)
     {
+        const std::string code = BaseGameCode(gameCode);
         const bool b2w2 = code == "IREO" || code == "IRDO", bw = code == "IRBO" || code == "IRAO";
         if (!b2w2 && !bw) return;
         const char* fn = b2w2 ? "EncData_Load" : "FIELD_ENCOUNT_ST_LoadEncountData";

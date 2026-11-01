@@ -62,6 +62,7 @@
 
 // How many chunks the program's SoulSilver tables have (none in a build without them).
 extern const uint32_t rc_num_chunks;
+bool rc_portable_knows(const char code[4]); // (runtime/recomp_api.h)
 
 namespace PcLauncher
 {
@@ -263,7 +264,8 @@ void SetRomFolder(Folders& fo)
 // the emulator, which reads them by file name.
 void ExtractFuncs(const Folders& fo)
 {
-    for (const char* code : { "IREO", "IRDO", "IRBO", "IRAO", "CPUE" })
+    // (With the other languages' tables made from tools/versions: keep in step with it.)
+    for (const char* code : { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "IRAS", "CPUS" })
     {
         SDL_RWops* rw = SDL_RWFromFile((std::string("funcs/") + code + ".txt").c_str(), "rb");
         if (!rw) continue;
@@ -290,7 +292,7 @@ bool Playable(const Folders& fo, const Launcher::Game& g)
 {
     if (g.platform == Launcher::GBA) return true; // (any GBA game plays, with widescreen or without)
     if (!g.known) return false;
-    if (g.code == "IPGE" || g.code == "IPKE") return rc_num_chunks > 0;
+    if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE")) return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
     return Exists(fo.funcs + "/" + g.code + ".txt");
 }
 
@@ -1875,7 +1877,7 @@ bool Start(int& argc, char**& argv)
 #endif
     // SoulSilver and HeartGold take their layouts from the program's own tables and must not be
     // given a function table (one switches to the Black games' layouts); the others take theirs.
-    if (game.code != "IPGE" && game.code != "IPKE")
+    if (!IsGame(game.code, "IPGE") && !IsGame(game.code, "IPKE"))
     {
         g_args.push_back("--funcs");
         g_args.push_back(fo.funcs + "/" + game.code + ".txt");

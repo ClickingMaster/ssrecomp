@@ -17,6 +17,7 @@
 #include <vector>
 #include <dirent.h>
 #include "ssr_os.h"
+#include "gamecode.h"
 #include <sys/stat.h>
 
 #include "ui.h"
@@ -96,8 +97,10 @@ inline const KnownGame* Known(const std::string& code)
         { "IPGE", "Pokemon SoulSilver", "soulsilver.sav" },
         { "CPUE", "Pokemon Platinum", "platinum.sav" },
     };
+    // (Another language's version as the English one: frontend/gamecode.h.)
+    const std::string base = BaseGameCode(code);
     for (const KnownGame& g : games)
-        if (code == g.code) return &g;
+        if (base == g.code) return &g;
     return nullptr;
 }
 inline int Order(const std::string& code)
@@ -105,8 +108,9 @@ inline int Order(const std::string& code)
     // (DS, then GBA: Emerald, Ultra Violet (UV22: its own code here, as FireRed's is BPRE too),
     // FireRed, LeafGreen.)
     static const char* order[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "BPEE", "UV22", "BPRE", "BPGE" };
+    const std::string base = BaseGameCode(code);
     for (int i = 0; i < 11; i++)
-        if (code == order[i]) return i;
+        if (base == order[i]) return i;
     return 11;
 }
 
