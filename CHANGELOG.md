@@ -127,6 +127,9 @@
 - French revision 0 ROMs of Black, White, Black 2, White 2, SoulSilver, HeartGold
   and Platinum, with separate French saves and regional widescreen map profiles.
 - Platinum: controller answers work with the French introduction's OUI/NON buttons.
+- **Black, White, Black 2 and White 2: the Bag's messages stay readable** when selecting
+  or using an item, including teaching a TM. The item card moves below the message box
+  instead of covering its text, and includes the move's type, power, accuracy and PP.
 
 - **A new address: github.com/mamesj/pokemon-fulldex** (the old pokemon-ds-widescreen address
   still leads there). The bug report link, the PC download's `README.txt` and the Linux

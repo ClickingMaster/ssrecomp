@@ -462,6 +462,48 @@ inline Element Crop(int screen, int sx, int sy, int sw, int sh)
     return { screen, sx, sy, sw, sh, 0, 0, 1.0f, 0, 255, false };
 }
 
+// Black and Black 2's Bag: the item card covers only the unused left part of the touch
+// screen. Its message box spans that whole screen, so the card must sit below it while
+// an item is selected or used. Keep the pocket controls at the bottom clear as well.
+inline Scene BagScene(float viewWidth, const ScreenImage* screens)
+{
+    const float viewLeft = 128 - viewWidth / 2, viewRight = 128 + viewWidth / 2;
+    int text = 0;
+    if (screens && screens[0].pixels)
+        for (int y = 28; y < 152; y += 2)
+            for (int x = 8; x < 248; x += 2)
+            {
+                const uint32_t c = screens[0].pixels[y * 256 + x];
+                text += ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 200;
+            }
+    Scene sc;
+    sc.name = "bag";
+    Element list = FullScreen(1);
+    sc.items = { list };
+    if (text >= 12)
+    {
+        list.dx = viewRight - 256;
+        const auto white = [&](int x, int y) {
+            if (!screens || !screens[1].pixels) return false;
+            const uint32_t c = screens[1].pixels[y * 256 + x];
+            return ((c >> 16) & 0xFF) > 230 && ((c >> 8) & 0xFF) > 230 && (c & 0xFF) > 230;
+        };
+        const bool message = white(5, 24) && white(250, 24);
+        // Include the move's type, category, power, accuracy and PP below the description.
+        Element card = Crop(0, 8, 28, 240, 164);
+        card.dy = message ? 48.0f : 4.0f;
+        const float left = viewRight - 256 + 116 - viewLeft;
+        card.scale = std::min({ 0.85f, (left - 6) / card.sw, (164 - card.dy) / card.sh });
+        card.dx = viewLeft + 3;
+        card.border = true;
+        sc.items = { list, card };
+    }
+    sc.bgScreen = 1;
+    sc.bgX = 2;
+    sc.bgY = 2;
+    return sc;
+}
+
 // Arranges crops as one column (or one row), scaled together to fill the view.
 // Black and Black 2's save screen (SAVE in the X menu): the question, YES / NO, the card of the
 // saved game and the progress of the save are all on the touch screen, laid out alike in both

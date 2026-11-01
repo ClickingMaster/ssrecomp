@@ -3386,39 +3386,7 @@ int main(int argc, char** argv)
             sc.weatherObj = weatherParticles();
         }
         else if (funcWatch.Ran(bw2.bag, 2))
-        {
-            // The bag at full size against the right edge, and the item's card from the other
-            // screen (name, icon, count and description) over the left part, where the bottom
-            // screen only has a picture of the bag (its pockets also change with L and R).
-            // (No item chosen, or an empty pocket: the card is blank, the bag alone in the
-            // middle. The card's text is white: some of it means there is something to show.)
-            int text = 0;
-            if (screens && screens[0].pixels)
-                for (int y = 28; y < 152; y += 2)
-                    for (int x = 8; x < 248; x += 2)
-                    {
-                        const uint32_t c = screens[0].pixels[y * 256 + x];
-                        text += ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 200;
-                    }
-            sc.name = "bag";
-            Element list = FullScreen(1);
-            if (text >= 12)
-            {
-                list.dx = viewRight - 256;
-                const float left = viewRight - 256 + 116 - viewLeft; // up to where the list starts
-                Element card = Crop(0, 8, 28, 240, 124);
-                card.scale = std::min(0.85f, (left - 6) / card.sw);
-                card.dx = viewLeft + 3;
-                card.dy = 4;
-                card.border = true;
-                sc.items = { list, card };
-            }
-            else
-                sc.items = { list };
-            sc.bgScreen = 1;
-            sc.bgX = 2;
-            sc.bgY = 2;
-        }
+            sc = BagScene(viewWidth, screens);
         else if (funcWatch.Ran(bw2.options, 2))
             // The explanation of the chosen option (a box near the bottom of the other screen)
             // above the list of options.
