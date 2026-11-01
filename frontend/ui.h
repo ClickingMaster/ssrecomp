@@ -229,7 +229,9 @@ struct Menu
     // The chosen row's colour (COLOUR, AccentNamed); the box, text and bars are shaded from it.
     static inline uint32_t Accent = 0xFFE0242C;
 
-    void Draw(Canvas& c, const std::string& title, const std::string& hint, const std::string& note = "") const
+    // boxUnits: the box's width at scale 1 (0: 190, as the other pages). CHEATS passes 260 so a
+    // code's name (32 letters) fits beside "< OFF >".
+    void Draw(Canvas& c, const std::string& title, const std::string& hint, const std::string& note = "", int boxUnits = 0) const
     {
         // (Each channel of the accent c: f(c) per part. With blue, 0xFF3D6FD1, it is the menu as
         // it was: the box 0x1C2A44, the text 0xC8D0E0, the hints 0x8FA0C0.)
@@ -257,7 +259,7 @@ struct Menu
         scroll = std::max(0, std::min(scroll, (int)items.size() - shown));
         const int rows = shown + (hasTitle ? 3 : 2);
         if (lineH * rows + 6 * scale > c.h - 4) lineH = std::max(9 * scale, (c.h - 4 - 6 * scale) / rows);
-        int boxW = 190 * scale;
+        int boxW = (boxUnits > 0 ? boxUnits : 190) * scale;
         if (boxW > c.w - 8) boxW = c.w - 8;
         int boxH = lineH * rows + 6 * scale;
         // The note's lines (up to 4, the last cut short), and the box moved up to make room.

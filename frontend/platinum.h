@@ -38,6 +38,26 @@ struct PtFuncs
         return 0;
     }
 
+    // The Pokedex list's three touch-screen buttons (SEARCH, SWITCH, CHECK), from the colours
+    // at their centres. The Poke Ball beside them is what a click on the right of the view hits.
+    static bool DexListButtons(const uint32_t* bottom)
+    {
+        if (!bottom) return false;
+        auto at = [&](int x, int y, int* r, int* g, int* b) {
+            const uint32_t c = bottom[y * 256 + x] & 0xFFFFFF;
+            *r = (int)((c >> 16) & 0xFF);
+            *g = (int)((c >> 8) & 0xFF);
+            *b = (int)(c & 0xFF);
+        };
+        int r, g, b;
+        at(60, 42, &r, &g, &b);
+        if (!(g > 140 && g > r + 20 && b < 160)) return false;
+        at(60, 88, &r, &g, &b);
+        if (!(b > 140 && g > 140 && r < 140)) return false;
+        at(60, 160, &r, &g, &b);
+        return g > 140 && g > r + 20 && b < 160;
+    }
+
     // Whether a weather with particles ran within the last `frames` frames.
     bool Weather(const FuncWatch& fw, unsigned frames) const
     {

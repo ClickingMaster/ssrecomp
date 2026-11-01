@@ -41,6 +41,15 @@ STEAM DECK
    list), full sharpness there and easier on the battery.
 
 
+LINUX ON ARM
+------------
+
+The ARM64 AppImage (pokemon-ds-wide-pc-linux-aarch64.AppImage) is for 64-bit ARM handhelds
+such as those running Armada. Add it to Gear Lever, or mark it executable and start it.
+ROMs, saves and settings go in ~/.local/share/pokemon-ds-wide (O in the game list opens its
+roms folder). Set 3D RESOLUTION to 720P for a handheld screen.
+
+
 PICTURE SETTINGS (Esc menu)
 ---------------------------
 
@@ -100,15 +109,18 @@ Keyboard:
   Esc              menu (settings, save state, QUIT back to the game list)
   F11              fullscreen
   Tab              next screen layout
-  F1               show the other DS screen
+  F1               swap screens
   Left Shift       fast forward while held
+  F5               save state
+  F8               load state
 
-Changing them: CONTROLS > KEYS AND BUTTONS in the menu (Esc) lists the DS's buttons, the menu, fast forward and
-swapping the screens, with the key or button each has. Choose one and press the key or button
-to give it (Esc, or waiting 5 seconds, leaves it as it was); CHANGING at the top switches
-between the keyboard and a controller. Giving one a key or button another one had swaps the
-two. RESET ALL puts them back. The game list follows the ones you change (A plays, B goes back,
-Y opens the settings).
+Changing them: CONTROLS > KEYS AND BUTTONS in the menu (Esc), and on the game list's settings page,
+lists the DS's buttons, the menu, fast forward, swapping the screens, save state and load state,
+with the key or button each has. Choose one and press the key or button to give it (Esc, or waiting
+5 seconds, leaves it as it was); CHANGING at the top switches between the keyboard and a controller.
+Save state starts as F5 and load state as F8; on a controller those two start unset. Giving one a
+key or button another one had swaps the two. RESET ALL puts them back. The game list follows the
+ones you change (A plays, B goes back, Y opens the settings).
 
 
 SOURCE AND LICENCE

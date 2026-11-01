@@ -1,15 +1,17 @@
 #pragma once
 // Remappable controls: which keyboard key and which controller button does each of the DS's
-// buttons and the program's own actions (the pause menu, fast forward, swapping the screens).
-// Changed in the pause menu's CONTROLS page (main.cpp) and kept in the settings file as
-// map_key_<action>=<SDL scancode> and map_pad_<action>=<input> lines; the PC's game list
-// (pc_launcher.cpp) follows the ones that were changed.
+// buttons and the program's own actions (the pause menu, fast forward, swapping the screens,
+// save state and load state). Changed in the pause menu's CONTROLS page (main.cpp) and kept
+// in the settings file as map_key_<action>=<SDL scancode> and map_pad_<action>=<input> lines
+// (map_pad_<action>=none: that action has no controller button); the game list
+// (pc_launcher.cpp, switch_platform.cpp) follows the ones that were changed.
 //
 // A controller is remapped where it is read (main.cpp, RemapPad): what is pressed on it becomes
 // the buttons in their usual places, so everything after that (the game, the menus, START
 // opening the menu) follows the new layout without knowing about it. The bindings form a
 // permutation: giving an action a button that another one had swaps the two, so no button
-// ever does two things and none is lost.
+// ever does two things. Save state and load state start with no controller button; giving
+// one of them a button another action had leaves that action with none.
 #ifdef __APPLE__
 #include <SDL.h>
 #else
@@ -30,8 +32,15 @@ enum Action
     MENU,  // opens (and closes) the pause menu
     FAST,  // fast forward while held
     SWAP,  // swaps which screen is large (with STICK TOUCH CURSOR on a controller)
+    SAVE,  // quick save state (one slot per game)
+    LOAD,  // quick load state
     COUNT
 };
+
+// No controller button. Distinct from -1, which means "the default" (DefaultPad). Save state
+// and load state start here. A swap that takes the last button off an action stores this, so
+// the default does not come back and press the same thing.
+enum { PAD_NONE = -2 };
 
 // Controller inputs: SDL's button order (as main.cpp's PAD_*), then the two triggers, which
 // count as pressed past half way.
@@ -44,14 +53,14 @@ enum
 inline const char* ActionKey(int a)
 {
     static const char* k[COUNT] = { "a", "b", "x", "y", "l", "r", "start", "select", "up", "down", "left", "right",
-                                    "menu", "fast", "swap" };
+                                    "menu", "fast", "swap", "save", "load" };
     return a >= 0 && a < COUNT ? k[a] : "";
 }
 
 inline const char* ActionName(int a)
 {
     static const char* n[COUNT] = { "A", "B", "X", "Y", "L", "R", "START", "SELECT", "UP", "DOWN", "LEFT", "RIGHT",
-                                    "PAUSE MENU", "FAST FORWARD", "SWAP SCREENS" };
+                                    "PAUSE MENU", "FAST FORWARD", "SWAP SCREENS", "SAVE STATE", "LOAD STATE" };
     return a >= 0 && a < COUNT ? n[a] : "";
 }
 
@@ -118,7 +127,7 @@ inline const char* InputName(int i, int style = XBOX)
     // (The Switch keeps its HOME button to itself: no game ever sees it pressed.)
     if (i == IN_GUIDE) return "NOT SET";
 #endif
-    if (i < 0 || i >= IN_COUNT) return "-";
+    if (i < 0 || i >= IN_COUNT) return "NOT SET";
     return style == PLAYSTATION ? ps[i] : style == NINTENDO ? nin[i] : xbox[i];
 }
 
@@ -153,7 +162,22 @@ inline int DefaultPad(int a, bool byLabel)
     case MENU: return IN_GUIDE;
     case FAST: return IN_RT;
     case SWAP: return IN_RS;
+    case SAVE: return -1; // (no button until one is chosen: F5 on the keyboard)
+    case LOAD: return -1;
     default: return -1;
+    }
+}
+
+// A line under the row in KEYS AND BUTTONS, or null.
+inline const char* ActionHint(int a)
+{
+    switch (a)
+    {
+    case FAST: return "HOLD TO RUN AHEAD";
+    case SWAP: return "SWAPS WHICH SCREEN IS LARGE";
+    case SAVE: return "SAVES TO THE QUICK SLOT";
+    case LOAD: return "LOADS THE QUICK SLOT";
+    default: return nullptr;
     }
 }
 
@@ -176,6 +200,8 @@ inline int DefaultKey(int a)
     case MENU: return SDL_SCANCODE_ESCAPE;
     case FAST: return SDL_SCANCODE_LSHIFT;
     case SWAP: return SDL_SCANCODE_F1;
+    case SAVE: return SDL_SCANCODE_F5;
+    case LOAD: return SDL_SCANCODE_F8;
     default: return SDL_SCANCODE_UNKNOWN;
     }
 }
@@ -214,7 +240,7 @@ inline std::string KeyName(int sc)
 
 struct Bindings
 {
-    int pad[COUNT]; // an input, or -1: the default (DefaultPad)
+    int pad[COUNT]; // an input, -1: the default (DefaultPad), or PAD_NONE
     int key[COUNT]; // a scancode, or -1: the default (DefaultKey)
     bool byLabel = true; // (Load: the file's BUTTONS, for the game list; the game has its own)
 
@@ -223,12 +249,16 @@ struct Bindings
     {
         for (int a = 0; a < COUNT; a++) pad[a] = key[a] = -1;
     }
-    int Pad(int a, bool byLabel) const { return pad[a] >= 0 ? pad[a] : DefaultPad(a, byLabel); }
+    int Pad(int a, bool byLabel) const
+    {
+        if (pad[a] == PAD_NONE) return -1;
+        return pad[a] >= 0 ? pad[a] : DefaultPad(a, byLabel);
+    }
     int Key(int a) const { return key[a] >= 0 ? key[a] : DefaultKey(a); }
     bool PadCustom() const
     {
         for (int a = 0; a < COUNT; a++)
-            if (pad[a] >= 0) return true;
+            if (pad[a] >= 0 || pad[a] == PAD_NONE) return true;
         return false;
     }
     bool KeyCustom(int a) const { return key[a] >= 0 && key[a] != DefaultKey(a); }
@@ -253,8 +283,14 @@ struct Bindings
         for (int b = 0; b < COUNT; b++)
             if (b != a && Pad(b, byLabel) == in)
             {
-                for (int c = 0; c < COUNT; c++) pad[c] = Pad(c, byLabel); // (all fixed: BUTTONS changes no more)
-                pad[b] = old;
+                // (All fixed: BUTTONS changes no more. An action that had no button stays without
+                // one, as PAD_NONE, so its default does not return.)
+                for (int c = 0; c < COUNT; c++)
+                {
+                    const int p = Pad(c, byLabel);
+                    pad[c] = p < 0 ? PAD_NONE : p;
+                }
+                pad[b] = old < 0 ? PAD_NONE : old;
             }
         pad[a] = in;
     }
@@ -280,6 +316,7 @@ struct Bindings
                     const int sc = atoi(v.c_str());
                     key[a] = sc > 0 && sc < SDL_NUM_SCANCODES ? sc : -1;
                 }
+                else if (v == "none") pad[a] = PAD_NONE;
                 else pad[a] = InputFromKey(v);
             }
         return true;
@@ -289,7 +326,8 @@ struct Bindings
         for (int a = 0; a < COUNT; a++)
         {
             if (key[a] >= 0) f << "map_key_" << ActionKey(a) << "=" << key[a] << "\n";
-            if (pad[a] >= 0) f << "map_pad_" << ActionKey(a) << "=" << InputKey(pad[a]) << "\n";
+            if (pad[a] == PAD_NONE) f << "map_pad_" << ActionKey(a) << "=none\n";
+            else if (pad[a] >= 0) f << "map_pad_" << ActionKey(a) << "=" << InputKey(pad[a]) << "\n";
         }
     }
     // Into a settings file as it is: its map_ lines replaced by these, the rest left alone (the
@@ -314,7 +352,8 @@ struct Bindings
         for (int a = 0; a < COUNT; a++)
         {
             if (key[a] >= 0) fprintf(f, "map_key_%s=%d\n", ActionKey(a), key[a]);
-            if (pad[a] >= 0) fprintf(f, "map_pad_%s=%s\n", ActionKey(a), InputKey(pad[a]));
+            if (pad[a] == PAD_NONE) fprintf(f, "map_pad_%s=none\n", ActionKey(a));
+            else if (pad[a] >= 0) fprintf(f, "map_pad_%s=%s\n", ActionKey(a), InputKey(pad[a]));
         }
         fclose(f);
         return true;

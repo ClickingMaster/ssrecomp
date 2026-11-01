@@ -730,6 +730,8 @@ public:
         // rows it is in, and each thing in front of them that is on its side, whole (a move's
         // effect reaching past those rows is not cut in two).
         Move.assign((size_t)w * 192, 0);
+        Bridge.assign((size_t)w * 192, 0);
+        int streamL = w, streamR = -1;
         if (enemyShift > 0)
         {
             Comp.assign((size_t)w * 192, 0);
@@ -764,23 +766,53 @@ public:
                             }
                         }
                 }
-                // On the wild Pokémon's side: where it stands, or nearer to there than to where
-                // the player's does (sparks flying off a hit stay with it); not something across
-                // the whole view (an effect over the whole battle). Something joining the two
-                // Pokémon (a move's effect reaching from one to the other) is parted between
-                // them, each point going with the nearer.
-                auto nearerEnemy = [&](int x, int y) {
-                    return (x - EnemyX) * (x - EnemyX) + (y - EnemyY) * (y - EnemyY) <
-                           (x - PlayerX) * (x - PlayerX) + (y - PlayerY) * (y - PlayerY);
-                };
+                // The wild Pokémon moves out as one piece, and so does a small effect on it.
+                // A move running from one Pokémon to the other is kept and drawn below, long
+                // enough to still reach: shifting only its far half left a hole, and filling
+                // that hole smeared two colours across the stream.
                 if (x0 == 0 && x1 == w - 1) continue;
-                if (atEnemy && atPlayer)
-                {
-                    for (int p : Members)
-                        if (nearerEnemy(p % w - extend, p / w)) Move[p] = 1;
-                }
-                else if (atEnemy || (!atPlayer && nearerEnemy((x0 + x1) / 2 - extend, (y0 + y1) / 2)))
+                const int x0s = x0 - extend, x1s = x1 - extend;
+                const int cx = (x0 + x1) / 2 - extend, cy = (y0 + y1) / 2;
+                const int bw = x1 - x0, bh = y1 - y0;
+                auto nearEnemy = [&](int x, int y, int r) {
+                    const int dx = x - EnemyX, dy = y - EnemyY;
+                    return dx * dx + dy * dy <= r * r;
+                };
+                const bool spans = x0s < EnemyGapLeft && x1s > EnemyGapRight;
+                // The whole stream, including where it covers the wild Pokémon. Moving that
+                // end across on its own cut Flamethrower in a straight line through the middle.
+                if (atEnemy && spans)
+                    for (int p : Members) Bridge[p] = 1;
+                else if (atEnemy || (!atPlayer && bw <= 72 && bh <= 72 && nearEnemy(cx, cy, 36)))
                     for (int p : Members) Move[p] = 1;
+                else if (!atPlayer)
+                    for (int p : Members) Bridge[p] = 1;
+            }
+            // One span for the whole stream. Lengthening each row by its own width put a
+            // horizontal cut through Flamethrower: the rows above the middle of the screen
+            // and the rows below it no longer lined up.
+            for (int y = 0; y < 192; y++)
+            {
+                const uint8_t* bridge = &Bridge[(size_t)y * w];
+                for (int x = 0; x < w; x++)
+                    if (bridge[x]) { streamL = std::min(streamL, x); streamR = std::max(streamR, x); }
+            }
+            if (streamR < 0 || streamR - streamL < 64 || streamR - extend < EnemyGapRight)
+            {
+                // Not a stream between the two Pokémon. A short effect on the wild Pokémon's
+                // side (its shadow, a hit spark) moves with it.
+                streamR = -1;
+                for (int y = 0; y < 192; y++)
+                {
+                    uint8_t* bridge = &Bridge[(size_t)y * w];
+                    uint8_t* move = &Move[(size_t)y * w];
+                    for (int x = 0; x < w; x++)
+                        if (bridge[x])
+                        {
+                            bridge[x] = 0;
+                            if (x - extend >= EnemyGapRight) move[x] = 1;
+                        }
+                }
             }
         }
 
@@ -791,6 +823,8 @@ public:
             const uint32_t* pic = &Picture[(size_t)y * w];
             const uint8_t* fg = &Fg[(size_t)y * w];
             const uint8_t* move = &Move[(size_t)y * w];
+            const uint8_t* bridge = &Bridge[(size_t)y * w];
+            const uint8_t* ui = &Ui[(size_t)y * w];
             const uint32_t* plain = &Plain[(size_t)y * w];
             if (enemyShift > 0)
             {
@@ -809,11 +843,47 @@ public:
                         row[sx + extend] = Row[from + extend];
                     }
                     for (int x = 0; x < w; x++)
-                        if (fg[x] && !move[x]) row[x] = pic[x];
+                        if (fg[x] && !move[x] && !bridge[x]) row[x] = pic[x];
                 }
                 for (int x = 0; x + enemyShift < w; x++)
                     if (move[x]) row[x + enemyShift] = pic[x];
-                const uint8_t* ui = &Ui[(size_t)y * w];
+                // The same mapping on every row, so the stream stays the shape the game drew
+                // and still reaches the Pokémon that moved out.
+                if (streamR >= streamL)
+                {
+                    bool rowHas = false;
+                    for (int x = 0; x < w && !rowHas; x++) rowHas = bridge[x] != 0;
+                    if (rowHas)
+                    {
+                        if (y >= EnemyBottom)
+                            for (int x = 0; x < w; x++)
+                                if (bridge[x]) row[x] = plain[x];
+                        const int oldW = streamR - streamL;
+                        const int newW = oldW + enemyShift;
+                        if ((int)ScalePx.size() < newW + 1) { ScalePx.resize(newW + 1); ScaleOn.resize(newW + 1); }
+                        for (int d = 0; d <= newW; d++) ScaleOn[d] = 0;
+                        for (int x = streamL; x <= streamR; x++)
+                        {
+                            if (!bridge[x]) continue;
+                            int d0 = (x - streamL) * newW / oldW;
+                            int d1 = (x + 1 - streamL) * newW / oldW;
+                            if (d1 <= d0) d1 = d0 + 1;
+                            for (int d = d0; d < d1 && d <= newW; d++)
+                            {
+                                ScalePx[d] = pic[x];
+                                ScaleOn[d] = 1;
+                            }
+                        }
+                        for (int d = 0; d <= newW && streamL + d < w; d++)
+                        {
+                            if (!ScaleOn[d]) continue;
+                            const int dst = streamL + d;
+                            if (ui[dst]) continue;
+                            if (fg[dst] && !move[dst] && !bridge[dst]) continue;
+                            row[dst] = ScalePx[d];
+                        }
+                    }
+                }
                 for (int x = 0; x < w; x++)
                     if (ui[x]) row[x] = pic[x];
             }
@@ -883,7 +953,9 @@ private:
     // Where the two Pokémon stand on the screen.
     static constexpr int EnemyX = 192, EnemyY = 56, PlayerX = 60, PlayerY = 105;
     std::vector<uint32_t> Pixels, Picture, Plain;
-    std::vector<uint8_t> Fg, Move, Comp, Ui;
+    std::vector<uint8_t> Fg, Move, Bridge, Comp, Ui;
+    std::vector<uint32_t> ScalePx;
+    std::vector<uint8_t> ScaleOn;
     std::vector<int> Members;
     std::vector<uint8_t> Label;
     std::vector<uint32_t> Back, Row;

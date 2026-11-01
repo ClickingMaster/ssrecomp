@@ -37,8 +37,24 @@ void Start(Account* account, const std::string& product, std::function<void()> s
 // The ROM's fingerprint, by which RetroAchievements finds the game's set (empty: none). Taken
 // before the ROM is let go of (the cartridge keeps its own copy).
 std::string Fingerprint(const std::vector<uint8_t>& rom);
+// The same for a Game Boy Advance ROM, of the ROM as it is sold: a widescreen patch put on as
+// the game starts is not part of it (that would be a ROM RetroAchievements does not know).
+std::string FingerprintGba(const std::vector<uint8_t>& rom);
 // The game, once its console exists and achievements have started: its fingerprint.
 void SetGame(melonDS::NDS* nds, const std::string& fingerprint);
+// A GBA game instead (mGBA). RetroAchievements asks for its internal work RAM from 0 (32 KB),
+// external work RAM from 0x8000 (256 KB) and save RAM from 0x48000 (64 KB). `read` is called on
+// the thread that calls DoFrame and Pump, and stays valid until ClearGame.
+using MemoryRead = uint32_t (*)(void* userdata, uint32_t address, uint8_t* buffer, uint32_t bytes);
+void SetGameMemory(MemoryRead read, void* userdata, const std::string& fingerprint);
+void ClearGame();
+
+// A GBA game is played from the game list, in this same process, before a DS game's Start.
+// BeginSession starts the client for it (or does nothing when Start already has). EndSession
+// closes one that BeginSession started, once its last messages have been sent, so a later Start
+// begins again.
+void BeginSession(Account* account, const std::string& product, std::function<void()> save);
+void EndSession();
 // Whether this game's achievements are being followed (on, logged in, a set found, no cheats).
 bool Active();
 

@@ -9,7 +9,9 @@
 //   usrcheat.dat      the R4 / DeSmuME cheat database: this game's codes are read from it
 //
 // Which are on is kept in <game code>-on.txt there (one name a line), so the game list's
-// other games and a new database keep theirs. CHEATS in the pause menu turns them on and off.
+// other games and a new database keep theirs. CHEATS in the pause menu lists the database's
+// folders (a folder shows how many of its codes are on); opening one turns its codes on and off.
+// Codes with no folder, such as a text file of your own, are listed above the folders.
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -31,13 +33,29 @@ namespace Cheats
 
 struct Cheat
 {
-    std::string name;  // as shown: its folder and its own name, in the menus' font
-    std::string key;   // as kept in <code>-on.txt: where it came from and its full name
+    std::string name;     // its own name, in the menus' font (the folder is separate, below)
+    std::string category; // the database folder it belongs to; empty when it has none
+    std::string key;      // as kept in <code>-on.txt: where it came from and its full name
     std::vector<melonDS::u32> code;
     bool on = false;
-    int group = -1;    // a folder of the database in which only one may be on (-1: none)
-    std::string note;  // what the database says about it ("hold L+R", ...), in the menus' font
+    int group = -1;       // a folder of the database in which only one may be on (-1: none)
+    std::string note;     // what the database says about it ("hold L+R", ...), in the menus' font
 };
+
+// Letters of a cheat's name beside ON / OFF. The cheats page's box is wide enough for this many
+// (ui.h, the 260-wide box: 32 letters, a gap, and "< OFF >").
+constexpr int LabelChars = 32;
+
+// `s` cut to `max` letters, the last a full stop when it had to be cut.
+inline std::string Fit(std::string s, size_t max)
+{
+    if (s.size() <= max) return s;
+    if (max == 0) return "";
+    s.resize(max - (max > 1 ? 1 : 0));
+    while (!s.empty() && s.back() == ' ') s.pop_back();
+    if (max > 1) s += '.';
+    return s.empty() ? "." : s;
+}
 
 // A name in the menus' font: capitals, digits and : - + . / < > ! ( ), others as spaces, cut to
 // `max` characters.
@@ -63,10 +81,57 @@ inline std::string Shown(const std::string& s, size_t max)
     return o.empty() ? "?" : o;
 }
 
+inline bool Matches(const Cheat& cheat, const std::string& query)
+{
+    std::string hay=cheat.name+" "+cheat.category+" "+cheat.note, needle=query;
+    for(char& c:hay)c=(char)std::toupper((unsigned char)c);
+    for(char& c:needle)c=(char)std::toupper((unsigned char)c);
+    size_t at=0;
+    while(at<needle.size())
+    {
+        const size_t start=needle.find_first_not_of(' ',at);
+        if(start==std::string::npos)break;
+        const size_t end=needle.find(' ',start);
+        if(hay.find(needle.substr(start,end-start))==std::string::npos)return false;
+        if(end==std::string::npos)break;
+        at=end+1;
+    }
+    return true;
+}
+inline std::vector<std::string> Lines(const std::string& text, size_t width=38)
+{
+    std::vector<std::string> lines;
+    size_t at=0;
+    while(at<text.size())
+    {
+        while(at<text.size() && text[at]==' ')at++;
+        if(at==text.size())break;
+        size_t end=std::min(text.size(),at+width);
+        if(end<text.size())
+        {
+            const size_t space=text.rfind(' ',end);
+            if(space!=std::string::npos && space>at)end=space;
+        }
+        lines.push_back(text.substr(at,end-at));at=end;
+    }
+    return lines;
+}
+
 struct List
 {
+    // A database folder, in the order the file lists them. Codes with an empty category
+    // (a text file of your own, or a code sitting outside any folder) are not a folder here:
+    // the menu lists those on the folder page itself.
+    struct Folder
+    {
+        std::string name;
+        std::string note; // what the database says about the folder, under the menu
+    };
+
     std::vector<Cheat> items;
+    std::vector<Folder> folders;
     std::string folder, code;
+    std::vector<std::string> messages; // Player-readable failures and missing game entries.
     std::vector<std::string> sources; // what was read, for game.log
 
     static bool Exists(const std::string& p)
@@ -90,24 +155,58 @@ struct List
     }
 
     void Add(const std::string& name, const std::string& key, const std::vector<melonDS::u32>& code, int group = -1,
-             const std::string& note = "")
+             const std::string& note = "", const std::string& category = "", const std::string& catNote = "")
     {
         if (code.empty()) return;
         Cheat c;
-        c.name = Shown(name, 21); // (beside its ON / OFF in the pause menu's box)
+        c.name = Shown(name, 1024);
         c.key = key;
         c.code = code;
         c.group = group;
-        // (Shown under the menu, a few lines at most; the whole name first when the menu's is cut.)
-        if (!note.empty() && Shown(note, 160) != "?") c.note = Shown(note, 160);
-        const std::string full = Shown(name, 80);
-        if (full != c.name) c.note = c.note.empty() ? full : full + ": " + c.note;
+        // (Shown under the menu, a few lines at most; the whole name first when the row has to
+        // shorten it. The row keeps the code's own name, not "folder: name": that prefix used up
+        // the row, so every code in a folder looked the same.)
+        if (!note.empty() && Shown(note, 4096) != "?") c.note = Shown(note, 4096);
+        if (c.name.size() > (size_t)LabelChars)
+            c.note = c.note.empty() ? c.name : c.name + ": " + c.note;
+        if (!category.empty())
+        {
+            const std::string cat = Shown(category, 256);
+            if (cat != "?")
+            {
+                c.category = cat;
+                bool found = false;
+                for (const Folder& f : folders)
+                    if (f.name == cat) { found = true; break; }
+                if (!found)
+                {
+                    Folder f;
+                    f.name = cat;
+                    if (!catNote.empty() && Shown(catNote, 160) != "?") f.note = Shown(catNote, 160);
+                    folders.push_back(f);
+                }
+            }
+        }
         items.push_back(c);
+    }
+
+    // What the folder row shows on the right: the one code that is on, when its name is short,
+    // otherwise how many are on.
+    std::string FolderStatus(const std::string& name) const
+    {
+        const Cheat* one = nullptr;
+        int n = 0;
+        for (const Cheat& c : items)
+            if (c.category == name && c.on) { one = &c; n++; }
+        if (n == 0) return "";
+        if (n == 1 && one->name.size() <= 12) return one->name;
+        return std::to_string(n) + " ON";
     }
 
     void Load(const std::string& cheatFolder, const std::string& gameCode, const unsigned char* romHeader)
     {
         items.clear();
+        folders.clear();
         sources.clear();
         folder = cheatFolder;
         code = gameCode;
@@ -147,9 +246,13 @@ struct List
             if (!file.Error)
             {
                 for (const melonDS::ARCode& c : file.GetCodes())
-                    Add((c.Parent && !c.Parent->Name.empty() ? c.Parent->Name + ": " : "") + c.Name, "mch:" + c.Name, c.Code, -1, c.Description);
+                {
+                    const std::string cat = (c.Parent && !c.Parent->Name.empty()) ? c.Parent->Name : "";
+                    Add(c.Name, "mch:" + c.Name, c.Code, -1, c.Description, cat);
+                }
                 sources.push_back(mch);
             }
+            else messages.push_back("CANNOT READ THE MELONDS CHEAT FILE.");
         }
         // The R4 / DeSmuME database: this game's entry (the one made for this very ROM if there
         // is one, by the checksum of its header, as melonDS picks it).
@@ -158,6 +261,8 @@ struct List
         {
             melonDS::ARDatabaseDAT db(dat);
             const melonDS::u32 gc = (melonDS::u32)romHeader[12] | romHeader[13] << 8 | romHeader[14] << 16 | (melonDS::u32)romHeader[15] << 24;
+            if(db.Error)messages.push_back("USRCHEAT.DAT COULD NOT BE READ. CHECK THAT IT IS A VALID R4 DATABASE.");
+            else if(!db.FindGameCode(gc))messages.push_back("USRCHEAT.DAT HAS NO ENTRY FOR THIS GAME CODE: "+code);
             if (!db.Error && db.FindGameCode(gc))
             {
                 melonDS::ARDatabaseEntryList entries = db.GetEntriesByGameCode(gc);
@@ -183,7 +288,8 @@ struct List
                                 if (std::holds_alternative<melonDS::ARCode>(sub))
                                 {
                                     const auto& c = std::get<melonDS::ARCode>(sub);
-                                    Add(cat.Name + ": " + c.Name, "dat:" + cat.Name + "/" + c.Name, c.Code, g, c.Description.empty() ? cat.Description : c.Description);
+                                    Add(c.Name, "dat:" + cat.Name + "/" + c.Name, c.Code, g,
+                                        c.Description.empty() ? cat.Description : c.Description, cat.Name, cat.Description);
                                 }
                         }
                     }

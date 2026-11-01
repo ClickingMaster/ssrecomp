@@ -40,6 +40,8 @@ jobs:
           gh release download mac-build-inputs -R "${{ github.repository }}" -p mac-inputs.tar.gz -D inputs
           tar -xzf inputs/mac-inputs.tar.gz -C inputs
           ls inputs
+      - name: GBA games (mGBA and the widescreen patches, when the inputs include them)
+        run: bash tools/apple/fetch_gba.sh inputs
       - run: tools/mac/build_all.sh inputs/build-gen-tables inputs/box-art inputs/icon.jpg
         env:
           SSR_MAC_ARCH: ${{ matrix.arch }}

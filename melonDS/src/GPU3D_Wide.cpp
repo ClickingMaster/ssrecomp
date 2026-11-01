@@ -542,6 +542,33 @@ struct WideAccess
                 if (pr->Partner[ci] >= 0)
                 {
                     const RawPolygon* prev = &rawPrev[pr->Partner[ci]];
+                    // Texture coordinates that all moved alike by at least the polygon's own size in
+                    // the texture are a step to another picture of an animation drawn side by side
+                    // in one texture (Black's water sparkles): halfway, it would show the gap between
+                    // two pictures, which flickered on every in-between frame. Those keep their new
+                    // value, as a scrolling texture's small steps do not.
+                    // Same idea as Continue below: a sky panel or a haze that shows one picture is
+                    // not blended into the next; a mountain whose picture already repeats
+                    // (repeat bit and UV span longer than the texture) still interpolates, or it
+                    // would pop as the camera pans.
+                    const u32 tp = cur.TexParam;
+                    const s32 texSize[2] = { (8 << ((tp >> 20) & 7)) * 16, (8 << ((tp >> 23) & 7)) * 16 };
+                    bool texStep[2] = { false, false };
+                    for (int c = 0; c < 2; c++)
+                    {
+                        const int d0 = cur.Vertices[0].TexCoords[c] - prev->Vertices[0].TexCoords[c];
+                        int lo = cur.Vertices[0].TexCoords[c], hi = lo;
+                        bool alike = d0 != 0;
+                        for (int i = 1; i < nverts; i++)
+                        {
+                            const int t = cur.Vertices[i].TexCoords[c];
+                            lo = std::min(lo, t);
+                            hi = std::max(hi, t);
+                            if (t - prev->Vertices[i].TexCoords[c] != d0) alike = false;
+                        }
+                        const bool repeats = (tp & (1 << (16 + c))) && hi - lo > texSize[c] + 16;
+                        texStep[c] = alike && hi > lo && std::abs(d0) >= hi - lo && !repeats;
+                    }
                     for (int i = 0; i < nverts; i++)
                     {
                         Vertex& v = g.TempVertexBuffer[i];
@@ -552,7 +579,7 @@ struct WideAccess
                         {
                             // Texture coordinates that jump (wrapping animations) are left at their new value.
                             int d = v.TexCoords[c] - p.TexCoords[c];
-                            if (d > -512 && d < 512) v.TexCoords[c] = (s16)((v.TexCoords[c] + p.TexCoords[c]) / 2);
+                            if (!texStep[c] && d > -512 && d < 512) v.TexCoords[c] = (s16)((v.TexCoords[c] + p.TexCoords[c]) / 2);
                         }
                     }
                 }

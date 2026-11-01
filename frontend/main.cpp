@@ -17,8 +17,12 @@
 #include <thread>
 #include "sampler.h"
 #include "ssr_os.h"
+#ifdef SSR_IOS
+#include "ios_orient.h"
+#endif
 #include "achievements.h"
 #include "exclusives.h"
+#include "save_backups.h"
 #ifndef SSR_RA_VERSION
 #define SSR_RA_VERSION "0.0.0" // (CMakeLists.txt sets it from CHANGELOG.md)
 #endif
@@ -203,11 +207,77 @@ static bool g_dexCoverKept = false;
 // has come onto them. Drawn as screens 4 and 5.
 static uint32_t g_dexPages[2][256 * 192];
 static bool g_dexPagesKept = false;
+static bool g_ptDexBtns = false; // Platinum list showing SEARCH / SWITCH / CHECK (controller taps)
 static uint32_t g_dexPaper = 0xFBFBFB;
 static std::vector<uint32_t> g_dexRuling;
 // What of it the view shows (pickScene), for the touch screen's swipes: 1 the cover, closed and
 // still, 2 the list page, 0 neither.
 static int g_dexShown = 0;
+
+// Black 2 and White 2's Pokedex list in a wide view: beside the column of both screens, their
+// background continued to the view's edges. The rows that are plain across (the title bar, the
+// band with the picture, the button bar) are their edge column stretched; the grid (cells of 8
+// pixels, the same on both screens) is copies of an empty stretch of it, 32 pixels from the top
+// screen's left edge, which the list never reaches.
+static void Bw2DexSides(Scene& sc, float viewWidth)
+{
+    if (sc.items.size() < 2) return;
+    const Element& top = sc.items[0];
+    const float k = top.scale, x0 = top.dx, x1 = x0 + 256 * k, L = 128 - viewWidth / 2, R = 128 + viewWidth / 2;
+    const float topY = top.dy, botY = sc.items[1].dy;
+    const bool crisp = top.crisp;
+    struct Band
+    {
+        int screen, y, h, gridY; // gridY < 0: plain rows
+    };
+    static const Band bands[] = {
+        { 0, 0, 49, -1 }, { 0, 49, 127, 49 }, { 0, 176, 16, 176 },
+        { 1, 0, 16, 176 }, { 1, 16, 80, -1 }, { 1, 96, 72, 56 }, { 1, 168, 24, -1 },
+    };
+    auto put = [&](Element e, float x, float y, float stretch) {
+        e.dx = x;
+        e.dy = y;
+        e.scale = k;
+        e.stretchX = stretch;
+        e.crisp = crisp;
+        sc.items.push_back(e);
+    };
+    for (const Band& b : bands)
+    {
+        const float y = (b.screen ? botY : topY) + b.y * k;
+        if (b.gridY < 0)
+        {
+            put(Crop(b.screen, 0, b.y, 1, b.h), L - 1, y, (x0 - L + 1) / k);
+            put(Crop(b.screen, 255, b.y, 1, b.h), x1, y, (R + 1 - x1) / k);
+            continue;
+        }
+        const float tw = 32 * k;
+        for (float x = x0 - tw; x > L - tw; x -= tw) put(Crop(0, 0, b.gridY, 32, b.h), x, y, 1);
+        for (float x = x1; x < R; x += tw) put(Crop(0, 0, b.gridY, 32, b.h), x, y, 1);
+    }
+}
+
+// Their Pokedex cover: only the Poke Ball on the touch screen. In a wide view it is
+// scaled so the red that met the DS's left and right edges meets the view's edges
+// (a little of the top and bottom is cropped). Gaps stay the grey around it, not
+// the white flash that ends the opening.
+static void Bw2DexCover(Scene& sc, float viewWidth, const ScreenImage* screens)
+{
+    sc.name = "pokedex-open";
+    const float L = 128 - viewWidth / 2;
+    const float k = viewWidth > 256 ? viewWidth / 256.0f : 1.0f;
+    Element ball = FullScreen(1);
+    ball.dx = L;
+    ball.dy = 96 - 192 * k / 2;
+    ball.scale = k;
+    sc.items = { ball };
+    if (viewWidth <= 256 || !screens || !screens[1].pixels) return;
+    const uint32_t c = screens[1].pixels[1 * 256 + 1] & 0xFFFFFF;
+    const int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+    static uint32_t side = 0x495151;
+    if (r <= 90 && g <= 100 && b <= 100) side = c;
+    sc.items.insert(sc.items.begin(), FillRect(L - 1, -1, (int)std::ceil(viewWidth) + 3, 194, side));
+}
 
 // Defined in the 2D renderer: layers not to draw, per engine (see GPU2D_Soft.cpp).
 extern unsigned rc_hide_layers[2];
@@ -483,6 +553,52 @@ static bool FlushSave(const std::string& path)
     fflush(stderr);
     Host::SaveIsDirty = false;
     return true;
+}
+
+// Copies of the save in a backups folder beside it (backups/soulsilver-20261101-164500.sav), the
+// last few that differ, so that a save that went back (#33) can be put back by hand. The one
+// .prelaunch.bak is replaced at every start, by then already with the save that went back.
+static void BackupSave(const std::string& path)
+{
+    namespace fs = std::filesystem;
+    const std::vector<uint8_t> data = ReadFile(path);
+    if (data.empty()) return;
+    const fs::path p(path);
+    const fs::path dir = (p.has_parent_path() ? p.parent_path() : fs::path(".")) / "backups";
+    const std::string stem = p.stem().string();
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec)
+    {
+        fprintf(stderr, "cannot make save backup folder %s\n", dir.string().c_str());
+        return;
+    }
+    // (Named <save>-YYYYMMDD-HHMMSS.sav, so that their names sort by time.)
+    std::vector<fs::path> kept;
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+    {
+        const std::string n = it->path().filename().string();
+        if (n.size() == stem.size() + 20 && n.compare(0, stem.size() + 1, stem + "-") == 0 && it->path().extension() == ".sav")
+            kept.push_back(it->path());
+    }
+    std::sort(kept.begin(), kept.end());
+    if (!kept.empty() && ReadFile(kept.back().string()) == data) return;
+    char when[32];
+    const time_t now = time(nullptr);
+    strftime(when, sizeof when, "%Y%m%d-%H%M%S", localtime(&now));
+    const fs::path out = dir / (stem + "-" + when + ".sav");
+    FILE* f = fopen(out.string().c_str(), "wb");
+    if (!f || fwrite(data.data(), 1, data.size(), f) != data.size())
+    {
+        if (f) fclose(f);
+        fprintf(stderr, "cannot write save backup %s\n", out.string().c_str());
+        return;
+    }
+    fclose(f);
+    fprintf(stderr, "[save] backup %s\n", out.string().c_str());
+    kept.push_back(out);
+    const size_t keep = 8;
+    for (size_t i = 0; i + keep < kept.size(); i++) fs::remove(kept[i], ec);
 }
 
 struct Options
@@ -1288,15 +1404,17 @@ static PadState ReadPad(Pads& pads)
 // The controller as CONTROLS has it: each action's button (Controls::Bindings) pressed puts the
 // button that action has as it comes (Controls::DefaultPad) down, so the game, the menus and
 // START opening the menu all follow the new layout. A trigger given to a button is pressed past
-// half way; FAST FORWARD given to a button holds the right trigger right down. The left trigger
-// (the touch cursor's press) and the left stick's click (the next layout) stay where they are
-// unless an action took them.
+// half way; FAST FORWARD given to a button holds the right trigger right down. Save state and
+// load state are a press, read from the controller itself, so they are not turned into a DS
+// button. The left trigger (the touch cursor's press) and the left stick's click (the next
+// layout) stay where they are unless an action took them.
 static PadState RemapPad(const PadState& p, const Controls::Bindings& b, bool byLabel)
 {
     if (!b.PadCustom()) return p;
     auto on = [&](int in) { return in < PAD_COUNT ? p.btn[in] : in == Controls::IN_LT ? p.lt > 0.5f : p.rt > 0.5f; };
     PadState o = p;
     for (bool& x : o.btn) x = false;
+    o.rt = 0; // FAST FORWARD sets this; with no button for it, it is not held
     bool used[Controls::IN_COUNT] = {};
     for (int a = 0; a < Controls::COUNT; a++)
     {
@@ -1304,7 +1422,12 @@ static PadState RemapPad(const PadState& p, const Controls::Bindings& b, bool by
         if (in < 0) continue;
         used[in] = true;
         if (a == Controls::FAST) o.rt = in == Controls::IN_RT ? p.rt : on(in) ? 1.0f : 0.0f;
-        else o.btn[Controls::DefaultPad(a, byLabel)] |= on(in);
+        else if (a == Controls::SAVE || a == Controls::LOAD) {} // (a press, beside this)
+        else
+        {
+            const int dest = Controls::DefaultPad(a, byLabel);
+            if (dest >= 0 && dest < PAD_COUNT) o.btn[dest] |= on(in);
+        }
     }
     o.btn[PAD_LS] = !used[Controls::IN_LS] && p.btn[PAD_LS];
     o.lt = used[Controls::IN_LT] ? 0.0f : p.lt;
@@ -1320,6 +1443,16 @@ static int NewPadInput(const PadState& now, const PadState& before)
     if (now.lt > 0.5f && before.lt <= 0.5f) return Controls::IN_LT;
     if (now.rt > 0.5f && before.rt <= 0.5f) return Controls::IN_RT;
     return -1;
+}
+
+// Whether controller input `in` (Controls::IN_*) is held.
+static bool InputHeld(const PadState& p, int in)
+{
+    if (in < 0) return false;
+    if (in < PAD_COUNT) return p.btn[in];
+    if (in == Controls::IN_LT) return p.lt > 0.5f;
+    if (in == Controls::IN_RT) return p.rt > 0.5f;
+    return false;
 }
 
 // DS buttons from the controller. With byLabel the button printed "A" is A on any pad;
@@ -1685,7 +1818,7 @@ int main(int argc, char** argv)
     {
         cheats.Load(Cheats::FolderFor(opt.save), gameCode, rom.data());
         cheats.Apply(nds->AREngine);
-        fprintf(stderr, "[cheats] %zu for %s in %s, %d on\n", cheats.items.size(), gameCode.c_str(), cheats.folder.c_str(), cheats.On());
+        fprintf(stderr, "[cheats] %zu for %s in %s, %d on, %zu folders\n", cheats.items.size(), gameCode.c_str(), cheats.folder.c_str(), cheats.On(), cheats.folders.size());
         for (const std::string& src : cheats.sources) fprintf(stderr, "[cheats]   from %s\n", src.c_str());
     }
 #ifdef __SWITCH__
@@ -1803,6 +1936,7 @@ int main(int argc, char** argv)
     std::string dir = slash == std::string::npos ? "." : opt.save.substr(0, slash);
     if (opt.config.empty()) opt.config = dir + "/ssrecomp.cfg";
     const std::string quickState = opt.save + ".state";
+    if (!opt.noSave) BackupSave(opt.save);
 
     Settings cfg;
 #ifdef __SWITCH__
@@ -1951,6 +2085,11 @@ int main(int argc, char** argv)
     // (melonDS/src/SsrProf.h).
     SsrProf::On = perfOn && getenv("SSR_EMU_PROF") != nullptr;
     SDL_Window* window = nullptr;
+    // When the screen is near 60 Hz (or 120, 240), pictures follow its refresh instead of the
+    // DS clock. Set where the renderer is created; the frame loop reads them.
+    bool syncToDisplay = false;
+    int refreshesPerFrame = 1;
+    double refreshPeriod = 1001.0 / 60000.0;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* tex[2] = { nullptr, nullptr };
     SDL_Texture* overlayTex = nullptr;
@@ -2034,13 +2173,28 @@ int main(int argc, char** argv)
         // left it behind without the focus: the keyboard and controllers did nothing until it was
         // clicked. The list's window was this program's, so it may take the focus.
         if (window) SDL_RaiseWindow(window);
+#ifdef SSR_IOS
+        // The list left the screen upright. Turn it once this window exists.
+        IosOrientGame();
+#endif
         // The OpenGL ES renderer uploads the picture several times faster than SDL's default
         // (desktop OpenGL) on the machines this was measured on. SDL_RENDER_DRIVER overrides.
         // Not on Windows: there OpenGL ES can come with a framebuffer that converts to sRGB,
-        // which washes the colours out (seen on AMD), and SDL's default is Direct3D anyway.
+        // which washes the colours out (seen on AMD). SDL's default on Windows is Direct3D 9,
+        // which in a borderless window does not wait for the display's refresh (the desktop
+        // samples the picture on its own clock). Direct3D 11 does wait. The widescreen world
+        // keeps its own OpenGL context on a hidden window (glcontext_wgl.cpp), so this does
+        // not touch it.
 #if defined(__APPLE__)
         if (!getenv("SDL_RENDER_DRIVER")) SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
-#elif !defined(_WIN32)
+#elif defined(_WIN32)
+        // The display-paced D3D11 path can add a fifth refresh on a 240 Hz display,
+        // reducing this game's output to about 53 FPS despite ample emulation time.
+        // Keep the established renderer/clock by default until that path is validated.
+        const char* displayPacing = getenv("SSR_DISPLAY_PACING");
+        if (!getenv("SDL_RENDER_DRIVER") && displayPacing && displayPacing[0] == '1')
+            SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
+#else
         if (!getenv("SDL_RENDER_DRIVER")) SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
 #endif
         Uint32 rendererFlags = SDL_RENDERER_ACCELERATED;
@@ -2051,15 +2205,14 @@ int main(int argc, char** argv)
         // screen's 60 never waits for it, with Metal's three pictures in flight.
         rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
 #elif !defined(__SWITCH__) && !defined(__ANDROID__)
-        // Windows and Linux: in step with the screen too (vsync) when it shows 60 pictures a
-        // second or a multiple of that (59.94 or 60, 120, 240 Hz), the frames still at their own
-        // pace (nextTick). Handed over without, a frame came up on the screen at whichever of its
-        // refreshes followed, and while the frames' times (59.8 a second) drifted past the
-        // screen's (59.94) that was the next one for some and the one after for others: for
-        // seconds at a time a picture shown twice here and one left out there, a jolt in the
-        // motion that showed most on a patterned floor or the edges of trees as the camera
-        // moved (a 4K screen at 59.94 Hz, Black 2's stairs at Aspertia). SSR_VSYNC=0 or 1
-        // decides it instead.
+        // Windows and Linux: in step with the screen (vsync) when it shows 60 pictures a
+        // second or a multiple of that (59.94 or 60, 120, 240 Hz). The pictures then follow
+        // that refresh, not the DS's own 59.8 a second. Keeping both, the two walk past each
+        // other: Windows reports a 59.94 Hz 4K screen as 59, and for seconds at a time a
+        // picture was shown twice and the next one left out (a jolt on a patterned floor or
+        // the edges of trees as the camera moved, Black 2's stairs at Aspertia). A 120 Hz or
+        // 240 Hz screen shows each picture across two or four refreshes, so the game stays
+        // near 60 rather than running at the screen's rate. SSR_VSYNC=0 or 1 decides it instead.
         {
             SDL_DisplayMode mode;
             const int display = SDL_GetWindowDisplayIndex(window);
@@ -2068,7 +2221,23 @@ int main(int argc, char** argv)
             bool vsync = near60 > 0 && std::abs(hz - near60) <= 1;
             if (const char* v = getenv("SSR_VSYNC")) vsync = v[0] == '1';
             fprintf(stderr, "[display] %d Hz: pictures handed over %s\n", hz, vsync ? "in step with the screen (vsync)" : "at their own times");
-            if (vsync) rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
+            if (vsync)
+            {
+                rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
+                // Windows rounds 59.94 down to 59, and 119.88 down to 119 (the same for 23.976,
+                // 29.97 and the other rates one under a round number of thousands).
+                const bool pulledDown = hz == 23 || hz == 29 || hz == 47 || hz == 59 || hz == 71 || hz == 95 || hz == 119 || hz == 143 || hz == 239;
+                refreshPeriod = hz <= 0 ? 1001.0 / 60000.0 : pulledDown ? 1001.0 / ((hz + 1) * 1000.0) : 1.0 / hz;
+                refreshesPerFrame = hz > 0 ? std::max(1, (hz + 30) / 60) : 1;
+                syncToDisplay = true;
+#ifdef _WIN32
+                const char* displayPacing = getenv("SSR_DISPLAY_PACING");
+                syncToDisplay = displayPacing && displayPacing[0] == '1';
+#endif
+                if (syncToDisplay)
+                    fprintf(stderr, "[display] one picture every %d refresh%s\n", refreshesPerFrame, refreshesPerFrame == 1 ? "" : "es");
+                else fprintf(stderr, "[display] stable DS frame clock (experimental display pacing disabled)\n");
+            }
         }
 #endif
         renderer = SDL_CreateRenderer(window, -1, rendererFlags);
@@ -2080,6 +2249,12 @@ int main(int argc, char** argv)
         {
             fprintf(stderr, "SDL accelerated renderer failed: %s; trying fallback\n", SDL_GetError());
             SDL_SetHint(SDL_HINT_RENDER_DRIVER, "");
+            renderer = SDL_CreateRenderer(window, -1, rendererFlags);
+        }
+        if (!renderer)
+        {
+            fprintf(stderr, "SDL renderer failed: %s; trying without vsync\n", SDL_GetError());
+            syncToDisplay = false;
             renderer = SDL_CreateRenderer(window, -1, 0);
         }
         if (!window || !renderer)
@@ -2317,6 +2492,9 @@ int main(int argc, char** argv)
         int field = -1, fieldMenu = -1, bag = -1, battle = -1;
         int battleCommand = -1, battleMove = -1, party = -1, trainerCard = -1, townMap = -1;
         int options = -1, summary = -1, dexList = -1, dexEntry = -1, box = -1;
+        // The Pokedex's opening (Black 2 and White 2); Black and White's has no function of its
+        // own, so it is their Pokedex running with neither the list nor an entry up.
+        int dexOpen = -1, dexApp = -1;
         int startContinue = -1, confirmDialog = -1, startMain = -1, intro = -1, nameEntry = -1;
         int battleList = -1, battleBag = -1, battleChoice = -1, battleYesNo = -1;
         int setupSingle = -1, setupDouble = -1, setupTriple = -1, setupRotation = -1;
@@ -2356,6 +2534,8 @@ int main(int argc, char** argv)
         bw2.summary = bw2Find("PStatus_ProcMain");      // a Pokemon's summary
         bw2.dexList = bw2Find("ZknListSeq_Main");       // the Pokedex list
         bw2.dexEntry = bw2Find("ZukanDetail_Main");     // a Pokedex entry
+        bw2.dexOpen = bw2Find("ZukanOpen_Main");        // the Pokedex's opening
+        bw2.dexApp = bw2Find("ZUKAN_Update");           // Black and White's Pokedex, all of it
         bw2.box = bw2Find("Box2Proc_Main");             // the PC's boxes
         bw2.startContinue = bw2Find("StartMenu_Continue"); // CONTINUE chosen on the start menu
         bw2.startMain = bw2Find("StartMenu_Main");      // the start menu (CONTINUE, NEW GAME, ...)
@@ -2509,12 +2689,27 @@ int main(int argc, char** argv)
                     piece(c.sx, c.sw, dx + (dw - c.sw * scl) / 2);
                     return;
                 }
-                // The plain columns widened across the whole button as one piece, the ends and
-                // the label over them. (Once repeated a few pixels at a time: some 90 pieces a
-                // button, each its own picture to upload, which on the Switch dropped the frame
-                // rate whenever a battle waited for a command.)
-                piece(c.tileX, c.tileW, dx);
-                sc.items.back().stretchX = dw / (c.tileW * scl);
+                // The plain columns are one colour. Widening those pixels themselves stretched any
+                // single pixel that was not (a shade at the edge of the column, one pixel of the
+                // picture beside it) into a line, and the bit of that line the label did not
+                // cover showed as a dark dot on the red FIGHT button, just left of its icon.
+                // The same columns in Platinum, SoulSilver and HeartGold. One flat colour fills
+                // the button instead; the ends and the label are drawn over it.
+                uint32_t flat = 0;
+                int bestN = 0;
+                for (int y = c.sy; y < c.sy + c.sh; y++)
+                    for (int x = c.tileX; x < c.tileX + c.tileW; x++)
+                    {
+                        const uint32_t col = b[y * 256 + x] & 0xFFFFFF;
+                        int n = 0;
+                        for (int y2 = c.sy; y2 < c.sy + c.sh; y2++)
+                            for (int x2 = c.tileX; x2 < c.tileX + c.tileW; x2++)
+                                if ((b[y2 * 256 + x2] & 0xFFFFFF) == col) n++;
+                        if (n > bestN) { bestN = n; flat = col; }
+                    }
+                Element body = FillRect(dx, dy, 1000, (int)std::lround(1000 * rowH / dw), flat);
+                body.scale = dw / 1000;
+                sc.items.push_back(body);
                 piece(c.sx, c.lx0 - c.sx, dx);
                 piece(c.lx1, c.sx + c.sw - c.lx1, dx + dw - (c.sx + c.sw - c.lx1) * scl);
                 piece(c.lx0, c.lx1 - c.lx0, dx + (dw - (c.lx1 - c.lx0) * scl) / 2);
@@ -2616,6 +2811,7 @@ int main(int argc, char** argv)
         return sc;
     };
     auto pickSceneBw2 = [&](float viewWidth, const ScreenImage* screens) {
+        g_ptDexBtns = false;
         Scene sc;
         sc.smartEdges = true;
         auto only = [&](const char* name, int screen) {
@@ -2666,8 +2862,41 @@ int main(int argc, char** argv)
             else if (ran(pt.moveReminder)) alone("move-reminder", 0);
             else if (ran(pt.townMap)) alone("map", 0);   // the touch screen: a zoom button
             else if (ran(pt.dex))
-                // The list or a page above, its buttons and tabs on the touch screen.
-                sc = Stack("pokedex", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+            {
+                // The list beside its three buttons (SEARCH, SWITCH, CHECK), not the Poke Ball:
+                // a click on the ball was turning it and scrolling the list. Y, X and A still
+                // press those buttons. A page (no list buttons) keeps both screens.
+                g_ptDexBtns = wideView && screens && PtFuncs::DexListButtons(screens[1].pixels);
+                if (g_ptDexBtns)
+                {
+                    // List beside SEARCH / SWITCH / CHECK. B QUIT sits on the touch screen's
+                    // top right (over the ball we dropped); a 140-wide crop clips it to "B Q",
+                    // so it is cut out and placed in the empty header above SEARCH. The list
+                    // is cropped to its scrollbar, its header grey continues across the button
+                    // bar, and the buttons overlap by one pixel, so the join is not a hairline.
+                    const int quitX = 114, quitW = 52, quitH = 16, btnW = 140, listW = 253;
+                    Element list = Crop(0, 0, 0, listW, 192);
+                    Element body = Crop(1, 0, quitH, btnW, 192 - quitH);
+                    Element quit = Crop(1, quitX, 0, quitW, quitH);
+                    Element bar = Crop(0, listW - 2, 0, 2, quitH);
+                    const float k = std::min(1.0f, viewWidth / (float)(listW + btnW));
+                    const float L = 128 - (listW + btnW) * k / 2;
+                    const float dy = 96 - 192 * k / 2;
+                    list.scale = body.scale = quit.scale = bar.scale = k;
+                    list.dx = L;
+                    body.dx = L + listW * k - k;
+                    bar.dx = body.dx;
+                    quit.dx = body.dx + 10 * k;
+                    list.dy = bar.dy = quit.dy = dy;
+                    body.dy = dy + quitH * k;
+                    bar.stretchX = (btnW + 1) / 2.0f;
+                    list.crisp = body.crisp = quit.crisp = bar.crisp = true;
+                    sc.name = "pokedex";
+                    sc.items = { list, bar, body, quit };
+                }
+                else
+                    sc = Stack("pokedex", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+            }
             else if (ran(pt.trainerCard))
                 // The card and its badges.
                 sc = Stack("trainer-card", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
@@ -3051,11 +3280,19 @@ int main(int argc, char** argv)
         else if (funcWatch.Ran(bw2.box, 2))
             // The chosen Pokemon's card (moves, ability, item) beside the box.
             sc = Stack("pc-box", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+        else if (funcWatch.Ran(bw2.dexOpen, 2) ||
+                 (funcWatch.Ran(bw2.dexApp, 2) && !funcWatch.Ran(bw2.dexList, 2) && !funcWatch.Ran(bw2.dexEntry, 2)))
+            // The opening: only the Poke Ball, filling the view, until the list takes over.
+            Bw2DexCover(sc, viewWidth, screens);
         else if (funcWatch.Ran(bw2.dexEntry, 2))
             only("pokedex-entry", 1); // the other screen is an empty grid
         else if (funcWatch.Ran(bw2.dexList, 2))
-            // The list runs on from the top screen into the bottom one: one column.
+        {
+            // The list runs on from the top screen into the bottom one: one column, as on the DS,
+            // with the background carried on to the edges of a wide view.
             sc = Stack("pokedex-list", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, false, viewWidth);
+            if (viewWidth > 256) Bw2DexSides(sc, viewWidth);
+        }
         else if (funcWatch.Ran(bw2.townMap, 2))
             // The map (the place's name is on its own banner); the other screen's card of
             // flavour text is one press away (the escape hatch above).
@@ -3248,6 +3485,7 @@ int main(int argc, char** argv)
             {
                 if (sectionActive("field")) singleFieldFrame = rc_current_frame();
                 sc.wide = viewWidth >= 300 && (fieldActive() || (singleFieldFrame && rc_current_frame() - singleFieldFrame < 20));
+                if (sc.wide && screens) sc.weatherObj = MergedParticleWeather(screens[0]);
             }
             return sc;
         }
@@ -3332,12 +3570,39 @@ int main(int argc, char** argv)
             lower.keyRing = 2;
             lower.cutX = 143;
             lower.cutY = 154;
+            // A move chosen on the moves page: its category, power, accuracy and description
+            // come up beside the list on the lower screen, where the page tabs and the party
+            // grid were (GitHub #11). They run off the screen at the right. The stats stay;
+            // the details are a fourth panel. On a wide view the four sit in one row, shrunk
+            // to fit. On a narrow view two rows are larger: the Pokemon and its stats above,
+            // the moves and the details below.
+            const uint32_t* lpx = screens[1].pixels;
+            const bool moveDetails = (lpx[5 * 256 + 140] & 0xFFFFFF) == frame &&
+                (lpx[6 * 256 + 200] & 0xFFFFFF) == frame && (lpx[161 * 256 + 140] & 0xFFFFFF) == frame;
+            if (moveDetails)
+                lower.sw = 130; // the list and its right edge, not the details beside it
             const float pad = 4, gap = 6, margin = 6, h = 189;
             const int cardW = upper.sw;
-            const float w = side.sw + 2 * (cardW + 2 * pad) + 2 * gap;
-            const float scale = std::min((192 - 2 * margin) / h, (viewWidth - 2 * margin) / w);
-            float x = 128 - w * scale / 2;
-            const float y = 96 - h * scale / 2;
+            const float card = cardW + 2 * pad;
+            const int rowCards = moveDetails ? 3 : 2;
+            const float rowW = side.sw + rowCards * card + rowCards * gap;
+            const float rowScale = std::min((192 - 2 * margin) / h, (viewWidth - 2 * margin) / rowW);
+            const float gridW = card + gap + card;
+            const float gridH = h + gap + h;
+            const float gridScale = std::min((192 - 2 * margin) / gridH, (viewWidth - 2 * margin) / gridW);
+            const bool grid = moveDetails && gridScale > rowScale;
+            const float scale = grid ? gridScale : rowScale;
+            const float spanW = grid ? gridW : rowW;
+            const float spanH = grid ? gridH : h;
+            const float left = 128 - spanW * scale / 2;
+            const float top = 96 - spanH * scale / 2;
+            const float sideX = grid ? left + (card - side.sw) * scale / 2.0f : left;
+            const float statsX = grid ? left + (card + gap) * scale : left + (side.sw + gap) * scale;
+            const float movesX = grid ? left : statsX + (card + gap) * scale;
+            const float detailsX = grid ? statsX : movesX + (card + gap) * scale;
+            const float row2 = grid ? top + (h + gap) * scale : top;
+            float x = sideX;
+            float y = top;
             sc.name = "summary";
             {
                 // The name and item boxes run off the screen at the right, and the item box
@@ -3382,37 +3647,20 @@ int main(int argc, char** argv)
                 corner.flipX = corner.flipY = true;
                 at(corner, 250, 192);
             }
-            x += (side.sw + gap) * scale;
-            // A move chosen on the moves page: its category, power, accuracy and description
-            // come up beside the list on the lower screen, where the page tabs and the party
-            // grid were (GitHub #11). They take the upper half's panel while they are shown,
-            // so nothing moves or changes size; they run off the screen at the right.
-            const uint32_t* lpx = screens[1].pixels;
-            const bool moveDetails = (lpx[5 * 256 + 140] & 0xFFFFFF) == frame &&
-                (lpx[6 * 256 + 200] & 0xFFFFFF) == frame && (lpx[161 * 256 + 140] & 0xFFFFFF) == frame;
-            if (moveDetails)
-                lower.sw = 130; // the list and its right edge, not the details beside it
-            for (Element* e : { &upper, &lower })
+            const float cardX[2] = { statsX, movesX };
+            const float cardY[2] = { top, row2 };
+            Element* halves[2] = { &upper, &lower };
+            for (int half = 0; half < 2; half++)
             {
+                Element* e = halves[half];
+                x = cardX[half];
+                y = cardY[half];
                 Element back = FillRect(x, y, cardW + 2 * (int)pad, (int)h, page);
                 back.scale = scale;
                 back.border = true;
                 back.borderColor = frame;
                 back.borderRadius = 3;
                 sc.items.push_back(back);
-                if (e == &upper && moveDetails)
-                {
-                    Element details = Crop(1, 128, 5, 128, 158);
-                    details.scale = scale;
-                    details.dx = x + (pad + (cardW - details.sw - 2) / 2.0f) * scale;
-                    details.dy = y + (h - details.sh) / 2.0f * scale;
-                    sc.items.push_back(details);
-                    Element edge = FillRect(details.dx + details.sw * scale, details.dy, 2, details.sh, frame);
-                    edge.scale = scale;
-                    sc.items.push_back(edge);
-                    x += (cardW + 2 * pad + gap) * scale;
-                    continue;
-                }
                 // What is drawn on the card comes in blocks, one above the other with the page's
                 // colour between them; each block is centred across the panel, and all of them
                 // together top to bottom.
@@ -3473,7 +3721,26 @@ int main(int argc, char** argv)
                             }
                     }
                 }
-                x += (cardW + 2 * pad + gap) * scale;
+            }
+            if (moveDetails)
+            {
+                x = detailsX;
+                y = row2;
+                Element back = FillRect(x, y, cardW + 2 * (int)pad, (int)h, page);
+                back.scale = scale;
+                back.border = true;
+                back.borderColor = frame;
+                back.borderRadius = 3;
+                sc.items.push_back(back);
+                Element details = Crop(1, 128, 5, 128, 158);
+                details.scale = scale;
+                details.dx = x + (pad + (cardW - details.sw - 2) / 2.0f) * scale;
+                details.dy = y + (h - details.sh) / 2.0f * scale;
+                sc.items.push_back(details);
+                // The panel's right edge is past the screen, so the card closes it.
+                Element edge = FillRect(details.dx + details.sw * scale, details.dy, 2, details.sh, frame);
+                edge.scale = scale;
+                sc.items.push_back(edge);
             }
             sc.bgScreen = 0;
             sc.bgX = 1;
@@ -4059,6 +4326,9 @@ int main(int argc, char** argv)
         // The overworld is drawn across the whole wide view by the widescreen 3D renderer.
         sc.wide = viewWidth >= 300 && (fieldActive() || menuReturn > 0) && !sc.items.empty() && sc.items[0].screen == 0 &&
             sc.items[0].sw == 256 && sc.items[0].sh == 192 && sc.items[0].dx == 0 && sc.items[0].scale == 1.0f;
+        // Snow, rain and sand are sprites. Repeat them beside the screen, as Platinum and the
+        // Black games do from their weather functions (see Scene::weatherObj).
+        if (sc.wide && screens) sc.weatherObj = MergedParticleWeather(screens[0]);
         return sc;
     };
     Scene scene;
@@ -4211,10 +4481,15 @@ int main(int argc, char** argv)
         M_DISPLAY, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
         M_VOLUME, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
+        M_CSEARCH, M_SEARCH_LETTER, M_SEARCH_DELETE, M_SEARCH_SPACE, M_SEARCH_CLEAR, M_SEARCH_DONE,
+        M_CDETAIL_TOGGLE, M_CINFO, M_BACKUPS, M_RESTORE_CONFIRM, M_LOAD_CONFIRM,
+        M_BACKUP0 = 70000,
         M_CHEAT0 = 1000, // (M_CHEAT0 + i: cheat i, CHEATS)
-        M_ACH0 = 30000   // (M_ACH0 + i: achievement i, ACHIEVEMENTS)
+        M_ACH0 = 30000,  // (M_ACH0 + i: achievement i, ACHIEVEMENTS)
+        M_CHEAT_ON = 49000, // ON NOW: every cheat that is on, from any folder
+        M_CFOLDER0 = 50000  // (M_CFOLDER0 + i: folder i of the cheat database)
     };
-    enum { PAGE_MAIN, PAGE_KEYS, PAGE_DISPLAY, PAGE_GRAPHICS, PAGE_CONTROLS, PAGE_CHEATS, PAGE_RA, PAGE_SOUND, PAGE_RA_LIST, PAGE_RA_DETAIL };
+    enum { PAGE_MAIN, PAGE_KEYS, PAGE_DISPLAY, PAGE_GRAPHICS, PAGE_CONTROLS, PAGE_CHEATS, PAGE_RA, PAGE_SOUND, PAGE_RA_LIST, PAGE_RA_DETAIL, PAGE_CSEARCH, PAGE_CDETAIL, PAGE_CINFO, PAGE_BACKUPS, PAGE_RESTORE_CONFIRM, PAGE_LOAD_CONFIRM };
     // ACHIEVEMENTS (RETROACHIEVEMENTS' list): read from the set as the page opens.
     std::vector<Achievements::Row> achList;
     int achDetail = -1; // the one ACHIEVEMENTS' details are shown for (A on it)
@@ -4240,6 +4515,21 @@ int main(int argc, char** argv)
     // buttons must all be let go first, captureReleased); ESC, or 5 seconds, leaves it as it was.
     // CHANGING says which is shown and changed, the keyboard's keys or a controller's buttons.
     int menuPage = 0; // PAGE_*
+    // CHEATS. -2: the folders (or every code, when there is no folder to open). -3: ON NOW.
+    // 0 and up: that folder of the database, so its codes are listed on their own.
+    int cheatWhere = -2; // -4: search results across all folders
+    std::string cheatQuery;
+    int searchLetter = 0, cheatDetail = -1;
+    const std::string searchLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::vector<SaveBackups::Entry> saveBackups;
+    int restoreChoice = -1;
+    auto cheatBrowse = [&]() {
+        if (cheats.folders.size() > 1) return true;
+        if (cheats.folders.empty()) return false;
+        for (const Cheats::Cheat& c : cheats.items)
+            if (c.category.empty()) return true;
+        return false;
+    };
 #ifdef __SWITCH__
     const bool ctlHasKeyboard = false; // (the Switch: a controller only)
 #else
@@ -4251,6 +4541,7 @@ int main(int argc, char** argv)
     bool captureReleased = false;
     bool navHoldOff = false; // (the button just given: ignored by the menu until let go)
     PadState physPad, prevPhysPad; // the controller as it is, before RemapPad
+    bool saveEdge = false, loadEdge = false; // (SAVE STATE / LOAD STATE: the button just pressed)
     const int ctlRow0 = ctlHasKeyboard ? 1 : 0; // the first action's row
     const int ctlRowReset = ctlRow0 + Controls::COUNT, ctlRowBack = ctlRowReset + 1;
     auto buildMenu = [&]() {
@@ -4287,6 +4578,7 @@ int main(int argc, char** argv)
             add(M_RESUME, "RESUME", "");
             add(M_SAVESTATE, "SAVE STATE", "");
             add(M_LOADSTATE, "LOAD STATE", "");
+            if (!opt.noSave) add(M_BACKUPS, "SAVE BACKUPS", "");
             add(M_FAST, "FAST FORWARD", onOff(fastLock));
             add(M_DISPLAY, "DISPLAY", "");
             add(M_SOUND, "SOUND", "");
@@ -4371,10 +4663,112 @@ int main(int argc, char** argv)
         }
         else if (menuPage == PAGE_CHEATS)
         {
-            if (cheats.items.empty()) add(M_NOTHING, "NONE FOUND FOR THIS GAME", "");
-            for (size_t i = 0; i < cheats.items.size(); i++)
-                add(M_CHEAT0 + (int)i, cheats.items[i].name.c_str(), cheats.items[i].on ? "ON" : "OFF");
+            // A database is a set of folders, each with its own codes. Listing every code as
+            // "folder: name" in one row cut the name off, so the rows all looked alike (issue 32).
+            if (cheatWhere == -3 && cheats.On() == 0) cheatWhere = -2;
+            add(M_CSEARCH, "SEARCH", cheatQuery.empty() ? "" : Cheats::Fit(cheatQuery, 18), true);
+            add(M_CINFO, "DATABASE INFO", std::to_string(cheats.items.size()) + " CODES", true);
+            if (cheatWhere == -4)
+            {
+                int matches = 0;
+                for (size_t i=0; i<cheats.items.size(); i++)
+                    if (Cheats::Matches(cheats.items[i], cheatQuery))
+                    {
+                        matches++;
+                        add(M_CHEAT0+(int)i, Cheats::Fit(cheats.items[i].name, Cheats::LabelChars).c_str(), cheats.items[i].on ? "ON" : "OFF");
+                    }
+                if (!matches) add(M_NOTHING, "NO MATCHING CODES", "", true);
+            }
+            else if (cheats.items.empty()) add(M_NOTHING, "NONE FOUND FOR THIS GAME", "", true);
+            else if (cheatBrowse() && cheatWhere == -2)
+            {
+                if (cheats.On() > 0)
+                    add(M_CHEAT_ON, "ON NOW", std::to_string(cheats.On()), true);
+                for (size_t i = 0; i < cheats.items.size(); i++)
+                {
+                    if (!cheats.items[i].category.empty()) continue;
+                    add(M_CHEAT0 + (int)i, Cheats::Fit(cheats.items[i].name, Cheats::LabelChars).c_str(),
+                        cheats.items[i].on ? "ON" : "OFF");
+                }
+                for (size_t i = 0; i < cheats.folders.size(); i++)
+                    add(M_CFOLDER0 + (int)i, Cheats::Fit(cheats.folders[i].name, 28).c_str(),
+                        cheats.FolderStatus(cheats.folders[i].name), true);
+            }
+            else if (cheatWhere == -3)
+            {
+                for (size_t i = 0; i < cheats.items.size(); i++)
+                {
+                    if (!cheats.items[i].on) continue;
+                    const Cheats::Cheat& c = cheats.items[i];
+                    const std::string both = c.category.empty() ? c.name : c.category + ": " + c.name;
+                    add(M_CHEAT0 + (int)i, Cheats::Fit(both.size() <= (size_t)Cheats::LabelChars ? both : c.name, Cheats::LabelChars).c_str(), "ON");
+                }
+            }
+            else
+            {
+                const std::string cat = (cheatWhere >= 0 && cheatWhere < (int)cheats.folders.size())
+                    ? cheats.folders[cheatWhere].name : std::string();
+                for (size_t i = 0; i < cheats.items.size(); i++)
+                {
+                    if (cheatWhere >= 0 && cheats.items[i].category != cat) continue;
+                    add(M_CHEAT0 + (int)i, Cheats::Fit(cheats.items[i].name, Cheats::LabelChars).c_str(),
+                        cheats.items[i].on ? "ON" : "OFF");
+                }
+            }
             add(M_BACK, "BACK", "");
+            if (menu.selected >= (int)menu.items.size())
+                menu.selected = (int)menu.items.size() - 1;
+        }
+        else if (menuPage == PAGE_CSEARCH)
+        {
+            add(M_SEARCH_DONE, "SHOW RESULTS", "");
+            add(M_SEARCH_LETTER, "LETTER: LEFT / RIGHT", std::string(1, searchLetters[searchLetter]));
+            add(M_SEARCH_SPACE, "ADD SPACE", "");
+            add(M_SEARCH_DELETE, "DELETE LAST LETTER", "");
+            add(M_SEARCH_CLEAR, "CLEAR SEARCH", "");
+            add(M_BACK, "BACK", "");
+        }
+        else if (menuPage == PAGE_CDETAIL && cheatDetail >= 0 && cheatDetail < (int)cheats.items.size())
+        {
+            const auto& c=cheats.items[cheatDetail];
+            add(M_CDETAIL_TOGGLE, "ENABLED", onOff(c.on));
+            auto lines=[&](const std::string& text) {for(const auto& l:Cheats::Lines(text))add(M_NOTHING,l.c_str(),"",true);};
+            lines(c.name);
+            if (!c.category.empty()) lines("FOLDER: "+c.category);
+            if (c.group >= 0) lines("ONLY ONE CODE IN THIS GROUP CAN BE ON.");
+            std::string description=c.note;
+            if(description==c.name)description.clear();
+            else if(description.rfind(c.name+": ",0)==0)description=description.substr(c.name.size()+2);
+            if (!description.empty()) lines(description);
+            add(M_BACK, "BACK", "");
+        }
+        else if (menuPage == PAGE_CINFO)
+        {
+            add(M_NOTHING, "GAME", cheats.code, true);
+            add(M_NOTHING, "CODES FOUND", std::to_string(cheats.items.size()), true);
+            for (const auto& source:cheats.sources)
+                for(const auto& l:Cheats::Lines("LOADED: "+Cheats::Shown(source,4096)))add(M_NOTHING,l.c_str(),"",true);
+            for(const auto& issue:cheats.messages)
+                for(const auto& l:Cheats::Lines(issue))add(M_NOTHING,l.c_str(),"",true);
+            if (cheats.sources.empty())
+                for(const auto& l:Cheats::Lines("NO CHEAT FILE LOADED. PUT USRCHEAT.DAT OR THIS GAME'S CODE FILE IN THE CHEATS FOLDER."))add(M_NOTHING,l.c_str(),"",true);
+            add(M_BACK, "BACK", "");
+        }
+        else if (menuPage == PAGE_BACKUPS)
+        {
+            for(size_t i=0;i<saveBackups.size();i++)add(M_BACKUP0+(int)i,saveBackups[i].label.c_str(),"",true);
+            if(saveBackups.empty())add(M_NOTHING,"NO BACKUPS FOR THIS GAME","",true);
+            add(M_BACK,"BACK","");
+        }
+        else if (menuPage == PAGE_RESTORE_CONFIRM)
+        {
+            add(M_BACK,"CANCEL","");
+            add(M_RESTORE_CONFIRM,"RESTORE AND RESTART","");
+        }
+        else if (menuPage == PAGE_LOAD_CONFIRM)
+        {
+            add(M_BACK,"CANCEL","");
+            add(M_LOAD_CONFIRM,"LOAD STATE","");
         }
         else if (menuPage == PAGE_RA_LIST)
         {
@@ -4491,6 +4885,35 @@ int main(int argc, char** argv)
         toast = msg;
         toastUntil = frame + 120;
     };
+    // The quick slot (SAVE STATE / LOAD STATE in the pause menu, and their keys and buttons).
+    auto saveQuick = [&]() {
+        say(WriteSnapshot(*nds, quickState, frame) ? "STATE SAVED" : "SAVE STATE FAILED");
+    };
+    auto loadQuickNow = [&]() {
+        // LOAD STATE: back where the state was made, the in-game save kept as it is. A state
+        // carries the save as it was then, which would otherwise replace the newer one on the
+        // next write (#33).
+        std::vector<u8> keep;
+        if (const u8* cur = nds->GetNDSSave(); cur && nds->GetNDSSaveLength())
+            keep.assign(cur, cur + nds->GetNDSSaveLength());
+        if (!ReadSnapshot(*nds, quickState, nullptr))
+        {
+            say("NO STATE TO LOAD");
+            return;
+        }
+        if (!keep.empty()) nds->SetNDSSave(keep.data(), (u32)keep.size());
+        say("STATE LOADED");
+        Achievements::Reset();
+        SetClock(*nds, false);
+    };
+    auto loadQuick = [&]() {
+        menu.open = true;
+        goPage(PAGE_LOAD_CONFIRM, M_BACK);
+    };
+    auto resetGame = [&]() {
+        nds->Reset(); nds->SetupDirectBoot("game.nds"); nds->Start();
+        rc_reset(); Achievements::Reset(); SetClock(*nds, false);
+    };
 #if defined(__ANDROID__) && !defined(SSR_PC_LAUNCHER)
     bool updateSaid = false;
     UpdateCheck::Start();
@@ -4503,6 +4926,13 @@ int main(int argc, char** argv)
     std::vector<int16_t> audioOut;
     uint64_t audioTick = 0;
     double audioSlow = 1.0;
+    // Sound generated while fast forwarding, not yet played. Playback stays at the DS's
+    // own rate (below); this holds the rest. ffAudioAt is the index of the next unplayed
+    // sample (stereo, so two entries per frame).
+    std::vector<int16_t> ffAudio;
+    int ffAudioAt = 0;
+    double ffAudioFrac = 0;
+    bool ffInBattle = false;
     bool running = true;
     bool mouseDown = false;
     int mouseX = 0, mouseY = 0;
@@ -4541,6 +4971,8 @@ int main(int argc, char** argv)
     const double frameTime = 1.0 / 59.8261;
     uint64_t perfFreq = opt.headless ? 1 : SDL_GetPerformanceFrequency();
     uint64_t nextTick = opt.headless ? 0 : SDL_GetPerformanceCounter();
+    uint64_t lastRefresh = 0; // the last vsync'd present's return, a refresh of the screen
+    int refreshSamples = 0;
 
     Sampler::Start();
     double perfAcc[6] = {};
@@ -4677,15 +5109,15 @@ int main(int argc, char** argv)
     double emuMs = 0, perfEmu = 0;
     uint64_t perfDsFrames = 0; // DS frames emulated since the last timing line (several a frame when fast forwarding)
 
-    // The emulation of one frame (several when fast-forwarding; only the first one's sound
-    // is played).
+    // The emulation of one frame (several when fast-forwarding). Every frame's sound is kept
+    // and played back at normal speed; see the fast-forward queue below.
     // Fast forward runs several frames at once and shows the last: the others' 2D and widescreen
     // world are not drawn (rc_frame_hidden, rc_wide_render_skip), so it goes faster and shows
     // more frames. SSR_FF_FULL=1 draws them all, for comparing.
     static const bool ffFull = getenv("SSR_FF_FULL") != nullptr;
     auto runFrames = [&]() {
         const double t0 = perfNow();
-        emuGot = 0;
+        int filled = 0;
         for (int i = 0; i < emuSpeed; i++)
         {
             // (The widescreen world drawn during a frame is shown after the next one.)
@@ -4696,11 +5128,15 @@ int main(int argc, char** argv)
             nds->RunFrame();
             Achievements::DoFrame(); // (on this thread: it reads the game's memory)
             exclusives.DoFrame();
-            int avail = nds->SPU.GetOutputSize();
-            if (avail > (int)audioBuf.size() / 2) avail = (int)audioBuf.size() / 2;
-            int n = nds->SPU.ReadOutput(audioBuf.data(), avail);
-            if (i == 0) emuGot = n;
+            const int avail = nds->SPU.GetOutputSize();
+            if (avail > 0)
+            {
+                if (filled + avail > (int)audioBuf.size() / 2)
+                    audioBuf.resize((size_t)(filled + avail) * 2);
+                filled += nds->SPU.ReadOutput(audioBuf.data() + filled * 2, avail);
+            }
         }
+        emuGot = filled;
         rc_frame_hidden = rc_wide_render_skip = false;
         emuMs = perfNow() - t0;
     };
@@ -4809,6 +5245,21 @@ int main(int argc, char** argv)
         }
     };
     auto presentFrame = [&](DrawJob& j, bool pace) {
+        // The screen is the clock (syncToDisplay). The work of this frame has already been
+        // done; wait here, just before the next refresh, and hand the picture over then.
+        // Waiting after Present on the DS's 59.8 a second instead is what walked past a
+        // 59.94 Hz screen. Present itself then blocks only for the last couple of milliseconds
+        // and returns on the refresh, which is when the next frame's work starts.
+        if (pace && syncToDisplay)
+        {
+            const uint64_t now = SDL_GetPerformanceCounter();
+            if (now < nextTick)
+            {
+                const double left = (double)(nextTick - now) / perfFreq;
+                if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
+                while (SDL_GetPerformanceCounter() < nextTick) {}
+            }
+        }
         // How evenly the frames are handed to the screen, for the timing lines: gaps between
         // them of more than 17.5 ms (a frame takes 16.7). (Taken before presenting: how long
         // that takes depends on the screen's own refresh.)
@@ -4836,6 +5287,37 @@ int main(int argc, char** argv)
         // (Frames shown a frame later keep their own times: see `ahead`.)
         if (!pace)
         {
+            perfMark(5);
+            return;
+        }
+        if (syncToDisplay)
+        {
+            const uint64_t returned = SDL_GetPerformanceCounter();
+            // Present waited for the refresh when this is more than a moment. A present that
+            // returns at once must not be treated as a refresh, or the next picture is asked
+            // for 2 ms early every frame and the game runs away faster than the screen.
+            const double blocked = lastShownAt ? (double)(returned - lastShownAt) / perfFreq : 0;
+            if (lastRefresh && blocked > 0.0005)
+            {
+                const double observed = (double)(returned - lastRefresh) / perfFreq;
+                const double expected = refreshPeriod * refreshesPerFrame;
+                // A missed refresh comes back as about two periods: leave the measure as it is
+                // and take the next deadline from the refresh we actually met.
+                if (expected > 0 && observed > expected - 0.0015 && observed < expected + 0.0015)
+                {
+                    refreshPeriod += (observed / refreshesPerFrame - refreshPeriod) * 0.05;
+                    if (++refreshSamples == 90)
+                        fprintf(stderr, "[display] following the screen at %.3f Hz, %d refresh%s a picture\n",
+                            1.0 / refreshPeriod, refreshesPerFrame, refreshesPerFrame == 1 ? "" : "es");
+                }
+            }
+            lastRefresh = returned;
+            // 2 ms early when Present itself waits out that last bit, so a late wake still
+            // meets this refresh. When Present does not wait, the whole refresh is left.
+            double untilNext = refreshPeriod * refreshesPerFrame;
+            if (blocked > 0.0005) untilNext -= 0.002;
+            if (untilNext < 0.002) untilNext = 0.002;
+            nextTick = returned + (uint64_t)(untilNext * (double)perfFreq);
             perfMark(5);
             return;
         }
@@ -5112,6 +5594,12 @@ int main(int argc, char** argv)
                 }
                 else if (ev.type == SDL_FINGERUP && ev.tfinger.fingerId == dexSwipe.id) dexSwipe.down = false;
                 if (ev.type == SDL_QUIT) running = false;
+                else if (ev.type == SDL_TEXTINPUT && menu.open && menuPage == PAGE_CSEARCH)
+                {
+                    for (const unsigned char c:std::string(ev.text.text))
+                        if (cheatQuery.size()<48 && (std::isalnum(c) || c==' ')) cheatQuery+=(char)std::toupper(c);
+                    buildMenu();
+                }
                 else if (ev.type == SDL_TEXTINPUT && menu.open && raTyping)
                 {
                     raTyped += ev.text.text;
@@ -5152,6 +5640,13 @@ int main(int argc, char** argv)
                     if (!opt.noSave) FlushSave(opt.save);
                     cfg.Save(opt.config);
                 }
+                else if (ev.type == SDL_APP_DIDENTERFOREGROUND)
+                {
+                    // The DS clock only ticks while frames run. Sleep or the app sitting in the
+                    // background leaves it behind; putting the host time back is what a real DS
+                    // does when it wakes, and what a launch already does (#36).
+                    SetClock(*nds, false);
+                }
                 else if (touchPadUsed && (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP))
                 {
                     int ow = 0, oh = 0;
@@ -5182,7 +5677,13 @@ int main(int argc, char** argv)
                     const int sc = ev.key.keysym.scancode;
                     // (The action CONTROLS gives this key, if any: those keys do that and nothing else.)
                     const int act = cfg.controls.ActionOfKey(sc);
-                    if (menu.open && raTyping)
+                    if (menu.open && menuPage == PAGE_CSEARCH && (k == SDLK_BACKSPACE || k == SDLK_RETURN || k == SDLK_KP_ENTER))
+                    {
+                        if (k == SDLK_BACKSPACE) {if(!cheatQuery.empty())cheatQuery.pop_back();buildMenu();}
+                        else {SDL_StopTextInput();cheatWhere=-4;goPage(PAGE_CHEATS,M_CSEARCH);}
+                    }
+                    else if (menu.open && menuPage == PAGE_CSEARCH && k >= 32 && k < 127) {}
+                    else if (menu.open && raTyping)
                     {
                         // LOG IN: typing (SDL_TEXTINPUT, above); ENTER goes on, ESC leaves it.
                         if (k == SDLK_ESCAPE || k == SDLK_AC_BACK) raCancel();
@@ -5222,16 +5723,11 @@ int main(int argc, char** argv)
                         else if (act == Controls::B) nav.back = true;
                     }
                     else if (act == Controls::SWAP) focus.manualFlip = !focus.manualFlip;
+                    else if (act == Controls::SAVE) saveQuick();
+                    else if (act == Controls::LOAD) loadQuick();
                     else if (act >= 0) {} // (a DS button, or fast forward: read as held, below)
                     else if (k == SDLK_TAB) layout = LayoutNext(layout);
                     else if (k == SDLK_F2) focus.mode = (focus.mode + 1) % 3;
-                    else if (k == SDLK_F5) say(WriteSnapshot(*nds, quickState, frame) ? "STATE SAVED" : "SAVE STATE FAILED");
-                    else if (k == SDLK_F8)
-                    {
-                        say(ReadSnapshot(*nds, quickState, nullptr) ? "STATE LOADED" : "NO STATE TO LOAD");
-                        Achievements::Reset();
-                        SetClock(*nds, false);
-                    }
                     else if (k == SDLK_F11
 #ifdef __APPLE__
                         || (k == SDLK_f && (ev.key.keysym.mod & KMOD_GUI) && (ev.key.keysym.mod & KMOD_CTRL))
@@ -5516,6 +6012,14 @@ int main(int argc, char** argv)
             nav = MenuInput();
             ps = PadState();
         }
+        // Save and load state: the button given in KEYS AND BUTTONS, once as it goes down.
+        // Read here, before this frame's buttons are remembered.
+        {
+            const int saveIn = cfg.controls.Pad(Controls::SAVE, cfg.byLabel);
+            const int loadIn = cfg.controls.Pad(Controls::LOAD, cfg.byLabel);
+            saveEdge = !menu.open && InputHeld(physPad, saveIn) && !InputHeld(prevPhysPad, saveIn);
+            loadEdge = !menu.open && InputHeld(physPad, loadIn) && !InputHeld(prevPhysPad, loadIn);
+        }
         prevPhysPad = physPad;
         if (navHoldOff)
         {
@@ -5553,6 +6057,7 @@ int main(int argc, char** argv)
 
         if (toggleMenu)
         {
+            if(menuPage == PAGE_CSEARCH) SDL_StopTextInput();
             menu.open = !menu.open;
             menuPage = 0;
             capturing = -1;
@@ -5627,15 +6132,72 @@ int main(int argc, char** argv)
                 goPage(PAGE_RA_DETAIL, M_BACK);
                 hit = -1;
             }
-            if (id >= M_CHEAT0 && id < M_ACH0)
+            if (id == M_CHEAT_ON)
             {
-                cheats.Toggle((size_t)(id - M_CHEAT0));
-                cheats.Apply(nds->AREngine);
-                Achievements::SetCheats(cheats.On() > 0 || exclusives.on);
-                fprintf(stderr, "[cheats] %s %s\n", cheats.items[id - M_CHEAT0].key.c_str(), cheats.items[id - M_CHEAT0].on ? "on" : "off");
+                cheatWhere = -3;
+                goPage(PAGE_CHEATS, -1);
+                hit = -1;
+            }
+            else if (id >= M_CFOLDER0 && id < M_CFOLDER0 + (int)cheats.folders.size())
+            {
+                cheatWhere = id - M_CFOLDER0;
+                goPage(PAGE_CHEATS, -1);
+                hit = -1;
+            }
+            else if (id >= M_CHEAT0 && id < M_ACH0 && id-M_CHEAT0 < (int)cheats.items.size())
+            {
+                if(dir == 0) {cheatDetail=id-M_CHEAT0;goPage(PAGE_CDETAIL,M_CDETAIL_TOGGLE);hit=-1;}
+                else
+                {
+                    cheats.Toggle((size_t)(id-M_CHEAT0));
+                    cheats.Apply(nds->AREngine);
+                    Achievements::SetCheats(cheats.On()>0 || exclusives.on);
+                }
+            }
+            else if(id >= M_BACKUP0 && id-M_BACKUP0 < (int)saveBackups.size())
+            {
+                restoreChoice=id-M_BACKUP0;goPage(PAGE_RESTORE_CONFIRM,M_BACK);hit=-1;
             }
             switch (id)
             {
+            case M_CSEARCH:
+                goPage(PAGE_CSEARCH,M_SEARCH_DONE);SDL_StartTextInput();hit=-1;break;
+            case M_SEARCH_LETTER:
+                if(dir)searchLetter=(searchLetter+(dir<0 ? (int)searchLetters.size()-1 : 1))%(int)searchLetters.size();
+                else if(cheatQuery.size()<48)cheatQuery+=searchLetters[searchLetter];
+                break;
+            case M_SEARCH_SPACE: if(cheatQuery.size()<48)cheatQuery+=' ';break;
+            case M_SEARCH_DELETE: if(!cheatQuery.empty())cheatQuery.pop_back();break;
+            case M_SEARCH_CLEAR: cheatQuery.clear();break;
+            case M_SEARCH_DONE:
+                SDL_StopTextInput();cheatWhere=-4;goPage(PAGE_CHEATS,M_CSEARCH);hit=-1;break;
+            case M_CINFO: goPage(PAGE_CINFO,-1);hit=-1;break;
+            case M_CDETAIL_TOGGLE:
+                if(cheatDetail>=0 && cheatDetail<(int)cheats.items.size())
+                {cheats.Toggle((size_t)cheatDetail);cheats.Apply(nds->AREngine);Achievements::SetCheats(cheats.On()>0 || exclusives.on);}
+                break;
+            case M_BACKUPS:
+                saveBackups=SaveBackups::List(opt.save);restoreChoice=-1;goPage(PAGE_BACKUPS,-1);hit=-1;break;
+            case M_RESTORE_CONFIRM:
+                if(!opt.noSave && restoreChoice>=0 && restoreChoice<(int)saveBackups.size())
+                {
+                    std::string error;std::vector<unsigned char> restored;
+                    if(!FlushSave(opt.save))say("CURRENT SAVE COULD NOT BE KEPT - RESTORE CANCELLED");
+                    else
+                    {
+                        if(SaveBackups::Restore(opt.save,saveBackups[restoreChoice].path,nds->GetNDSSaveLength(),restored,error))
+                        {
+                            nds->SetNDSSave(restored.data(),(u32)restored.size());
+                            Host::SaveData=restored;Host::SaveIsDirty=false;
+                            resetGame();say("SAVE RESTORED - PREVIOUS SAVE KEPT");
+                            menu.open=false;swallowMenuButtons=true;
+                        }
+                        else say(error);
+                    }
+                }
+                hit=-1;break;
+            case M_LOAD_CONFIRM:
+                loadQuickNow();menu.open=false;swallowMenuButtons=true;hit=-1;break;
             case M_BOTHVER:
                 // (Achievements are not followed while it is on, as with a cheat: the other
                 // version's Pokemon are for the other version's players.)
@@ -5643,6 +6205,7 @@ int main(int argc, char** argv)
                 Achievements::SetCheats(cheats.On() > 0 || exclusives.on);
                 break;
             case M_CHEATS:
+                cheatWhere = -2;
                 goPage(PAGE_CHEATS, -1);
                 hit = -1;
                 break;
@@ -5693,6 +6256,24 @@ int main(int argc, char** argv)
                 hit = -1;
                 break;
             case M_BACK:
+                if(menuPage == PAGE_CSEARCH) {SDL_StopTextInput();goPage(PAGE_CHEATS,M_CSEARCH);hit=-1;break;}
+                if(menuPage == PAGE_CDETAIL) {goPage(PAGE_CHEATS,M_CHEAT0+cheatDetail);hit=-1;break;}
+                if(menuPage == PAGE_CINFO) {goPage(PAGE_CHEATS,M_CINFO);hit=-1;break;}
+                if(menuPage == PAGE_RESTORE_CONFIRM) {goPage(PAGE_BACKUPS,M_BACKUP0+restoreChoice);hit=-1;break;}
+                if(menuPage == PAGE_BACKUPS || menuPage == PAGE_LOAD_CONFIRM)
+                {goPage(PAGE_MAIN,menuPage == PAGE_BACKUPS ? M_BACKUPS : M_LOADSTATE);hit=-1;break;}
+                if(menuPage == PAGE_CHEATS && cheatWhere == -4)
+                {cheatWhere=-2;goPage(PAGE_CHEATS,M_CSEARCH);hit=-1;break;}
+                // A folder's codes (or ON NOW) go back to the folders. The folder list goes back
+                // to the pause menu, as the other pages do.
+                if (menuPage == PAGE_CHEATS && cheatBrowse() && cheatWhere != -2)
+                {
+                    const int backId = cheatWhere == -3 ? M_CHEAT_ON : M_CFOLDER0 + cheatWhere;
+                    cheatWhere = -2;
+                    goPage(PAGE_CHEATS, backId);
+                    hit = -1;
+                    break;
+                }
                 if (menuPage == PAGE_RA_DETAIL)
                 {
                     goPage(PAGE_RA_LIST, M_ACH0 + achDetail);
@@ -5837,23 +6418,14 @@ int main(int argc, char** argv)
                 break;
 #endif
             case M_SAVESTATE:
-                say(WriteSnapshot(*nds, quickState, frame) ? "STATE SAVED" : "SAVE STATE FAILED");
+                saveQuick();
                 menu.open = false;
                 swallowMenuButtons = true;
                 break;
             case M_LOADSTATE:
-                say(ReadSnapshot(*nds, quickState, nullptr) ? "STATE LOADED" : "NO STATE TO LOAD");
-                Achievements::Reset();
-                SetClock(*nds, false);
-                menu.open = false;
-                swallowMenuButtons = true;
-                break;
+                loadQuick();hit=-1;break;
             case M_RESET:
-                nds->Reset();
-                nds->SetupDirectBoot("game.nds");
-                nds->Start();
-                rc_reset();
-                Achievements::Reset();
+                resetGame();
                 say("GAME RESET");
                 menu.open = false;
                 swallowMenuButtons = true;
@@ -5893,6 +6465,8 @@ int main(int argc, char** argv)
         int speed = 1;
         if (!paused && !swallowMenuButtons)
         {
+            if (saveEdge) saveQuick();
+            if (loadEdge) loadQuick();
             PadState toGame = ps;
             if (cfg.startMenu && ctrlStart) toGame.btn[PAD_START] = touchStart; // (START is the menu's)
             keys |= PadKeys(toGame, cfg.byLabel);
@@ -6231,10 +6805,17 @@ int main(int argc, char** argv)
                 const u32* screenImagesPrev = nds->GPU.Framebuffer[nds->GPU.FrontBuffer][1].get();
                 auto usable = [&](int i) {
                     if (cmd) return !battleFightOnly || i == 0;
-                    uint32_t c = screenImagesPrev[(movY[i] - 14) * 256 + movX[i]];
-                    // (Platinum's moves are on a pale yellow panel.)
-                    if (pt.on) return ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 140;
-                    return ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 200;
+                    // One pixel at the name's centre can fall between two letters (a move whose
+                    // name has a gap there could not be chosen): look across the name instead.
+                    for (int y = movY[i] - 16; y <= movY[i] - 12; y++)
+                        for (int x = movX[i] - 28; x <= movX[i] + 28; x++)
+                        {
+                            const uint32_t c = screenImagesPrev[y * 256 + x];
+                            // (Platinum's moves are on a pale yellow panel.)
+                            if (((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > (pt.on ? 140 : 200))
+                                return true;
+                        }
+                    return false;
                 };
                 if (singleView())
                 {
@@ -6361,6 +6942,34 @@ int main(int argc, char** argv)
                     shoesStep = 0;
                     fprintf(stderr, "[shoes] frame %u: running shoes %s\n", frame, shoesOn ? "on" : "off");
                 }
+            }
+        }
+
+        // Platinum's Pokedex list: SEARCH, SWITCH and CHECK are touch-only. Y, X and A
+        // (Triangle, Square and Cross on a PlayStation pad) tap them. The flag is what the
+        // last layout showed, so a press is not missed if the pixel check flickers.
+        if (pt.on && !paused && g_ptDexBtns)
+        {
+            static uint32_t prevDexKeys = 0;
+            static int dexBtnTouch = 0, dexBtnX = 0, dexBtnY = 0;
+            const uint32_t edge = keys & ~prevDexKeys;
+            prevDexKeys = keys;
+            const uint32_t yxA = (1u << KEY_Y) | (1u << KEY_X) | (1u << KEY_A);
+            if (dexBtnTouch == 0 && (edge & yxA))
+            {
+                dexBtnTouch = 8;
+                dexBtnX = 60;
+                dexBtnY = (edge & (1u << KEY_Y)) ? 42 : (edge & (1u << KEY_X)) ? 88 : 160;
+                fprintf(stderr, "[pokedex] frame %u: touched %s\n", frame,
+                        dexBtnY == 42 ? "SEARCH" : dexBtnY == 88 ? "SWITCH" : "CHECK");
+            }
+            if (dexBtnTouch > 0)
+            {
+                keys &= ~yxA;
+                touching = true;
+                touchX = dexBtnX;
+                touchY = dexBtnY;
+                dexBtnTouch--;
             }
         }
 
@@ -6958,6 +7567,63 @@ int main(int argc, char** argv)
             }
         }
 
+        // Fast forward runs several DS frames in one go, and each one produces a frame of
+        // sound. Playing all of it in that one moment would rush the music; keeping a single
+        // slice and throwing the rest away makes the song skip ahead. Keep every sample and
+        // hand the device one frame's worth per wall-clock frame, so the music stays at its
+        // normal speed while the picture runs ahead. The queue holds up to half a minute
+        // of sound so a long fast forward cannot store the whole song. Past that, further
+        // sound is left out; once what is queued has played, playback takes up from where
+        // the game is now. Letting go throws the queue away, so the music lines up with
+        // the game at once instead of lagging on. A battle has its own music: when one
+        // starts or ends, the queue is dropped so that track starts with the battle
+        // instead of waiting behind whatever was playing before it.
+        const bool inBattle = std::strncmp(scene.name, "battle", 6) == 0;
+        if (speed > 1 && inBattle != ffInBattle && (ffAudioAt != 0 || !ffAudio.empty()))
+        {
+            ffAudio.clear();
+            ffAudioAt = 0;
+            ffAudioFrac = 0;
+            if (audio) SDL_ClearQueuedAudio(audio);
+        }
+        ffInBattle = inBattle;
+        if (speed > 1)
+        {
+            const int cap = 48000 * 30;
+            int have = ((int)ffAudio.size() - ffAudioAt) / 2;
+            if (have <= 0)
+            {
+                ffAudio.clear();
+                ffAudioAt = 0;
+                have = 0;
+            }
+            if (got > 0 && (have == 0 || have + got <= cap))
+                ffAudio.insert(ffAudio.end(), audioBuf.begin(), audioBuf.begin() + (size_t)got * 2);
+            ffAudioFrac += 48000.0 * frameTime;
+            int take = (int)ffAudioFrac;
+            ffAudioFrac -= take;
+            have = ((int)ffAudio.size() - ffAudioAt) / 2;
+            if (take > have) take = have;
+            if (take > 0)
+            {
+                std::copy(ffAudio.begin() + ffAudioAt, ffAudio.begin() + ffAudioAt + (size_t)take * 2, audioBuf.begin());
+                ffAudioAt += take * 2;
+                if (ffAudioAt >= 8192)
+                {
+                    ffAudio.erase(ffAudio.begin(), ffAudio.begin() + ffAudioAt);
+                    ffAudioAt = 0;
+                }
+            }
+            got = take;
+        }
+        else if (ffAudioAt != 0 || !ffAudio.empty())
+        {
+            ffAudio.clear();
+            ffAudioAt = 0;
+            ffAudioFrac = 0;
+            if (audio) SDL_ClearQueuedAudio(audio);
+        }
+
         if (audio && got > 0)
         {
             // How much longer than a DS frame the frames are taking: above full speed's 1 the
@@ -7105,6 +7771,45 @@ int main(int argc, char** argv)
             canvas.Text(ox + (ow - tw) / 2, oy + oh + 4 * tsc, label, tsc, 0xFFFFFFFF);
             overlayUsed = true;
         }
+        // Platinum's Pokedex list: name the face buttons on SEARCH, SWITCH and CHECK, as the
+        // connected pad prints them (Xbox, PlayStation or Nintendo). Hidden with no pad, and
+        // on a phone while the on-screen buttons are up (Android's own keys look like a pad).
+        if (merged && !paused && g_ptDexBtns && !pads.Empty() && !(touchPadUsed && touchPad.visible))
+        {
+            const Element* body = nullptr;
+            for (const Element& e : scene.items)
+                if (e.screen == 1 && e.sy > 0 && e.sw >= 120) { body = &e; break; }
+            const int style = Controls::StyleOf(pads.controllers.empty() ? nullptr : pads.controllers[0]);
+            auto btn = [&](int a) {
+                return std::string(Controls::InputName(cfg.controls.Pad(a, cfg.byLabel), style));
+            };
+            const int sc = std::max(2, outH / 240);
+            if (body)
+            {
+                static const int act[] = { Controls::Y, Controls::X, Controls::A };
+                static const int srcY[] = { 42, 88, 160 };
+                for (int i = 0; i < 3; i++)
+                {
+                    const std::string n = btn(act[i]);
+                    const int tw = Canvas::TextWidth(n, sc), pad = 4 * sc;
+                    const int cw = tw + 2 * pad, ch = 11 * sc;
+                    const float lx = body->dx + 108 * body->scale;
+                    const float ly = body->dy + (srcY[i] - body->sy) * body->scale;
+                    const int ox = (int)(view.originX + lx * view.unit);
+                    const int oy = (int)(view.originY + ly * view.unit) - ch / 2;
+                    canvas.Fill(ox - 1, oy - 1, cw + 2, ch + 2, 0xFF000000);
+                    canvas.Fill(ox, oy, cw, ch, 0xE0181818);
+                    canvas.Text(ox + pad, oy + 2 * sc, n, sc, 0xFFFFD75E);
+                }
+            }
+            const std::string hint = btn(Controls::Y) + " SEARCH   " + btn(Controls::X) + " SWITCH   " +
+                                     btn(Controls::A) + " CHECK";
+            const int tw = Canvas::TextWidth(hint, sc) + 8 * sc;
+            const int ty = outH - 15 * sc;
+            canvas.Fill((outW - tw) / 2, ty, tw, 13 * sc, 0xC0000000);
+            canvas.Text((outW - tw) / 2 + 4 * sc, ty + 3 * sc, hint, sc, 0xFFFFFFFF);
+            overlayUsed = true;
+        }
         if (frame < toastUntil)
         {
             int sc = outH / 240 < 1 ? 1 : outH / 240;
@@ -7130,13 +7835,13 @@ int main(int argc, char** argv)
             std::string hint = touchPadUsed && touchPad.visible ? "TAP: CHOOSE   OUTSIDE: BACK"
                                : btn(Controls::A) + ": SELECT   " + btn(Controls::B) + ": BACK";
             const int selId = menu.selected >= 0 && menu.selected < (int)menuIds.size() ? menuIds[menu.selected] : -1;
-            static const char* pageTitle[] = { "", "KEYS AND BUTTONS", "DISPLAY", "GRAPHICS", "CONTROLS", "CHEATS", "RETROACHIEVEMENTS", "SOUND", "ACHIEVEMENTS", "ACHIEVEMENT" };
+            static const char* pageTitle[] = { "", "KEYS AND BUTTONS", "DISPLAY", "GRAPHICS", "CONTROLS", "CHEATS", "RETROACHIEVEMENTS", "SOUND", "ACHIEVEMENTS", "ACHIEVEMENT", "SEARCH CHEATS", "CHEAT DETAILS", "DATABASE INFO", "SAVE BACKUPS", "RESTORE SAVE", "LOAD STATE" };
             if (menuPage == PAGE_KEYS)
             {
                 if (!(touchPadUsed && touchPad.visible)) hint = btn(Controls::A) + ": CHANGE   " + btn(Controls::B) + ": BACK";
                 if (capturing >= 0) hint = ctlKeyboard ? "ESC: LEAVE IT AS IT WAS" : "OR WAIT 5 SECONDS: AS IT WAS";
                 else if (menu.selected == 0 && ctlHasKeyboard) hint = "CHANGE: KEYBOARD OR CONTROLLER";
-                else if (menu.selected == ctlRow0 + Controls::SWAP) hint = "SWAPS WHICH SCREEN IS LARGE";
+                else if (const char* h = Controls::ActionHint(menu.selected - ctlRow0)) hint = h;
 #ifdef __SWITCH__
                 else if (menu.selected == ctlRow0 + Controls::MENU && cfg.controls.pad[Controls::MENU] < 0)
                     hint = cfg.startMenu ? "+ OPENS IT (START BUTTON)" : "+ AND - OPEN IT";
@@ -7152,10 +7857,10 @@ int main(int argc, char** argv)
             if (selId == M_VOLUME) hint = "SOUND AND MUSIC: LEFT / RIGHT";
             // (What START BUTTON does, while it is the one chosen.)
             if (selId == M_STARTBTN) hint = cfg.startMenu ? "START OPENS THIS MENU" : "START IS THE DS START";
-            if (selId == M_CONTROLS) hint = "GIVE ANY BUTTON ANOTHER KEY OR BUTTON";
+            if (selId == M_CONTROLS) hint = "SAVE, LOAD, FAST FORWARD, SWAP";
             if (selId == M_BOTHVER) hint = "WILD POKEMON OF BOTH VERSIONS";
             if (selId == M_CHEATS) hint = cheats.items.empty() ? "NONE FOUND: SEE THE README" : "ACTION REPLAY CODES";
-            if (selId == M_NOTHING) hint = "GET USRCHEAT.DAT: SEE THE README";
+            if (selId == M_NOTHING && menuPage == PAGE_CHEATS && cheats.items.empty()) hint = "DATABASE INFO EXPLAINS WHAT WAS FOUND";
             // RETROACHIEVEMENTS.
             // (Each at most about 30 letters: the width of the menu's box.)
             if (selId == M_RA) hint = "FROM RETROACHIEVEMENTS.ORG";
@@ -7167,9 +7872,27 @@ int main(int argc, char** argv)
             if (selId == M_RA_TYPED)
                 hint = touchPadUsed ? "THEN TAP HERE OR DONE" : ctlHasKeyboard ? "ENTER: NEXT   ESC: CANCEL" : "TYPE IT  THEN A";
             if (selId >= M_CHEAT0 && selId < M_ACH0 && !(touchPadUsed && touchPad.visible)) hint = btn(Controls::A) + ": ON / OFF   " + btn(Controls::B) + ": BACK";
+            if (selId == M_CHEAT_ON || (selId >= M_CFOLDER0 && selId < M_CFOLDER0 + (int)cheats.folders.size()))
+                hint = (touchPadUsed && touchPad.visible) ? "TAP: OPEN   OUTSIDE: BACK"
+                     : btn(Controls::A) + ": OPEN   " + btn(Controls::B) + ": BACK";
             if (selId == M_RA_LIST) hint = "WHAT EACH ASKS FOR";
             std::string note = selId >= M_CHEAT0 && selId < M_ACH0 && selId - M_CHEAT0 < (int)cheats.items.size() ? cheats.items[selId - M_CHEAT0].note : std::string();
+            if (selId >= M_CHEAT0 && selId < M_ACH0 && selId - M_CHEAT0 < (int)cheats.items.size() && cheatWhere == -3)
+            {
+                // ON NOW mixes folders. The row already says "FOLDER: NAME" when that fits; otherwise
+                // the folder starts the note, so two codes with the same name can be told apart.
+                const Cheats::Cheat& c = cheats.items[selId - M_CHEAT0];
+                if (!c.category.empty() && (c.category + ": " + c.name).size() > (size_t)Cheats::LabelChars)
+                    note = note.empty() ? c.category : c.category + ": " + note;
+            }
+            if (selId >= M_CFOLDER0 && selId - M_CFOLDER0 < (int)cheats.folders.size())
+                note = cheats.folders[selId - M_CFOLDER0].note;
             std::string title = pageTitle[menuPage];
+            if (menuPage == PAGE_CHEATS && cheatWhere == -3) title = "ON NOW";
+            else if (menuPage == PAGE_CHEATS && cheatWhere >= 0 && cheatWhere < (int)cheats.folders.size())
+                title = Cheats::Fit(cheats.folders[cheatWhere].name, 36);
+            else if (menuPage == PAGE_CHEATS && !cheatBrowse() && cheats.folders.size() == 1)
+                title = Cheats::Fit(cheats.folders[0].name, 36);
             if (menuPage == PAGE_RA_DETAIL && achDetail >= 0 && achDetail < (int)achList.size())
             {
                 // (The title in the box's top line, at most 30 letters; the whole of it, if longer,
@@ -7189,7 +7912,24 @@ int main(int argc, char** argv)
                     if (!r.unlocked && !r.progress.empty()) note += " SO FAR: " + r.progress;
                 }
             }
-            menu.Draw(canvas, title, hint, note);
+            if(menuPage == PAGE_CHEATS)
+            {
+                if(cheatWhere == -4)title="SEARCH RESULTS";
+                if(selId>=M_CHEAT0 && selId<M_ACH0)hint="SELECT: DETAILS   LEFT/RIGHT: ON/OFF";
+            }
+            if(menuPage == PAGE_CSEARCH)
+            {
+                note="FIND: "+(cheatQuery.empty() ? std::string("ALL CODES") : cheatQuery);
+                hint="TYPE OR SELECT LETTERS TO ADD";
+            }
+            if(menuPage == PAGE_CDETAIL || menuPage == PAGE_CINFO)note.clear();
+            if(menuPage == PAGE_BACKUPS)note="NEWEST FIRST. CHOOSE A BACKUP TO REVIEW BEFORE RESTORING.";
+            if(menuPage == PAGE_RESTORE_CONFIRM && restoreChoice>=0 && restoreChoice<(int)saveBackups.size())
+                note=saveBackups[restoreChoice].label+". RESTORES THIS GAME'S SAVE AND RESTARTS IT. CURRENT SAVE KEPT AS BEFORE-RESTORE.SAV.";
+            if(menuPage == PAGE_LOAD_CONFIRM)
+                note="YOUR CARTRIDGE SAVE IS KEPT. SAVING IN-GAME AFTER LOADING AN OLD STATE CAN STILL REPLACE NEWER PROGRESS.";
+            const bool wideMenu=menuPage==PAGE_CHEATS || menuPage==PAGE_CDETAIL || menuPage==PAGE_CINFO || menuPage==PAGE_CSEARCH || menuPage==PAGE_BACKUPS || menuPage==PAGE_RESTORE_CONFIRM || menuPage==PAGE_LOAD_CONFIRM;
+            menu.Draw(canvas, title, hint, note, wideMenu ? 260 : 0);
             }
             overlayUsed = true;
         }
@@ -7321,6 +8061,7 @@ int main(int argc, char** argv)
 
         if (!opt.noSave && frame % 120 == 0 && !FlushSave(opt.save))
             say("SAVE FAILED - CHECK DISK SPACE AND SAVE FOLDER");
+        if (!opt.noSave && frame && frame % (60 * 60 * 30) == 0) BackupSave(opt.save); // (about every half hour)
         if (opt.frames && scriptClock >= opt.frames) running = false;
         if (opt.stopAt && frame >= opt.stopAt)
         {

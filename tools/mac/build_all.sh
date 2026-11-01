@@ -11,7 +11,9 @@
 # JPEG or PNG). The function tables come from the decompilations' symbol files, as on a PC.
 #
 # The app keeps the ROMs, saves and settings in ~/Library/Application Support/Pokemon DS
-# Widescreen (O in the game list opens its roms folder). It is not notarised: the first start is
+# Widescreen (O in the game list opens its roms folder). GBA games too when the inputs include
+# them (tools/apple/fetch_gba.sh writes gba.env beside the tables) or SSR_GBA_DIR is set.
+# It is not notarised: the first start is
 # right click > Open. A Mac's OpenGL stops at 4.1, so the widescreen world is drawn by the
 # processor (no WORLD ON GPU). Needs Xcode's command line tools, CMake (3.21 to 3.x), Ninja,
 # Python 3 and git (.github/workflows/mac.yml has them).
@@ -20,6 +22,13 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$HERE"
 TABLES="$(cd "${1:?which tables folder? tools/mac/build_all.sh TABLES [ART] [ICON]}" && pwd)"
+# GBA games, when the Mac inputs packed them (gba.env) or the caller set SSR_GBA_DIR.
+if [ -z "${SSR_GBA_DIR:-}" ] && [ -f "$(dirname "$TABLES")/gba.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$(dirname "$TABLES")/gba.env"
+    set +a
+fi
 ART="${2:-}"; [ -n "$ART" ] && ART="$(cd "$ART" && pwd)"
 ICON="${3:-}"
 # The processor to build for: this Mac's own, or SSR_MAC_ARCH (arm64 or x86_64; an Intel Mac
@@ -69,6 +78,13 @@ say "Compiling for the Mac ($ARCH)"
 OPTS=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DSSR_JIT=ON -DSSR_PC_ALL_GAMES=ON -DSSR_PNG=OFF -DSSR_GPU3D=OFF
       -DSSR_GENERATED_DIR="$TABLES" -DCMAKE_OSX_ARCHITECTURES="$ARCH" -DSSR_PORTABLE_X86=ON)
 [ -n "$ART" ] && OPTS+=(-DSSR_PC_ART="$ART")
+if [ -n "${SSR_GBA_DIR:-}" ]; then
+    [ -f "$SSR_GBA_DIR/frontend/embed.h" ] || fail "SSR_GBA_DIR: not Pokemon GBA Widescreen: $SSR_GBA_DIR"
+    OPTS+=(-DSSR_GBA_DIR="$SSR_GBA_DIR")
+    [ -n "${GBAW_MGBA:-}" ] && OPTS+=(-DGBAW_MGBA="$GBAW_MGBA")
+    [ -n "${GBAW_PATCHES:-}" ] && OPTS+=(-DGBAW_PATCHES="$GBAW_PATCHES")
+    say "GBA games too: $SSR_GBA_DIR"
+fi
 cmake -S . -B build-mac "${OPTS[@]}" >/dev/null
 ninja -C build-mac ssrecomp
 
@@ -80,8 +96,20 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/data"
 cp build-mac/ssrecomp "$APP/Contents/MacOS/pokemon-ds-wide"
 strip -x "$APP/Contents/MacOS/pokemon-ds-wide"
 cp -r "$DATA/funcs" "$APP/Contents/Resources/data/funcs"
-cp tools/pc/README.txt "$APP/Contents/Resources/README.txt"
 cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
+GBA_DOCS=""
+if [ -n "${SSR_GBA_DIR:-}" ]; then
+    MGBA_SRC="${GBAW_MGBA:-${GBAW_WORK:-$HOME/pokemon-gba-wide}/mgba}"
+    [ -f "$MGBA_SRC/LICENSE" ] || fail "no mGBA licence in $MGBA_SRC (GBAW_MGBA, or Pokemon GBA Widescreen's setup.sh)"
+    awk -v gba=tools/pc/README-GBA.txt '/^SOURCE AND LICENCE$/ { while ((getline l < gba) > 0) print l } { print }' \
+        tools/pc/README.txt > "$APP/Contents/Resources/README.txt"
+    cp "$MGBA_SRC/LICENSE" "$APP/Contents/Resources/LICENSE-mGBA.txt"
+    # So a .gba can be opened with the app from the Finder.
+    GBA_DOCS="<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Game Boy Advance ROM</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string><key>LSItemContentTypes</key><array><string>com.github.mamesj.gba-rom</string></array></dict></array>
+<key>UTImportedTypeDeclarations</key><array><dict><key>UTTypeIdentifier</key><string>com.github.mamesj.gba-rom</string><key>UTTypeDescription</key><string>Game Boy Advance ROM</string><key>UTTypeConformsTo</key><array><string>public.data</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>gba</string><string>agb</string><string>ips</string></array></dict></dict></array>"
+else
+    cp tools/pc/README.txt "$APP/Contents/Resources/README.txt"
+fi
 ICONKEY=""
 if [ -n "$ICON" ]; then
     SET="$DIST/AppIcon.iconset"
@@ -112,6 +140,7 @@ $ICONKEY
 <key>LSApplicationCategoryType</key><string>public.app-category.role-playing-games</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+$GBA_DOCS
 </dict></plist>
 PLIST
 lipo -archs "$APP/Contents/MacOS/pokemon-ds-wide" | grep -qx "$ARCH" || fail "the program is not built for $ARCH"
@@ -138,10 +167,11 @@ ZIP="$DIST/pokemon-ds-wide-pc-macos-$ARCH.zip"
 # Only the program, its tables, notes, licence and icon: never a ROM, save or game code.
 python3 - "$ZIP" <<'PY'
 import re, sys, zipfile
-ok = re.compile(r'^Pokemon Fulldex\.app/(Contents/(Info\.plist|MacOS/(pokemon-ds-wide)?|_CodeSignature/(CodeResources)?|Resources/(AppIcon\.icns|README\.txt|LICENSE\.txt|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt)?)?)?$')
+ok = re.compile(r'^Pokemon Fulldex\.app/(Contents/(Info\.plist|MacOS/(pokemon-ds-wide)?|_CodeSignature/(CodeResources)?|Resources/(AppIcon\.icns|README\.txt|LICENSE\.txt|LICENSE-mGBA\.txt|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt)?)?)?$')
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 bad = [n for n in names if not ok.match(n)]
 if bad: sys.exit('unexpected files in the Mac download: %s' % bad)
 print('ok: %s (%d entries)' % (sys.argv[1].split('/')[-1], len(names)))
 PY
+python3 tools/updater/write_checksums.py "$DIST" --build "pokemon-ds-wide-pc-macos-$ARCH.zip=$HERE/build-mac/fulldex-build-id.txt"
 say "Done: $ZIP"

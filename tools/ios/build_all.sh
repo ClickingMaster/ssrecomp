@@ -12,7 +12,8 @@
 # .github/workflows/ios.yml).
 #
 # The app keeps the ROMs, saves, settings and game.log in its Documents folder, which the Files
-# app shows as On My iPhone > Pokémon Fulldex. iOS lets no app make code as it runs, so
+# app shows as On My iPhone > Pokémon Fulldex. GBA games too when the inputs include them
+# (tools/apple/fetch_gba.sh writes gba.env beside the tables) or SSR_GBA_DIR is set. iOS lets no app make code as it runs, so
 # melonDS's JIT is left out and its interpreter plays (a recent iPhone is fast enough). The world
 # is drawn by the processor, as on Android. Needs Xcode, CMake (3.21 to 3.x), Ninja, Python 3, git.
 set -euo pipefail
@@ -20,6 +21,13 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$HERE"
 TABLES="$(cd "${1:?which tables folder? tools/ios/build_all.sh TABLES [ART] [ICON]}" && pwd)"
+# GBA games, when the inputs packed them (gba.env) or the caller set SSR_GBA_DIR.
+if [ -z "${SSR_GBA_DIR:-}" ] && [ -f "$(dirname "$TABLES")/gba.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$(dirname "$TABLES")/gba.env"
+    set +a
+fi
 ART="${2:-}"; [ -n "$ART" ] && ART="$(cd "$ART" && pwd)"
 ICON="${3:-}"
 TARGET="${SSR_IOS_TARGET:-device}"
@@ -75,6 +83,13 @@ OPTS=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SY
       -DCMAKE_OSX_ARCHITECTURES="$ARCH" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MIN_IOS"
       -DSSR_JIT=OFF -DSSR_PC_ALL_GAMES=ON -DSSR_PNG=OFF -DSSR_GPU3D=OFF -DSSR_GENERATED_DIR="$TABLES")
 [ -n "$ART" ] && OPTS+=(-DSSR_PC_ART="$ART")
+if [ -n "${SSR_GBA_DIR:-}" ]; then
+    [ -f "$SSR_GBA_DIR/frontend/embed.h" ] || fail "SSR_GBA_DIR: not Pokemon GBA Widescreen: $SSR_GBA_DIR"
+    OPTS+=(-DSSR_GBA_DIR="$SSR_GBA_DIR")
+    [ -n "${GBAW_MGBA:-}" ] && OPTS+=(-DGBAW_MGBA="$GBAW_MGBA")
+    [ -n "${GBAW_PATCHES:-}" ] && OPTS+=(-DGBAW_PATCHES="$GBAW_PATCHES")
+    say "GBA games too: $SSR_GBA_DIR"
+fi
 cmake -S . -B "$BUILD" "${OPTS[@]}" >/dev/null
 ninja -C "$BUILD" ssrecomp
 
@@ -90,6 +105,15 @@ cp "$BIN" "$APP/pokemon-ds-wide"
 strip -x "$APP/pokemon-ds-wide"
 cp -r "$DATA/funcs" "$APP/data/funcs"
 cp LICENSE "$APP/LICENSE.txt"
+GBA_DOCS=""
+if [ -n "${SSR_GBA_DIR:-}" ]; then
+    MGBA_SRC="${GBAW_MGBA:-${GBAW_WORK:-$HOME/pokemon-gba-wide}/mgba}"
+    [ -f "$MGBA_SRC/LICENSE" ] || fail "no mGBA licence in $MGBA_SRC (GBAW_MGBA, or Pokemon GBA Widescreen's setup.sh)"
+    cp "$MGBA_SRC/LICENSE" "$APP/LICENSE-mGBA.txt"
+    # So a .gba opened from the Files app is handed to this app.
+    GBA_DOCS="<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Game Boy Advance ROM</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string><key>LSItemContentTypes</key><array><string>com.github.mamesj.gba-rom</string></array></dict></array>
+<key>UTImportedTypeDeclarations</key><array><dict><key>UTTypeIdentifier</key><string>com.github.mamesj.gba-rom</string><key>UTTypeDescription</key><string>Game Boy Advance ROM</string><key>UTTypeConformsTo</key><array><string>public.data</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>gba</string><string>agb</string><string>ips</string></array></dict></dict></array>"
+fi
 ICONS=""
 if [ -n "$ICON" ]; then
     SQ="$DIST/icon-1024.png"
@@ -121,8 +145,8 @@ cat > "$APP/Info.plist" <<PLIST
 <key>MinimumOSVersion</key><string>$MIN_IOS</string>
 <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
 <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
-<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
-<key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+<key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 <key>UIRequiresFullScreen</key><true/>
 <key>UIStatusBarHidden</key><true/>
 <key>UIViewControllerBasedStatusBarAppearance</key><false/>
@@ -134,6 +158,7 @@ cat > "$APP/Info.plist" <<PLIST
 <key>GCSupportedGameControllers</key><array><dict><key>ProfileName</key><string>ExtendedGamepad</string></dict></array>
 <key>ITSAppUsesNonExemptEncryption</key><false/>
 $ICONS
+$GBA_DOCS
 </dict></plist>
 PLIST
 plutil -lint "$APP/Info.plist"
@@ -154,10 +179,11 @@ rm -rf "$DIST/Payload"
 # Only the program, its tables, licence, icons and Info.plist: never a ROM, save or game code.
 python3 - "$IPA" <<'PY'
 import re, sys, zipfile
-ok = re.compile(r'^Payload/(Pokemon Fulldex\.app/(pokemon-ds-wide|Info\.plist|LICENSE\.txt|AppIcon[0-9.x@~a-z]+\.png|_CodeSignature/(CodeResources)?|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt)?)?$')
+ok = re.compile(r'^Payload/(Pokemon Fulldex\.app/(pokemon-ds-wide|Info\.plist|LICENSE\.txt|LICENSE-mGBA\.txt|AppIcon[0-9.x@~a-z]+\.png|_CodeSignature/(CodeResources)?|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt)?)?$')
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 bad = [n for n in names if not ok.match(n)]
 if bad: sys.exit('unexpected files in the iOS download: %s' % bad)
 print('ok: %s (%d entries)' % (sys.argv[1].split('/')[-1], len(names)))
 PY
+python3 tools/updater/write_checksums.py "$DIST" --build "pokemon-ds-wide-ios.ipa=$BUILD/fulldex-build-id.txt"
 say "Done: $IPA"

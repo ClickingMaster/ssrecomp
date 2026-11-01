@@ -2,7 +2,46 @@
 
 ## Unreleased
 
+- Keep the established Windows renderer and frame clock by default. The recovered Direct3D 11 display-pacing path measured about 53 FPS on a 240 Hz display where the earlier path sustained about 60 FPS; it remains available with SSR_DISPLAY_PACING=1 for further testing.
+
+- Cheat search covers names, folders and descriptions, with keyboard, touch and controller entry. Open a cheat for its full scrollable details and an explicit enabled switch; left/right still toggles it from the list. DATABASE INFO explains what was loaded.
+- DS SAVE BACKUPS in the pause menu lists dated backups. Restoring requires confirmation, keeps the previous save, and restarts the game. Loading a quick state now explains how a later in-game save can replace newer progress.
+- Updates compare the binary build ID in SHA256SUMS.txt, removing the 12-hour blind spot. Packages write matching build metadata, and the update popup identifies the current and available builds.
+
+- Use the ARM64 Linux download when updating an ARM64 build, and remove obsolete Switch updater thread cleanup.
+
+- Restore the later Windows/Linux display-pacing fix (#17), GBA RetroAchievements (#6) and ARM64 Linux packaging (#19) from their separate working copy.
+- Check for updates when the launcher opens, offer INSTALL or LATER, verify downloads against SHA256SUMS.txt and retain the previous program. Mac and iOS offer the download page.
+
+- Restore the familiar centred game grid, pixel font and picture selection frame while the new launcher design is unfinished.
+
+- **A move with a gap in its name can be chosen with the D-pad** (SoulSilver and the other
+  DS games): Rock Polish and the like were skipped because the space between the words sat on
+  the one pixel the menu checked. Touch was already fine (#38).
+- **Switch: HOME Menu titles spell Pokémon** with the accent, as the other Pokémon games on
+  the Switch do. Choose HOME MENU ICONS again to update an icon that is already there (#8).
+- **The in-game clock catches up after the phone sleeps** (Android, iOS): SoulSilver's
+  Pokégear stayed hours behind overnight with the app still open; force-closing was the only
+  fix. Waking the app now sets the DS clock from the phone again, as a launch already does (#36).
+- **LOAD STATE no longer replaces your in-game save** with the older one inside the save state:
+  loading a state from hours ago, then quitting, could put the game back there (#33). It still
+  takes you back to where the state was made.
+- **Backups of your saves:** the last 8 versions of each, in a `backups` folder beside your
+  saves, made as a game starts and every half hour of play.
+- **The sparkles on the water no longer strobe** (Black and White, with 60 FPS on): every other
+  frame showed them as broken crescents; they now twinkle as the game draws them (#7).
+- **No more white lines across the widescreen view in the snow** (HeartGold and SoulSilver, Mt.
+  Silver): a snowflake at the edge of the DS screen was drawn out to the edge of the view (#10).
+  The snow now falls in the sides of the wide view as well, as it does in Platinum and Black,
+  and rain and sand do the same.
+- **No dark dot on the Fight button** (Platinum, SoulSilver and HeartGold): one pixel that was not the button's flat colour was stretched across it, and showed just left of the icon.
+- **Moves that cross the battle stay in one piece** (Platinum, SoulSilver and HeartGold): Flamethrower and the other moves that run from one Pokémon to the other are lengthened evenly, so the stream still reaches and is not cut across the middle.
+- **GBA games on a Mac, iPhone and iPad.** Emerald, FireRed, LeafGreen and Ultra Violet show in the game list with the DS games. Put the ROMs in the same `roms` folder. On an iPhone or iPad, a ROM opened from the Files app is taken in as well, and the on-screen buttons are there while you play (#25).
+- **Cheats are listed in their folders.** A cheat database no longer puts every code in one long list with the folder's name cut off the front, which made the rows unreadable. CHEATS opens the folders; a folder shows how many of its codes are on. ON NOW lists the ones that are on. The list is wider, so a code's own name fits (#32).
+- **Save state and load state can be given their own key or button.** In KEYS AND BUTTONS, on the game list and in the pause menu, next to fast forward and swapping the screens. On the keyboard they start as F5 and F8. On a controller they start unset, until you choose a button.
+- **Fast forward no longer rushes the music.** While it is held the game still runs ahead; the music keeps its normal speed, and lines up with the game again when you let go. A battle's music starts when the battle does, still at normal speed.
 - Switch Android gameplay explicitly to landscape for DS and GBA, restoring portrait on return to the launcher.
+- **iPhone and iPad: the game list is upright, and a game turns the screen sideways.** The same on a phone or a tablet. The list was sideways on both, so an iPad never used the taller layout.
 
 - Report cartridge save failures on screen, log successful save writes, and flush Linux save data and directory changes to storage. Steam Deck rollback investigation remains open.
 - Keep the SoulSilver overworld through a door or Dark Cave fade instead of sticking on the X menu / touch screen (#5).
@@ -12,12 +51,21 @@
   you shows again. The white flash of a cave's entrance fills the whole widescreen view instead of
   showing black bars at the sides for a second.
 - **A move's power, accuracy and description show on the summary's moves page** (HeartGold and
-  SoulSilver): choosing a move puts them where the stats were, until you go back (#11).
+  SoulSilver): choosing a move adds them beside the stats and the list. On a wide view the four
+  panels shrink into one row; on a narrow view they sit in two rows (#11).
 - **HeartGold and SoulSilver: the Pokédex's cover no longer shows twice** while it slides open or
   shut (#12). In the wide view the closed cover fills the screen, its buttons bar runs edge to
   edge, and it slides across the whole screen from the right edge to the left as it opens.
   On a touch screen, swipe the closed cover to the left to open it, and swipe the list to the
   right to close it.
+- **Platinum: the Pokédex list sits beside SEARCH, SWITCH and CHECK**, without the Poké Ball that
+  a click was turning. B QUIT sits in the header above those buttons. On a controller the face
+  buttons that press them are named on each button, as that pad prints them (Xbox, PlayStation
+  or Nintendo), and only while a controller is in use. On a phone they stay hidden until a pad
+  is used, so the on-screen buttons are not covered.
+- **Black, White, Black 2 and White 2: the Pokédex opens on its red Poké Ball cover.** In the
+  wide view the ball is scaled so the red that met the DS's left and right edges meets the
+  edges of the screen, instead of a small grey screen and the ball stacked or side by side.
 - **Android: the on-screen SELECT and START are at the top, beside MENU**, so they no longer
   cover the game's buttons along the bottom of the screen.
 - **Windows: a game started from the game list takes the keyboard and controller at once**; until

@@ -17,6 +17,8 @@
 #include <jni.h>
 #include <SDL.h>
 #elif defined(__SWITCH__)
+#include <atomic>
+#include <cstdlib>
 #include <mutex>
 #include <switch.h>
 #include <curl/curl.h>
@@ -106,6 +108,12 @@ bool HttpPost(const std::string& url, const std::string& post, const std::string
     return ok;
 }
 
+// (The updater's download, updater.cpp: WinHTTP's time limits are for each step, not the whole.)
+bool HttpDownload(const std::string& url, const std::string& userAgent, int& status, std::string& body, std::string& error)
+{
+    return HttpPost(url, "", "", userAgent, status, body, error);
+}
+
 #elif defined(__linux__) && !defined(__ANDROID__)
 
 const char* SystemName() { return "Linux"; }
@@ -174,8 +182,8 @@ size_t Write(char* data, size_t size, size_t n, void* user)
 }
 }
 
-bool HttpPost(const std::string& url, const std::string& post, const std::string& contentType,
-              const std::string& userAgent, int& status, std::string& body, std::string& error)
+bool Request(const std::string& url, const std::string& post, const std::string& contentType,
+             const std::string& userAgent, long timeout, int& status, std::string& body, std::string& error)
 {
     if (!LoadCurl()) { error = "libcurl not found (install curl to use RetroAchievements)"; return false; }
     void* c = g_curl.easy_init();
@@ -187,7 +195,7 @@ bool HttpPost(const std::string& url, const std::string& post, const std::string
     g_curl.easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
     g_curl.easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     g_curl.easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
-    g_curl.easy_setopt(c, CURLOPT_TIMEOUT, 30L);
+    g_curl.easy_setopt(c, CURLOPT_TIMEOUT, timeout);
     g_curl.easy_setopt(c, CURLOPT_WRITEFUNCTION, (size_t (*)(char*, size_t, size_t, void*))Write);
     g_curl.easy_setopt(c, CURLOPT_WRITEDATA, (void*)&body);
     if (!post.empty())
@@ -205,6 +213,18 @@ bool HttpPost(const std::string& url, const std::string& post, const std::string
     g_curl.easy_cleanup(c);
     status = (int)code;
     return res == 0;
+}
+
+bool HttpPost(const std::string& url, const std::string& post, const std::string& contentType,
+              const std::string& userAgent, int& status, std::string& body, std::string& error)
+{
+    return Request(url, post, contentType, userAgent, 30L, status, body, error);
+}
+
+// (The updater's download, updater.cpp: a whole program, which may take minutes.)
+bool HttpDownload(const std::string& url, const std::string& userAgent, int& status, std::string& body, std::string& error)
+{
+    return Request(url, "", "", userAgent, 900L, status, body, error);
 }
 
 #elif defined(__ANDROID__)
@@ -311,26 +331,48 @@ namespace
 {
 std::once_flag g_curlInit;
 bool g_curlOk = false;
+std::atomic<bool> g_stop{ false };
 
+int Progress(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
+{
+    return g_stop ? 1 : 0;
+}
+
+// (Not curl_global_cleanup: the achievements' request may still be on its way on a thread of
+// its own, left to finish, which then just fails.)
+void CloseNetwork()
+{
+    g_stop = true;
+    socketExit();
+}
+
+struct Sink
+{
+    std::string* body;
+    size_t limit;
+};
 size_t Write(char* data, size_t size, size_t count, void* user)
 {
-    std::string* out = (std::string*)user;
-    if (out->size() + size * count > (8u << 20)) return 0;
-    out->append(data, size * count);
+    Sink* out = (Sink*)user;
+    if (out->body->size() + size * count > out->limit) return 0;
+    out->body->append(data, size * count);
     return size * count;
 }
-}
 
-bool HttpPost(const std::string& url, const std::string& post, const std::string& contentType,
-              const std::string& userAgent, int& status, std::string& body, std::string& error)
+bool Request(const std::string& url, const std::string& post, const std::string& contentType,
+             const std::string& userAgent, long timeout, size_t limit, int& status, std::string& body, std::string& error)
 {
-    // The console's network (libnx's sockets), started the first time it is needed and left
-    // open: the program ends with the console's own exit, which closes it.
+    // The console's network (libnx's sockets), started the first time it is needed and closed
+    // as the program ends. It must be closed: the Homebrew Menu's loader starts the next .nro
+    // (the game chosen, the list again, a new version) in this same process, and with the
+    // sockets left open that start never came (a black screen).
     std::call_once(g_curlInit, [] {
         if (R_FAILED(socketInitializeDefault())) return;
         g_curlOk = curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK;
+        atexit(CloseNetwork);
     });
     if (!g_curlOk) { error = "no network (sockets)"; return false; }
+    if (g_stop) { error = "stopped"; return false; }
     CURL* c = curl_easy_init();
     if (!c) { error = "no curl"; return false; }
     curl_slist* headers = nullptr;
@@ -341,15 +383,18 @@ bool HttpPost(const std::string& url, const std::string& post, const std::string
     curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, timeout);
     if (!post.empty())
     {
         curl_easy_setopt(c, CURLOPT_POSTFIELDS, post.c_str());
         curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, (long)post.size());
     }
     if (headers) curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
+    Sink sink = { &body, limit };
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, Write);
-    curl_easy_setopt(c, CURLOPT_WRITEDATA, &body);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, Progress);
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
     const CURLcode res = curl_easy_perform(c);
     long code = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &code);
@@ -358,6 +403,25 @@ bool HttpPost(const std::string& url, const std::string& post, const std::string
     curl_easy_cleanup(c);
     status = (int)code;
     return res == CURLE_OK;
+}
+}
+
+bool HttpPost(const std::string& url, const std::string& post, const std::string& contentType,
+              const std::string& userAgent, int& status, std::string& body, std::string& error)
+{
+    return Request(url, post, contentType, userAgent, 30L, 8u << 20, status, body, error);
+}
+
+// (The updater's download, updater.cpp: the whole program, which may take minutes.)
+bool HttpDownload(const std::string& url, const std::string& userAgent, int& status, std::string& body, std::string& error)
+{
+    return Request(url, "", "", userAgent, 900L, 512u << 20, status, body, error);
+}
+
+// (While on, a transfer going on another thread ends at once, failing, and none starts.)
+void HttpStop(bool on)
+{
+    g_stop = on;
 }
 
 #elif defined(__APPLE__)

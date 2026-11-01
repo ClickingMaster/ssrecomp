@@ -1,5 +1,6 @@
 # Builds the iPhone and iPad download (pokemon-ds-wide-ios.ipa, tools/ios/build_all.sh), unsigned
-# for sideloading, and starts a Simulator build of it once to check that it opens on its game list
+# for sideloading, and starts a Simulator build on an iPhone and an iPad to check that it
+# opens on its game list, upright
 # (a screenshot and its game.log are the run's artifacts; no ROM is ever given to this workflow,
 # so no game is played here). Started by the maintainer's script or by hand (Actions tab).
 #
@@ -34,6 +35,8 @@ jobs:
           gh release download mac-build-inputs -R "${{ github.repository }}" -p mac-inputs.tar.gz -D inputs
           tar -xzf inputs/mac-inputs.tar.gz -C inputs
           ls inputs
+      - name: GBA games (mGBA and the widescreen patches, when the inputs include them)
+        run: bash tools/apple/fetch_gba.sh inputs
       - run: tools/ios/build_all.sh inputs/build-gen-tables inputs/box-art inputs/icon.jpg
         env:
           SSR_IOS_TARGET: ${{ matrix.target }}
@@ -47,25 +50,46 @@ jobs:
       - name: A first start in the iOS Simulator
         if: matrix.target == 'simulator'
         run: |
-          set -x
-          UDID=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          d = json.load(sys.stdin)["devices"]
-          phones = [x["udid"] for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
-          print(phones[-1])')
-          xcrun simctl boot "$UDID"
-          xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl install "$UDID" "build-ios-dist/Pokemon Fulldex.app"
-          xcrun simctl launch "$UDID" io.github.mamesj.pokemonds
-          sleep 25
+          set -euo pipefail
           mkdir -p sim
-          xcrun simctl io "$UDID" screenshot sim/first-start.png
-          DATA=$(xcrun simctl get_app_container "$UDID" io.github.mamesj.pokemonds data)
-          ls -laR "$DATA/Documents" > sim/documents.txt || true
-          cp "$DATA/Documents/game.log" sim/game.log || true
-          xcrun simctl spawn "$UDID" log show --last 3m --style compact --predicate 'process == "pokemon-ds-wide"' > sim/system.log || true
-          cat sim/game.log || true
-          grep -q '\[launcher\] folder' sim/game.log
+          # An iPhone and an iPad. The list should come up upright on both.
+          start_one() {
+            local kind="$1"
+            local udid
+            udid="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          kind = sys.argv[1]
+          d = json.load(sys.stdin)["devices"]
+          found = [x["udid"] for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith(kind)]
+          if not found:
+              raise SystemExit("no " + kind + " simulator")
+          print(found[-1])
+          ' "$kind")"
+            xcrun simctl boot "$udid"
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl install "$udid" "build-ios-dist/Pokemon Fulldex.app"
+            xcrun simctl launch "$udid" io.github.mamesj.pokemonds
+            sleep 25
+            xcrun simctl io "$udid" screenshot "sim/${kind}-first-start.png"
+            local data
+            data="$(xcrun simctl get_app_container "$udid" io.github.mamesj.pokemonds data)"
+            ls -laR "$data/Documents" > "sim/${kind}-documents.txt" || true
+            cp "$data/Documents/game.log" "sim/${kind}-game.log" || true
+            xcrun simctl spawn "$udid" log show --last 3m --style compact --predicate 'process == "pokemon-ds-wide"' > "sim/${kind}-system.log" || true
+            cat "sim/${kind}-game.log" || true
+            grep -q '\[launcher\] folder' "sim/${kind}-game.log"
+            python3 -c '
+          import struct, sys
+          kind, path = sys.argv[1], sys.argv[2]
+          w, h = struct.unpack(">II", open(path, "rb").read(24)[16:24])
+          print("%s screenshot %dx%d" % (kind, w, h))
+          if h <= w:
+              raise SystemExit("%s list is not upright (%dx%d)" % (kind, w, h))
+          ' "$kind" "sim/${kind}-first-start.png"
+            xcrun simctl shutdown "$udid" || true
+          }
+          start_one iPhone
+          start_one iPad
       - uses: actions/upload-artifact@v4
         if: always() && matrix.target == 'simulator'
         with:

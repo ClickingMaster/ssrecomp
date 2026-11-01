@@ -494,12 +494,32 @@ bool PatchNpdm(std::vector<u8>& npdm, u64 tid)
     return ok;
 }
 
+// The HOME Menu draws this name with the system font, which has é. The game list's own font
+// does not (it draws the accent as its own mark, ui.h), so the names stay "Pokemon Black"
+// until they are written here.
+std::string HomeMenuName(const std::string& name)
+{
+    std::string out = name;
+    auto apply = [&](const char* from, const char* to) {
+        const size_t n = strlen(from), m = strlen(to);
+        for (size_t at = 0; (at = out.find(from, at)) != std::string::npos; )
+        {
+            out.replace(at, n, to);
+            at += m;
+        }
+    };
+    apply("Pokemon", "Pok\u00E9mon");
+    apply("POKEMON", "POK\u00C9MON");
+    return out;
+}
+
 void PatchNacp(NacpStruct& nacp, const std::string& name, u64 tid)
 {
+    const std::string shown = HomeMenuName(name);
     for (NacpLanguageEntry& lang : nacp.lang)
     {
         memset(lang.name, 0, sizeof(lang.name));
-        strncpy(lang.name, name.c_str(), sizeof(lang.name) - 1);
+        strncpy(lang.name, shown.c_str(), sizeof(lang.name) - 1);
         memset(lang.author, 0, sizeof(lang.author));
         strncpy(lang.author, "Pokémon Fulldex", sizeof(lang.author) - 1);
     }
@@ -706,7 +726,7 @@ Result InstallOne(const std::string& nroPath, const Entry& e, const std::vector<
 
     if (R_FAILED(rc = PushApplicationRecord(nsApp, tid, &record, 1))) return rc;
     InvalidateApplicationControlCache(nsApp, tid);
-    fprintf(stderr, "[forwarder] %s: title %016lX\n", e.name.c_str(), (unsigned long)tid);
+    fprintf(stderr, "[forwarder] %s: title %016lX\n", HomeMenuName(e.name).c_str(), (unsigned long)tid);
     return 0;
 }
 }

@@ -17,7 +17,7 @@ in the first time the game starts.
 In a GBA game: arrow keys, X and Z for A and B, Enter START, Backspace SELECT, Q and W for L and
 R, Left Shift fast forward; a controller as printed, the right trigger to fast forward. Esc (or
 a controller's left trigger) opens its pause menu: save state, load state, fast forward,
-settings, and QUIT GAME back to the list.
+settings, RetroAchievements (the same account as the DS games) and QUIT GAME back to the list.
 
 The GBA games are played by mGBA (Mozilla Public License 2.0, LICENSE-mGBA.txt) with Pokemon
 GBA Widescreen's changes; its source: https://github.com/mamesj/pokemon-gba-widescreen

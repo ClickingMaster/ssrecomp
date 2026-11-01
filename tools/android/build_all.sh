@@ -151,7 +151,9 @@ say "The app around it: manifest, icon, SDL's Java code and the app's own"
 W="$HERE/build-android-dist/skeleton"
 rm -rf "$W"
 mkdir -p "$W/classes" "$W/dex"
-printf 'package io.github.mamesj.pokemonds; final class BuildInfo { static final long BUILT_AT = %s000L; }\n' "$(date +%s)" > "$W/BuildInfo.java"
+BUILD_EPOCH="$(date +%s)"
+printf '%s\n' "$BUILD_EPOCH" > "$HERE/build-android-dist/fulldex-build-id.txt"
+printf 'package io.github.mamesj.pokemonds; final class BuildInfo { static final long BUILT_AT = %s000L; }\n' "$BUILD_EPOCH" > "$W/BuildInfo.java"
 # The icon: the picture as it is for Android 7 and older, and an adaptive icon for Android 8 on
 # (mipmap-anydpi-v26), whose launchers cut it to their own shape (a circle on a Pixel). Without
 # one, the square picture was shrunk inside a white circle. Its one layer is the picture at 70% of
@@ -222,6 +224,7 @@ bad = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if not ok.match(n)]
 if bad: sys.exit('unexpected files in the APK: %s' % bad)
 PY
 if [ -x "$BT/apksigner" ]; then "$BT/apksigner" verify "$APK" && echo "signature: ok"; fi
+python3 tools/updater/write_checksums.py "$HERE/build-android-dist" --build "pokemon-ds-wide-android.apk=$HERE/build-android-dist/fulldex-build-id.txt"
 ls -l "$APK"
 say "Done: $APK"
 cat <<EOF

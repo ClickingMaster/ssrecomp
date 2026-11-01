@@ -12,7 +12,7 @@ namespace SwitchForwarder
 {
 struct Entry
 {
-    std::string name;            // as the HOME Menu shows it, e.g. "Pokemon Black 2"
+    std::string name;            // "Pokemon Black 2"; the HOME Menu spells Pokémon (switch_forwarder.cpp)
     std::string args;            // after the program's path, e.g. "--game IREO"
     std::vector<uint8_t> icon;   // a 256x256 JPEG
 };

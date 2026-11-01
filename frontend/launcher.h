@@ -20,7 +20,6 @@
 #include <sys/stat.h>
 
 #include "ui.h"
-#include "launcher_font.h"
 // (JPEG and PNG pictures for the list: the program that draws it defines STB_IMAGE_IMPLEMENTATION
 // with STBI_ONLY_JPEG and STBI_ONLY_PNG before including this, in one file.)
 #include "thirdparty/stb_image.h"
@@ -28,35 +27,10 @@
 namespace Launcher
 {
 
+// Keep the established launcher font while the replacement design is unfinished.
 inline void ModernText(Canvas& c, int x, int y, const std::string& text, int scale, uint32_t colour)
 {
-    if (scale <= 1) { c.Text(x,y,text,scale,colour); return; }
-    const int cw = 6 * scale, ch = 9 * scale;
-    for (unsigned char letter : text)
-    {
-        if (letter >= 128) letter = '?';
-        for (int yy = 0; yy < ch; ++yy) for (int xx = 0; xx < cw; ++xx)
-        {
-            if (x+xx < 0 || x+xx >= c.w || y+yy < 0 || y+yy >= c.h) continue;
-            unsigned a = LauncherFont[letter*768 + (yy*32/ch)*24 + xx*24/cw];
-            uint32_t& dst = c.px[(size_t)(y+yy)*c.w+x+xx];
-            unsigned r = (((colour>>16)&255)*a + ((dst>>16)&255)*(255-a))/255;
-            unsigned g = (((colour>>8)&255)*a + ((dst>>8)&255)*(255-a))/255;
-            unsigned b = ((colour&255)*a + (dst&255)*(255-a))/255;
-            dst = 0xFF000000u | r<<16 | g<<8 | b;
-        }
-        x += cw;
-    }
-}
-inline void Rounded(Canvas& c, int x, int y, int w, int h, int radius, uint32_t colour)
-{
-    radius = std::max(0, std::min(radius, std::min(w,h)/2));
-    for (int row=0; row<h; ++row)
-    {
-        int dy = row < radius ? radius-row-1 : row >= h-radius ? row-(h-radius) : 0;
-        int inset = dy ? radius-(int)std::sqrt(radius*radius-dy*dy) : 0;
-        c.Fill(x+inset,y+row,w-2*inset,1,colour);
-    }
+    c.Text(x, y, text, scale, colour);
 }
 
 // The consoles the list has games of, in the order its sections and tabs come in.
@@ -473,16 +447,6 @@ struct Background
 inline Theme ThemeNamed(const std::string& colour)
 {
     Theme t;
-    if (colour == "pokemon")
-    {
-        t.pokemon = true;
-        t.bg = 0xFFF1F5FA; t.band = 0xFF174A86; t.bandLine = 0xFFFFCB05;
-        t.title = 0xFFFFFFFF; t.tile = 0xFFFFFFFF; t.frame = 0xFFE5AC00;
-        t.name = t.nameSel = 0xFF173B64; t.sub = 0xFF52677F;
-        t.subSel = 0xFF174A86; t.hint = 0xFF52677F; t.bad = 0xFFB3293E;
-        t.bandLineH = 2; t.frameW = 3; t.selBar = 0xFF174A86;
-        return t;
-    }
     t.bandLine = t.frame = t.subSel = AccentNamed(colour); // (ui.h; red when not set)
     return t;
 }
@@ -604,16 +568,6 @@ inline Grid Layout(const Canvas& c)
     g.cols = std::max(1, std::min(4, (c.w - g.gap) / (g.tile + g.gap * 3)));
     const int gridW = g.cols * g.tile + (g.cols - 1) * g.gap * 3;
     g.gx = (c.w - gridW) / 2;
-    if (c.w >= c.h * 3 / 2 && c.w >= 960)
-    {
-        g.gap = 5*g.s;
-        g.panelW = c.w / 4;
-        g.panelX = c.w - g.panelW - 6*g.s;
-        g.cols = 3;
-        g.tile = std::max(32, std::min((g.panelX-18*g.s)/3-3*g.gap,
-                         (g.bottom-g.top-2*g.headH)/2-g.labelH-g.gap));
-        g.gx = 8*g.s;
-    }
     return g;
 }
 
@@ -761,45 +715,20 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
     const Grid& grid = v.g;
     const int s = grid.s;
     c.Fill(0, 0, c.w, c.h, th.bg);
-    if (th.pokemon)
-    {
-        uint32_t tint = 0xFF1659A0;
-        if (selected >= 0 && selected < (int)games.size() && !games[selected].art.empty())
-            tint = games[selected].art[Art*Art/2];
-        for (int y=0; y<c.h; ++y)
-        {
-            unsigned r = 12 + ((tint>>16)&255)*y/std::max(1,c.h)/5;
-            unsigned g = 48 + ((tint>>8)&255)*y/std::max(1,c.h)/5;
-            unsigned b = 90 + (tint&255)*y/std::max(1,c.h)/4;
-            c.Fill(0,y,c.w,1,0xFF000000u|r<<16|g<<8|b);
-        }
-    }
     if (th.background)
         if (const uint32_t* bgPx = th.background->Fitted(c.w, c.h)) std::copy(bgPx, bgPx + (size_t)c.w * c.h, c.px.begin());
     // A band along the top with the title.
     c.Fill(0, 0, c.w, (c.h > c.w ? 43 : 22) * s, th.band);
     c.Fill(0, (c.h > c.w ? 43 : 22) * s, c.w, th.bandLineH * s, th.bandLine);
     const std::string title = "POK\x05MON FULLDEX"; // (Pokémon Fulldex: \x05 is the font's É, ui.h)
-    ModernText(c, (c.w - Canvas::TextWidth(title, s + 1)) / 2, 6 * s, title, s + 1, th.title);
-    if (grid.panelW && th.pokemon)
-    {
-        Rounded(c,grid.panelX,grid.top,grid.panelW,grid.bottom-grid.top,6*s,0xFF245B91);
-        const Game* current = selected >= 0 && selected < (int)games.size() ? &games[selected] : nullptr;
-        const int size=grid.panelW-12*s, ox=grid.panelX+6*s, oy=grid.top+8*s;
-        if (current && !current->art.empty())
-            for(int yy=0;yy<size;yy++) for(int xx=0;xx<size;xx++)
-                c.px[(size_t)(oy+yy)*c.w+ox+xx]=current->art[(yy*Art/size)*Art+xx*Art/size];
-        ModernText(c,ox,oy+size+8*s,"GAME PREVIEW",s,0xFFFFFFFF);
-        ModernText(c,ox,oy+size+22*s,current ? PlatformName(current->platform) : "FULLDEX",s,0xFFFFD447);
-        ModernText(c,ox,oy+size+35*s,current && current->hasSave ? "SAVE FOUND" : "YOUR NEXT ADVENTURE",std::max(1,s-1),0xFFFFFFFF);
-    }
+    c.Text((c.w - Canvas::TextWidth(title, s + 1)) / 2, 6 * s, title, s + 1, th.title);
     // The tabs: the chosen one bright and underlined.
     for (int t = 0; t < TABS; t++)
     {
         const std::string name = TabName(t);
         const int x = TabX(c, grid, t) - Canvas::TextWidth(name, s) / 2, y = grid.tabsY + 3 * s;
         if (onTabs && t == tab) c.Fill(x - 3 * s, y - 3 * s, Canvas::TextWidth(name, s) + 5 * s, 13 * s, th.frame);
-        ModernText(c, x, y, name, s, t == tab ? (th.pokemon ? 0xFFFFD447u : th.title) : (th.pokemon ? 0xFFDBE9FAu : th.hint));
+        c.Text(x, y, name, s, t == tab ? th.title : th.hint);
         if (t == tab) c.Fill(x - 2 * s, grid.tabsY + grid.tabsH - s, Canvas::TextWidth(name, s) + 3 * s, s, th.frame);
     }
 
@@ -813,34 +742,26 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
         {
             const std::string none = std::string("NO ") + PlatformName(h.platform) + " GAMES YET";
             // (On its own tab: in the middle of the page.)
-            if (tab != 0) ModernText(c, (c.w - Canvas::TextWidth(none, s)) / 2, (top + bottom) / 2 - 4 * s, none, s, th.hint);
-            else if (y >= top && y + 10 * s <= bottom) ModernText(c, grid.gx, y + 2 * s, none, s, th.hint);
+            if (tab != 0) c.Text((c.w - Canvas::TextWidth(none, s)) / 2, (top + bottom) / 2 - 4 * s, none, s, th.hint);
+            else if (y >= top && y + 10 * s <= bottom) c.Text(grid.gx, y + 2 * s, none, s, th.hint);
             continue;
         }
         if (y < top || y + 10 * s > bottom) continue;
         const std::string name = PlatformName(h.platform);
-        ModernText(c, grid.gx, y + s, name, s + 1, th.frame);
+        c.Text(grid.gx, y + s, name, s + 1, th.frame);
         const int lx = grid.gx + Canvas::TextWidth(name, s + 1) + 4 * s;
         const int rx = grid.gx + grid.cols * tile + (grid.cols - 1) * grid.gap * 3;
         if (rx > lx) c.Fill(lx, y + 6 * s, rx - lx, std::max(1, s / 2), th.tile);
     }
-    const std::vector<uint32_t> upper(c.px.begin(), c.px.begin() + (size_t)top*c.w);
-    const std::vector<uint32_t> lower(c.px.begin() + (size_t)bottom*c.w, c.px.end());
-    // Draw partial cards, then restore the fixed header and footer.
+    // The tiles that are wholly in view.
     for (const View::Spot& sp : v.spots)
     {
         const int x = sp.x, y = top + sp.y - scroll;
-        if (y + tile + labelH < top || y > bottom) continue;
+        if (y < top || y + tile + labelH > bottom) continue;
         const Game& g = games[sp.game];
         const bool sel = sp.game == selected;
-        if (th.pokemon)
-        {
-            Rounded(c,x + 2*s,y + 3*s,tile,tile+labelH,4*s,0xFF102F51);
-            Rounded(c,x,y,tile,tile+labelH,4*s,th.tile);
-        }
         // A frame round the chosen one.
-        if (sel) Rounded(c,x-th.frameW*s,y-th.frameW*s,tile+2*th.frameW*s,tile+labelH+2*th.frameW*s,5*s,th.frame);
-        if (th.pokemon) Rounded(c,x,y,tile,tile+labelH,4*s,th.tile);
+        if (sel) c.Fill(x - th.frameW * s, y - th.frameW * s, tile + 2 * th.frameW * s, tile + 2 * th.frameW * s, th.frame);
         c.Fill(x, y, tile, tile, th.tile);
         if (!g.art.empty())
         {
@@ -850,7 +771,7 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
                 for (int px = 0; px < tile; px++)
                 {
                     const uint32_t p = row[px * Art / tile];
-                    if (y+py >= 0 && y+py < c.h && x+px >= 0 && x+px < c.w && p >> 24 >= 0x80) c.px[(size_t)(y + py) * c.w + x + px] = p | 0xFF000000u;
+                    if (p >> 24 >= 0x80) c.px[(size_t)(y + py) * c.w + x + px] = p | 0xFF000000u;
                 }
             }
             c.Fill(x, y, 1, 1, th.tile); // (so the canvas knows the tile was drawn)
@@ -869,34 +790,31 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
             for (int py = 0; py < tile; py++)
                 for (int px = 0; px < tile; px++)
                 {
-                    if (y+py < 0 || y+py >= c.h || x+px < 0 || x+px >= c.w) continue;
                     uint32_t& p = c.px[(size_t)(y + py) * c.w + x + px];
                     p = 0xFF000000u | ((p >> 1) & 0x7F7F7F);
                 }
             const std::string soon = "COMING SOON";
             const int bs = Canvas::TextWidth(soon, s) + 8 * s <= tile ? s : std::max(1, s - 1);
             c.Fill(x, y + tile / 2 - 8 * bs, tile, 16 * bs, th.band);
-            ModernText(c, x + (tile - Canvas::TextWidth(soon, bs)) / 2, y + tile / 2 - 4 * bs, soon, bs, th.title);
+            c.Text(x + (tile - Canvas::TextWidth(soon, bs)) / 2, y + tile / 2 - 4 * bs, soon, bs, th.title);
         }
         // The name (shortened: POKEMON is the same for all) and the save.
         std::string name = g.name;
         if (name.rfind("POKEMON ", 0) == 0) name = name.substr(8);
         const int ns = Canvas::TextWidth(name, s) <= tile ? s : std::max(1, s - 1);
-        ModernText(c, x + (tile - Canvas::TextWidth(name, ns)) / 2, y + tile + 3 * s, name, ns, sel ? th.nameSel : th.name);
+        c.Text(x + (tile - Canvas::TextWidth(name, ns)) / 2, y + tile + 3 * s, name, ns, sel ? th.nameSel : th.name);
         if (sel && th.selBar) c.Fill(x + tile / 4, y + tile + 19 * s, tile / 2, s, th.selBar);
         std::string sub = g.comingSoon ? "COMING SOON" : !g.known ? "NOT PLAYABLE" : g.hasSave ? "SAVE FOUND" : "NEW GAME";
         if (!g.where.empty() && g.known) sub = (g.hasSave ? "SAVE " : "NEW ") + g.where; // e.g. SAVE IN BLACK2
         const int ss = std::max(1, s * 2 / 3);
-        ModernText(c, x + (tile - Canvas::TextWidth(sub, ss)) / 2, y + tile + 12 * s, sub, ss, !g.known && !g.comingSoon ? th.bad : sel ? th.subSel : th.sub);
+        c.Text(x + (tile - Canvas::TextWidth(sub, ss)) / 2, y + tile + 12 * s, sub, ss, !g.known && !g.comingSoon ? th.bad : sel ? th.subSel : th.sub);
     }
-    std::copy(upper.begin(), upper.end(), c.px.begin());
-    std::copy(lower.begin(), lower.end(), c.px.begin() + (size_t)bottom*c.w);
     // More games below the ones shown. (None drawn for above: under the tabs it looked like one
     // of their underlines, and the cut tiles at the top say it already.)
     if (scroll + (bottom - top) < v.height - grid.gap) c.Fill(c.w / 2 - 8 * s, bottom - 2 * s, 16 * s, s, th.hint);
     const std::string hint = !note.empty() ? note : !hintText.empty() ? hintText : "A: PLAY    Y: SETTINGS    L / R: TABS    +: QUIT";
     const int hintScale = std::max(1, std::min(s, (c.w - 8) / std::max(1, (int)hint.size() * 6)));
-    ModernText(c, (c.w - Canvas::TextWidth(hint, hintScale)) / 2, c.h - 12 * s, hint, hintScale, th.pokemon ? 0xFFDBE9FAu : th.hint);
+    c.Text((c.w - Canvas::TextWidth(hint, hintScale)) / 2, c.h - 12 * s, hint, hintScale, th.hint);
 }
 
 // The settings page (Y on the Switch's list, H or a controller's Y on a PC's): the pause menu's
@@ -917,7 +835,20 @@ inline std::vector<Setting> SettingsList()
     const std::vector<std::pair<std::string, std::string>> onOff = { { "1", "ON" }, { "0", "OFF" } };
     std::vector<Setting> l;
 #ifdef __ANDROID__
-    l.push_back({ "!updates", "CHECK FOR UPDATES", { { "", "CHECK" } }, "", "CHECK GITHUB FOR THE OFFICIAL ANDROID APK. DOWNLOADS OPEN ONLY WHEN YOU CHOOSE THEM." });
+    l.push_back({ "!updates", "CHECK FOR UPDATES", { { "", "CHECK" } }, "",
+                  "CHECKS GITHUB FOR A NEW VERSION. INSTALL DOWNLOADS IT: IT IS CHECKED AGAINST THE RELEASE SHA256SUMS.TXT AND ANDROID ASKS "
+                  "BEFORE INSTALLING. THE OLD VERSION IS KEPT. YOUR ROMS / SAVES AND SETTINGS STAY AS THEY ARE." });
+#elif defined(__APPLE__)
+    l.push_back({ "!updates", "CHECK FOR UPDATES", { { "", "CHECK" } }, "",
+                  "CHECKS GITHUB FOR A NEW VERSION. WHEN THERE IS ONE: CHOOSE AGAIN TO OPEN ITS PAGE AND DOWNLOAD IT THERE." });
+#elif defined(__SWITCH__) && defined(SSR_ALL_GAMES)
+    l.push_back({ "!updates", "CHECK FOR UPDATES", { { "", "CHECK" } }, "",
+                  "CHECKS GITHUB FOR A NEW VERSION. CHOOSE AGAIN TO INSTALL IT: IT IS CHECKED AGAINST THE RELEASE SHA256SUMS.TXT "
+                  "AND THE OLD .NRO IS KEPT IN THE UPDATE FOLDER. YOUR ROMS / SAVES AND SETTINGS STAY AS THEY ARE." });
+#elif !defined(__SWITCH__)
+    l.push_back({ "!updates", "CHECK FOR UPDATES", { { "", "CHECK" } }, "",
+                  "CHECKS GITHUB FOR A NEW VERSION. CHOOSE AGAIN TO INSTALL IT: IT IS CHECKED AGAINST THE RELEASE SHA256SUMS.TXT "
+                  "AND THE OLD VERSION IS KEPT IN THE UPDATE FOLDER. YOUR ROMS / SAVES AND SETTINGS STAY AS THEY ARE." });
 #endif
 
 #ifdef __SWITCH__
@@ -1003,7 +934,7 @@ inline std::vector<Setting> SettingsList()
                   "PUTS AN ICON FOR EACH GAME IN THIS LIST ON THE HOME MENU WITH ITS PICTURE. IT STARTS THAT GAME STRAIGHT AWAY. MADE ON THIS CONSOLE: NO PC OR KEYS FILE NEEDED. LIKE ANY FORWARDER THE ICONS NEED SIGPATCHES TO START. INSTALL AGAIN AFTER ADDING GAMES. REMOVE ONE IN THE HOME MENU (OPTIONS / DELETE SOFTWARE)." });
 #endif
     // The game list's own look (GAME LIST: ThemeNamed, Background).
-    l.push_back({ "list_colour", "COLOUR", { { "pokemon", "POKEMON" }, { "red", "RED" }, { "blue", "BLUE" }, { "green", "GREEN" }, { "purple", "PURPLE" },
+    l.push_back({ "list_colour", "COLOUR", { { "red", "RED" }, { "blue", "BLUE" }, { "green", "GREEN" }, { "purple", "PURPLE" },
                   { "gold", "GOLD" }, { "pink", "PINK" }, { "teal", "TEAL" } }, "red",
                   "THE GAME LIST'S COLOUR: ITS LINES, THE FRAME ROUND THE CHOSEN GAME AND THE TABS." });
 #ifdef __SWITCH__
@@ -1023,22 +954,26 @@ inline std::vector<Setting> SettingsList()
     // Only in the pause menu.
 #ifdef __SWITCH__
     l.push_back({ nullptr, "THE PAUSE MENU", {}, "", "PRESS + WHILE PLAYING (+ AND - TOGETHER WITH START BUTTON ON DS START). EVERYTHING ABOVE IS THERE TOO AND CAN BE CHANGED AS YOU PLAY." });
-    l.push_back({ nullptr, "FAST FORWARD", {}, "", "HOLD ZR (UP TO 4X). FAST FORWARD IN THE PAUSE MENU KEEPS IT ON WITHOUT HOLDING." });
+    l.push_back({ nullptr, "FAST FORWARD", {}, "", "HOLD ZR (UP TO 4X). FAST FORWARD IN THE PAUSE MENU KEEPS IT ON WITHOUT HOLDING. THE BUTTON IS CHANGED IN KEYS AND BUTTONS." });
 #elif defined(SSR_PHONE)
     l.push_back({ nullptr, "THE PAUSE MENU", {}, "", "THE MENU BUTTON AT THE TOP OF THE SCREEN WHILE PLAYING OR START OR GUIDE ON A CONTROLLER. EVERYTHING ABOVE IS THERE TOO." });
-    l.push_back({ nullptr, "FAST FORWARD", {}, "", "HOLD THE >> BUTTON BESIDE R AT THE TOP, OR THE RIGHT TRIGGER OF A CONTROLLER (UP TO 4X). FAST FORWARD IN THE PAUSE MENU KEEPS IT ON WITHOUT HOLDING." });
+    l.push_back({ nullptr, "FAST FORWARD", {}, "", "HOLD THE >> BUTTON BESIDE R AT THE TOP, OR THE RIGHT TRIGGER OF A CONTROLLER (UP TO 4X). FAST FORWARD IN THE PAUSE MENU KEEPS IT ON WITHOUT HOLDING. THE BUTTON IS CHANGED IN KEYS AND BUTTONS." });
 #else
     l.push_back({ nullptr, "THE PAUSE MENU", {}, "", "ESC ON THE KEYBOARD. ON A CONTROLLER: START (MENU ON XBOX / OPTIONS ON PS) OR ITS GUIDE BUTTON. EVERYTHING ABOVE IS THERE TOO." });
-    l.push_back({ nullptr, "FAST FORWARD", {}, "", "HOLD THE RIGHT TRIGGER OR LEFT SHIFT (UP TO 4X). FAST FORWARD IN THE PAUSE MENU KEEPS IT ON WITHOUT HOLDING." });
+    l.push_back({ nullptr, "FAST FORWARD", {}, "", "HOLD THE RIGHT TRIGGER OR LEFT SHIFT (UP TO 4X). FAST FORWARD IN THE PAUSE MENU KEEPS IT ON WITHOUT HOLDING. THE KEY AND BUTTON ARE CHANGED IN KEYS AND BUTTONS." });
 #endif
 #ifdef __SWITCH__
     l.push_back({ "!keys", "KEYS AND BUTTONS", { { "", "CHANGE" } }, "",
-                  "GIVE ANY DS BUTTON / THE PAUSE MENU / FAST FORWARD / SWAP SCREENS ANOTHER BUTTON (ANY CONTROLLER: PRO / JOY-CON OR ONE ADDED WITH SYS-CON OR MISSIONCONTROL). GIVING ONE A BUTTON ANOTHER ONE HAD SWAPS THE TWO. ALSO IN THE PAUSE MENU (CONTROLS). THIS LIST FOLLOWS THE ONES YOU CHANGE." });
+                  "GIVE ANY DS BUTTON / THE PAUSE MENU / FAST FORWARD / SWAP SCREENS / SAVE STATE / LOAD STATE ANOTHER BUTTON (ANY CONTROLLER: PRO / JOY-CON OR ONE ADDED WITH SYS-CON OR MISSIONCONTROL). GIVING ONE A BUTTON ANOTHER ONE HAD SWAPS THE TWO. SAVE STATE AND LOAD STATE START NOT SET. ALSO IN THE PAUSE MENU (CONTROLS). THIS LIST FOLLOWS THE ONES YOU CHANGE." });
 #else
     l.push_back({ "!keys", "KEYS AND BUTTONS", { { "", "CHANGE" } }, "",
-                  "GIVE ANY DS BUTTON / THE PAUSE MENU / FAST FORWARD / SWAP SCREENS ANOTHER KEY OR CONTROLLER BUTTON. GIVING ONE A KEY OR BUTTON ANOTHER ONE HAD SWAPS THE TWO. ALSO IN THE PAUSE MENU (CONTROLS). THIS LIST FOLLOWS THE ONES YOU CHANGE (A PLAYS / B GOES BACK / Y OPENS THESE SETTINGS)." });
+                  "GIVE ANY DS BUTTON / THE PAUSE MENU / FAST FORWARD / SWAP SCREENS / SAVE STATE / LOAD STATE ANOTHER KEY OR CONTROLLER BUTTON. GIVING ONE A KEY OR BUTTON ANOTHER ONE HAD SWAPS THE TWO. SAVE STATE STARTS AS F5 AND LOAD STATE AS F8 (NOT SET ON A CONTROLLER). ALSO IN THE PAUSE MENU (CONTROLS). THIS LIST FOLLOWS THE ONES YOU CHANGE (A PLAYS / B GOES BACK / Y OPENS THESE SETTINGS)." });
 #endif
-    l.push_back({ nullptr, "SAVE STATE / LOAD STATE", {}, "", "IN THE PAUSE MENU: ONE QUICK SLOT PER GAME. YOUR SAVE IN THE GAME IS SEPARATE AND STILL WORKS AS NORMAL." });
+#ifdef __SWITCH__
+    l.push_back({ nullptr, "SAVE STATE / LOAD STATE", {}, "", "ONE QUICK SLOT PER GAME, FROM THE PAUSE MENU. CHOOSE A BUTTON FOR EACH IN KEYS AND BUTTONS (THEY START NOT SET). YOUR SAVE IN THE GAME IS SEPARATE AND STILL WORKS AS NORMAL." });
+#else
+    l.push_back({ nullptr, "SAVE STATE / LOAD STATE", {}, "", "ONE QUICK SLOT PER GAME. F5 SAVES AND F8 LOADS UNTIL YOU CHANGE THEM IN KEYS AND BUTTONS. A CONTROLLER BUTTON IS NOT SET UNTIL YOU CHOOSE ONE. YOUR SAVE IN THE GAME IS SEPARATE AND STILL WORKS AS NORMAL." });
+#endif
     l.push_back({ nullptr, "RESET GAME / QUIT", {}, "", "IN THE PAUSE MENU: START THE GAME AGAIN FROM ITS TITLE SCREEN / BACK TO THIS GAME LIST." });
     return l;
 }

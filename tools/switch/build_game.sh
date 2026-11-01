@@ -215,6 +215,7 @@ want = ['switch/pokemon-ds-wide/pokemon-ds-wide.nro'] + sys.argv[2:] + ['switch/
 if names != want: sys.exit('unexpected files in the zip: %s' % names)
 print('zip holds:', ', '.join(names))
 " "build-sd/$ZIP" $LICENCES
+    python3 tools/updater/write_checksums.py build-sd --build "$ZIP=$BUILD/fulldex-build-id.txt"
     say "Done: $HERE/build-sd/$ZIP"
     ls -l build-sd/switch/pokemon-ds-wide "build-sd/$ZIP"
     cat <<EOF

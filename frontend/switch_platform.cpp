@@ -27,12 +27,16 @@
 #ifdef SSR_GBA
 #include <map>
 #include "gba_games.h" // Pokemon GBA Widescreen, built in: its GBA games (CMakeLists.txt, SSR_GBA_DIR)
+#include "gba_ra.h"    // RetroAchievements for those games, the same account as the DS games
 #endif
 #ifdef SSR_ALL_GAMES
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STBI_WRITE_NO_STDIO
 #include "thirdparty/stb_image_write.h"
 #include "switch_forwarder.h"
+#ifdef SSR_UPDATER
+#include "updater.h"
+#endif
 #endif
 #ifdef SSR_PC_ART
 // The game list's pictures built into the program (pc_art.cpp, CMakeLists.txt: SSR_PC_ART).
@@ -244,6 +248,13 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
     int shown = 0;
 #ifdef SSR_ALL_GAMES
     bool installIcons = false; // (HOME MENU ICONS chosen: done after INSTALLING is on the screen)
+#ifdef SSR_UPDATER
+    bool updateWork = false; // (CHECK FOR UPDATES: done after CHECKING... is on the screen)
+    bool launchCheck = false; // (Once, after the list's first picture is on the screen)
+    bool updateAsked = false;
+    unsigned updateSeen = 0;
+    Menu updateMenu;
+#endif
 #endif
     // The list's look (GAME LIST on the settings page: COLOUR, and BACKGROUND, a picture in this
     // folder), read again when one of them changes.
@@ -270,6 +281,16 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
             page.items[page.selected].values[0].second = "INSTALLING...";
             installIcons = true;
         }
+#ifdef SSR_UPDATER
+        // CHECK FOR UPDATES: the work runs on this thread after CHECKING... is on the screen
+        // (a second thread here stops the program).
+        if (key && !strcmp(key, "!updates") && !updateWork)
+        {
+            page.items[page.selected].values[0].second =
+                Updater::Get().state == Updater::State::Available ? "DOWNLOADING..." : "CHECKING...";
+            updateWork = true;
+        }
+#endif
 #else
         (void)key;
 #endif
@@ -283,12 +304,49 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
             page.items[page.selected].values[0].second = InstallHomeIcons(games);
             installIcons = false;
         }
+#ifdef SSR_UPDATER
+        if (updateWork)
+        {
+            const std::string url = Updater::Choose();
+            if (!url.empty()) note = "NEW VERSION: GITHUB.COM/MAMESJ/POKEMON-FULLDEX/RELEASES";
+            const Updater::Status u = Updater::Get();
+            if (page.selected >= 0 && page.selected < (int)page.items.size() && !page.items[page.selected].values.empty())
+                page.items[page.selected].values[0].second = u.text;
+            updateSeen = u.serial;
+            updateWork = false;
+            if (u.state == Updater::State::Installed && Updater::RestartPending()) break;
+        }
+#endif
 #endif
         if (autoFrames > 0 && ++shown > autoFrames)
         {
             result = selected;
             break;
         }
+#ifdef SSR_UPDATER
+        // The update check and install (on this thread): shown on CHECK FOR UPDATES, a new
+        // version said under the list too, and the list closed for the new program to start.
+        {
+            const Updater::Status u = Updater::Get();
+            if (u.serial != updateSeen)
+            {
+                updateSeen = u.serial;
+                for (auto* list : { &page.items, &page.all })
+                    for (Launcher::Setting& st : *list)
+                        if (st.key && !strcmp(st.key, "!updates") && !st.values.empty()) st.values[0].second = u.text;
+                if (u.state == Updater::State::Available && !updateAsked)
+                {
+                    updateAsked = true;
+                    updateMenu.items = { { u.canInstall ? Updater::PopupInstall() : Updater::PopupOpen(), "" },
+                                         { Updater::PopupLater(), "" } };
+                    updateMenu.selected = 0;
+                    updateMenu.open = true;
+                }
+                if (u.state == Updater::State::Downloading || u.state == Updater::State::Installed) updateMenu.open = false;
+                if (u.state == Updater::State::Installed && Updater::RestartPending()) break;
+            }
+        }
+#endif
         padUpdate(&pad);
         const u64 down = padGetButtonsDown(&pad), now = padGetButtons(&pad);
         int tapX = -1, tapY = -1;
@@ -314,6 +372,33 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
         const bool up = now & HidNpadButton_AnyUp, dn = now & HidNpadButton_AnyDown;
         const bool lf = now & HidNpadButton_AnyLeft, rt = now & HidNpadButton_AnyRight;
         held = (up || dn || lf || rt) ? held + 1 : 0;
+#ifdef SSR_UPDATER
+        if (updateMenu.open)
+        {
+            const bool step = held == 1 || (held > 20 && held % 6 == 0);
+            MenuInput nav;
+            nav.up = step && up;
+            nav.down = step && dn;
+            nav.accept = (down & HidNpadButton_A) != 0;
+            if ((down & HidNpadButton_B) || tapBack) updateMenu.open = false;
+            if (tapX >= 0)
+            {
+                const int row = updateMenu.ItemAt(tapX, tapY);
+                if (row >= 0) { updateMenu.selected = row; nav.accept = true; }
+                else if (row == -2) updateMenu.open = false;
+            }
+            int dir = 0;
+            const int hit = updateMenu.Update(nav, dir);
+            if (hit == 0)
+            {
+                updateMenu.open = false;
+                if (!Updater::Choose().empty()) note = "NEW VERSION: GITHUB.COM/MAMESJ/POKEMON-FULLDEX/RELEASES";
+            }
+            else if (hit == 1) updateMenu.open = false;
+            if (down & HidNpadButton_Plus) break;
+        }
+        else
+#endif
         // KEYS AND BUTTONS: choose one with the D-pad and A, then press the button it should be
         // (5 seconds without one: as it was); B goes back to the settings page.
         if (guide && keysOpen)
@@ -448,9 +533,20 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
         {
             page.Draw(canvas, page.group < 0 ? "UP / DOWN: CHOOSE    A: OPEN    B: BACK"
                                              : "UP / DOWN: CHOOSE    LEFT / RIGHT / A: CHANGE    B: BACK", theme);
-            if (keysOpen) keysMenu.Draw(canvas, "KEYS AND BUTTONS", keysCapture >= 0 ? "OR WAIT 5 SECONDS: AS IT WAS" : "A: CHANGE   B: BACK");
+            if (keysOpen)
+            {
+                std::string kh = keysCapture >= 0 ? "OR WAIT 5 SECONDS: AS IT WAS" : "A: CHANGE   B: BACK";
+                if (keysCapture < 0)
+                    if (const char* h = Controls::ActionHint(keysMenu.selected)) kh = h;
+                keysMenu.Draw(canvas, "KEYS AND BUTTONS", kh);
+            }
         }
         else Launcher::Draw(canvas, games, tab, onSettings || onTabs ? -1 : selected, scroll, note, std::string(), theme, true, onTabs);
+#ifdef SSR_UPDATER
+        if (updateMenu.open)
+            updateMenu.Draw(canvas, Updater::PopupTitle(), "A: CHOOSE    B: LATER",
+                            Updater::PopupNote(Updater::Get().canInstall));
+#endif
         {
             // The title band's buttons, as pc_launcher.cpp draws them (the chosen one framed).
             const int s = std::max(1, canvas.h / 240);
@@ -476,6 +572,15 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
             }
         }
         framebufferEnd(&fb);
+#ifdef SSR_UPDATER
+        // After the list is on the screen: one check at launch, on this thread (a second
+        // thread here stops the program). A new version is only said, never installed unasked.
+        if (!launchCheck && autoFrames == 0)
+        {
+            launchCheck = true;
+            Updater::Check(true);
+        }
+#endif
     }
     {
         u32 stride;
@@ -748,7 +853,14 @@ bool Start(int& argc, char**& argv)
                 for (Launcher::Game& g : games)
                     for (const Launcher::Game& other : games)
                         if (g.art.empty() && !other.art.empty() && other.code == g.code) g.art = other.art;
+#ifdef SSR_UPDATER
+                Updater::Init(dir, dir, g_self);
+#endif
                 chosen = PickGame(games, chosen, SettingsPath(dir));
+#ifdef SSR_UPDATER
+                // (Installed: the new .nro started as this one ends.)
+                if (chosen < 0 && Updater::RestartPending()) Updater::Restart();
+#endif
                 if (chosen < 0) return false;
                 if (FILE* f = fopen(lastPath.c_str(), "w"))
                 {
@@ -784,7 +896,7 @@ bool Start(int& argc, char**& argv)
         o.fullscreen = true;
         Launcher::SyncGbaSettings(SettingsPath(dir), o.data);
         fprintf(stderr, "[switch] GBA: %s, saves in %s\n", game.rom.c_str(), game.folder.c_str());
-        GbaWide::Play(game.rom, o);
+        GbaRa::Play(game.rom, o, SettingsPath(dir));
         if (!g_self.empty() && envHasNextLoad())
         {
             const std::string cmd = g_self.find(' ') == std::string::npos ? g_self : "\"" + g_self + "\"";

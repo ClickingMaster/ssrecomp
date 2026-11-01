@@ -2,6 +2,7 @@
 #include "achievements.h"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <cstring>
@@ -31,6 +32,9 @@ Account* g_account = nullptr;
 std::function<void()> g_save;
 std::string g_userAgent;
 std::atomic<melonDS::NDS*> g_nds{nullptr};
+std::atomic<MemoryRead> g_read{nullptr}; // a GBA game's memory, in place of g_nds
+std::atomic<void*> g_readUd{nullptr};
+bool g_closeOnEnd = false;       // this client was started for a GBA game (EndSession closes it)
 std::string g_hash;              // the game's fingerprint (empty: none, or not a game RetroAchievements knows)
 std::atomic<bool> g_loaded{false};  // the game's set is loaded (and followed when not paused)
 std::atomic<bool> g_cheats{false};
@@ -94,6 +98,7 @@ std::condition_variable g_queueWake;
 std::deque<Request> g_requests;
 std::deque<Response> g_responses;
 std::thread g_worker;
+std::atomic<bool> g_busy{false}; // the worker is in a request (the queue is empty meanwhile)
 bool g_quit = false;
 
 void Worker()
@@ -104,9 +109,10 @@ void Worker()
         {
             std::unique_lock<std::mutex> lock(g_queueMutex);
             g_queueWake.wait(lock, [] { return g_quit || !g_requests.empty(); });
-            if (g_quit) return;
+            if (g_requests.empty()) return; // (quit, and nothing left to send)
             r = std::move(g_requests.front());
             g_requests.pop_front();
+            g_busy = true;
         }
         Response a{0, {}, r.callback, r.data};
         std::string error;
@@ -117,8 +123,12 @@ void Worker()
             a.body = error;
             fprintf(stderr, "[achievements] request failed: %s\n", error.c_str());
         }
-        std::lock_guard<std::mutex> lock(g_queueMutex);
-        g_responses.push_back(std::move(a));
+        {
+            std::lock_guard<std::mutex> lock(g_queueMutex);
+            g_responses.push_back(std::move(a));
+            g_busy = false;
+        }
+        g_queueWake.notify_one();
     }
 }
 
@@ -136,6 +146,7 @@ void RC_CCONV ServerCall(const rc_api_request_t* request, rc_client_server_callb
 // games keep their stack and some of their state) at 0x1000000.
 uint32_t RC_CCONV ReadMemory(uint32_t address, uint8_t* buffer, uint32_t bytes, rc_client_t*)
 {
+    if (MemoryRead read = g_read.load()) return read(g_readUd.load(), address, buffer, bytes);
     melonDS::NDS* nds = g_nds.load();
     if (!nds) return 0;
     uint32_t done = 0;
@@ -311,14 +322,107 @@ std::string Fingerprint(const std::vector<uint8_t>& rom)
     return hash;
 }
 
+std::string FingerprintGba(const std::vector<uint8_t>& rom)
+{
+    char hash[33] = {};
+    if (rom.empty() || !rc_hash_generate_from_buffer(hash, RC_CONSOLE_GAMEBOY_ADVANCE, rom.data(), rom.size())) return std::string();
+    return hash;
+}
+
+// Drops the game that was being followed, so another (a GBA game after a DS one, or the reverse)
+// can take its place. The reader stays as the caller left it.
+void UnloadGame()
+{
+    if (g_client && (g_loaded || g_loading))
+    {
+        rc_client_unload_game(g_client);
+        g_loaded = g_loading = false;
+    }
+    g_hash.clear();
+    g_gameLine.clear();
+    g_detail.clear();
+}
+
 void SetGame(melonDS::NDS* nds, const std::string& fingerprint)
 {
+    g_read.store(nullptr);
+    g_readUd.store(nullptr);
     g_nds = nds;
+    UnloadGame();
     g_hash = fingerprint;
-    g_loaded = false;
-    g_gameLine.clear();
     fprintf(stderr, "[achievements] ROM fingerprint %s\n", g_hash.empty() ? "(none)" : g_hash.c_str());
     LoadGame();
+}
+
+void SetGameMemory(MemoryRead read, void* userdata, const std::string& fingerprint)
+{
+    g_nds = nullptr;
+    g_readUd.store(userdata);
+    g_read.store(read);
+    UnloadGame();
+    g_hash = fingerprint;
+    fprintf(stderr, "[achievements] ROM fingerprint %s\n", g_hash.empty() ? "(none)" : g_hash.c_str());
+    LoadGame();
+}
+
+void ClearGame()
+{
+    UnloadGame();
+    g_nds = nullptr;
+    g_read.store(nullptr);
+    g_readUd.store(nullptr);
+}
+
+void Pump(bool paused);
+
+void BeginSession(Account* account, const std::string& product, std::function<void()> save)
+{
+    if (g_client) return;
+    Start(account, std::move(product), std::move(save));
+    g_closeOnEnd = g_client != nullptr;
+}
+
+void EndSession()
+{
+    if (!g_client)
+    {
+        g_read.store(nullptr);
+        g_readUd.store(nullptr);
+        return;
+    }
+    const bool close = g_closeOnEnd;
+    ClearGame();
+    if (!close) return;
+    // (An unlock that has not gone yet is sent before the client is closed. A connection that
+    // never answers is given up after the request's own wait.)
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(40);
+    for (;;)
+    {
+        Pump(true);
+        std::unique_lock<std::mutex> lock(g_queueMutex);
+        if (g_requests.empty() && !g_busy.load()) break;
+        if (std::chrono::steady_clock::now() >= deadline) break;
+        g_queueWake.wait_for(lock, std::chrono::milliseconds(50));
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_queueMutex);
+        g_quit = true;
+    }
+    g_queueWake.notify_all();
+    if (g_worker.joinable()) g_worker.join();
+    Pump(true);
+    {
+        // (Anything still queued belongs to this client, which is about to go.)
+        std::lock_guard<std::mutex> lock(g_queueMutex);
+        g_requests.clear();
+        g_responses.clear();
+    }
+    rc_client_destroy(g_client);
+    g_client = nullptr;
+    g_account = nullptr;
+    g_save = nullptr;
+    g_closeOnEnd = false;
+    g_loaded = g_loading = false;
 }
 
 bool Active()
@@ -543,6 +647,8 @@ void Stop()
     if (g_worker.joinable()) g_worker.detach();
     if (g_loaded) rc_client_unload_game(g_client);
     g_nds = nullptr;
+    g_read.store(nullptr);
+    g_readUd.store(nullptr);
     g_loaded = false;
     // (Not destroyed: the request thread may still hand it an answer. The program ends next.)
 }

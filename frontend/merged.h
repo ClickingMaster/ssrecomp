@@ -283,7 +283,19 @@ inline EdgeContinuation MergedEdgeContinuation(const Scene& scene, const ScreenI
     // (Not a layer the scene leaves out: that one is not drawn on the screen either.)
     if (cls == LAYER_3D || (cls & scene.items[0].drop)) return none;
     const EdgeContinuation finished = { top.pixels[sy * 256 + sx] & 0xFFFFFF, 16, 0 };
-    if (!scene.smartEdges || !top.edge || !top.edgeBlend || !top.edgeFlat) return finished;
+    if (!scene.smartEdges || !top.edge || !top.edgeBlend || !top.edgeFlat)
+    {
+        // A sprite goes on only as a fill (a wipe, a flash): a snowflake or a rain drop on the
+        // edge column would otherwise become a line to the edge of the view (SoulSilver's snow).
+        if (cls == LAYER_OBJ)
+            for (int k = 1; k < 8; k++)
+            {
+                const int x = side ? 255 - k : k;
+                if (LayerClass(top.flags[sy * 256 + x]) != LAYER_OBJ || ((top.pixels[sy * 256 + x] ^ top.pixels[sy * 256 + sx]) & 0xFFFFFF))
+                    return none;
+            }
+        return finished;
+    }
     const uint16_t blend = top.edgeBlend[sy * 2 + side];
     const int eva = blend & 0xFF, evb = blend >> 8;
     if (!(top.edgeFlat[sy * 2 + side] & 1))
@@ -313,6 +325,32 @@ inline EdgeContinuation MergedEdgeContinuation(const Scene& scene, const ScreenI
 inline bool MergedWeatherRow(const Scene& scene, const ScreenImage& top, int sy)
 {
     return MergedEdgeContinuation(scene, top, sy, 0).none() && MergedEdgeContinuation(scene, top, sy, 1).none();
+}
+
+// Separate sprites in the outer columns, rather than one tall shape such as the player or a
+// follower, are a particle weather (snow, rain, sand). HeartGold and SoulSilver name no
+// weather function, unlike Platinum and the Black games, so the picture is what says to
+// repeat those sprites beside the screen.
+inline bool MergedParticleWeather(const ScreenImage& top)
+{
+    if (!top.flags) return false;
+    int runs = 0;
+    for (int side = 0; side < 2; side++)
+    {
+        bool prev = false;
+        for (int y = 0; y < 192; y++)
+        {
+            bool obj = false;
+            for (int k = 0; k < 16 && !obj; k++)
+            {
+                const int x = side ? 255 - k : k;
+                if (LayerClass(top.flags[y * 256 + x]) == LAYER_OBJ) obj = true;
+            }
+            if (obj && !prev) runs++;
+            prev = obj;
+        }
+    }
+    return runs >= 4;
 }
 
 // Whether a picture in a bitmap background (not a fill, not blended with the world) reaches a
