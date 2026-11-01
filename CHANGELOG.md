@@ -11,6 +11,10 @@
   have Flash) with the world drawn by the graphics chip (PC, Switch): the circle of light around
   you shows again. The white flash of a cave's entrance fills the whole widescreen view instead of
   showing black bars at the sides for a second.
+- **A move's power, accuracy and description show on the summary's moves page** (HeartGold and
+  SoulSilver): choosing a move puts them where the stats were, until you go back (#11).
+- **Windows: a game started from the game list takes the keyboard and controller at once**; until
+  its window was clicked, they did nothing.
 
 - Android launcher opens in portrait, with bounded rendering resolution and remembered console tab.
 - Check ROM banner and artwork bounds, skip repeated ROM paths and reduce background scanning.

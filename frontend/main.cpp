@@ -1349,8 +1349,15 @@ struct Settings
     bool padTouch = false;
     bool showFps = false; // frames shown per second, in a corner
     // A controller's START (+ on the Switch) opens the pause menu instead of being the DS's
-    // START, which the games hardly use (START BUTTON: PAUSE MENU or DS START).
+    // START, which the games hardly use (START BUTTON: PAUSE MENU or DS START). On a PC it is
+    // the DS's: its controllers have a Guide button for the menu, as well as START and BACK
+    // together, and players took START opening the menu for a fault (GitHub #21). The Switch
+    // has no button of its own for it (HOME is the system's), and a phone has its MENU button.
+#if defined(__SWITCH__) || defined(SSR_PHONE)
     bool startMenu = true;
+#else
+    bool startMenu = false;
+#endif
     // While fast forwarding, the widescreen world at no more than 360 lines (more frames a
     // second, so a faster fast forward where drawing it is the limit). Off on a PC (the PC
     // defaults below), where it is a setting: FAST FORWARD LOW RES.
@@ -2007,6 +2014,10 @@ int main(int argc, char** argv)
             SDL_WINDOW_ALLOW_HIGHDPI |
 #endif
             (cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+        // Started from the game list, this window comes after the list's has closed, and Windows
+        // left it behind without the focus: the keyboard and controllers did nothing until it was
+        // clicked. The list's window was this program's, so it may take the focus.
+        if (window) SDL_RaiseWindow(window);
         // The OpenGL ES renderer uploads the picture several times faster than SDL's default
         // (desktop OpenGL) on the machines this was measured on. SDL_RENDER_DRIVER overrides.
         // Not on Windows: there OpenGL ES can come with a framebuffer that converts to sRGB,
@@ -3355,6 +3366,15 @@ int main(int argc, char** argv)
                 at(corner, 250, 192);
             }
             x += (side.sw + gap) * scale;
+            // A move chosen on the moves page: its category, power, accuracy and description
+            // come up beside the list on the lower screen, where the page tabs and the party
+            // grid were (GitHub #11). They take the upper half's panel while they are shown,
+            // so nothing moves or changes size; they run off the screen at the right.
+            const uint32_t* lpx = screens[1].pixels;
+            const bool moveDetails = (lpx[5 * 256 + 140] & 0xFFFFFF) == frame &&
+                (lpx[6 * 256 + 200] & 0xFFFFFF) == frame && (lpx[161 * 256 + 140] & 0xFFFFFF) == frame;
+            if (moveDetails)
+                lower.sw = 130; // the list and its right edge, not the details beside it
             for (Element* e : { &upper, &lower })
             {
                 Element back = FillRect(x, y, cardW + 2 * (int)pad, (int)h, page);
@@ -3363,6 +3383,19 @@ int main(int argc, char** argv)
                 back.borderColor = frame;
                 back.borderRadius = 3;
                 sc.items.push_back(back);
+                if (e == &upper && moveDetails)
+                {
+                    Element details = Crop(1, 128, 5, 128, 158);
+                    details.scale = scale;
+                    details.dx = x + (pad + (cardW - details.sw - 2) / 2.0f) * scale;
+                    details.dy = y + (h - details.sh) / 2.0f * scale;
+                    sc.items.push_back(details);
+                    Element edge = FillRect(details.dx + details.sw * scale, details.dy, 2, details.sh, frame);
+                    edge.scale = scale;
+                    sc.items.push_back(edge);
+                    x += (cardW + 2 * pad + gap) * scale;
+                    continue;
+                }
                 // What is drawn on the card comes in blocks, one above the other with the page's
                 // colour between them; each block is centred across the panel, and all of them
                 // together top to bottom.
@@ -3379,7 +3412,7 @@ int main(int argc, char** argv)
                 for (int sy = e->sy; sy < e->sy + e->sh; sy++)
                 {
                     int r0 = cardW, r1 = -1;
-                    for (int sx = 0; sx < cardW; sx++)
+                    for (int sx = 0; sx < e->sw; sx++)
                         if (drawn(sx, sy))
                         {
                             r0 = std::min(r0, sx);
