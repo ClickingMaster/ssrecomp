@@ -18,6 +18,8 @@
   edge, and it slides across the whole screen from the right edge to the left as it opens.
   On a touch screen, swipe the closed cover to the left to open it, and swipe the list to the
   right to close it.
+- **Android: the on-screen SELECT and START are at the top, beside MENU**, so they no longer
+  cover the game's buttons along the bottom of the screen.
 - **Windows: a game started from the game list takes the keyboard and controller at once**; until
   its window was clicked, they did nothing.
 

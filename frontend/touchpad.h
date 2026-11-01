@@ -61,6 +61,17 @@ struct TouchPad
             // a controller, where fast forward is the right trigger.
             { FAST, outW - 0.35f * u - 2.6f * u - 0.3f * u - 0.8f * u, 0.3f * u + 0.45f * u, 0, 1.6f * u, 0.9f * u, ">>" },
         };
+        // SELECT and START either side of MENU, off the bottom edge where the games put their
+        // touch screen's buttons (the Pokedex's, the bag's, a battle's), if they fit there
+        // between L and fast forward; on narrower screens (a 4:3 tablet) along the bottom.
+        if (outW / 2.0f + 2.75f * u < outW - 4.95f * u)
+            for (Button& b : buttons)
+                if (b.pad == PAD_BACK || b.pad == PAD_START)
+                {
+                    b.x = outW / 2.0f + (b.pad == PAD_BACK ? -1.85f : 1.85f) * u;
+                    b.y = 0.55f * u;
+                    b.w = 1.8f * u;
+                }
     }
 
     int HitButton(float x, float y) const
