@@ -34,9 +34,6 @@
 #ifdef __ANDROID__
 #include <jni.h>
 #endif
-#ifdef SSR_IOS
-#include "ios_orient.h"
-#endif
 
 // (stb_image's code here, for the list's pictures: only JPEG and PNG.)
 #define STB_IMAGE_IMPLEMENTATION
@@ -49,6 +46,9 @@
 #include "controls.h"
 #include "achievements.h"
 #include "ssr_os.h"
+#ifdef SSR_IOS
+#include "ios_orient.h"
+#endif
 #if !defined(SSR_PHONE) && !defined(__SWITCH__)
 #include "shortcuts.h"
 #endif

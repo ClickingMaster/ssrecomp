@@ -48,5 +48,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mac-${{ matrix.arch }}
-          path: build-mac-dist/pokemon-ds-wide-pc-macos-${{ matrix.arch }}.zip
+          path: |
+            build-mac-dist/pokemon-ds-wide-pc-macos-${{ matrix.arch }}.zip
+            build-mac-dist/SHA256SUMS.txt
           if-no-files-found: error

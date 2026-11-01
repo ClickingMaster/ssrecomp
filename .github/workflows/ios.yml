@@ -45,7 +45,9 @@ jobs:
         if: matrix.target == 'device'
         with:
           name: ios-ipa
-          path: build-ios-dist/pokemon-ds-wide-ios.ipa
+          path: |
+            build-ios-dist/pokemon-ds-wide-ios.ipa
+            build-ios-dist/SHA256SUMS.txt
           if-no-files-found: error
       - name: A first start in the iOS Simulator
         if: matrix.target == 'simulator'
