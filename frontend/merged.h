@@ -462,6 +462,29 @@ inline Element Crop(int screen, int sx, int sy, int sw, int sh)
     return { screen, sx, sy, sw, sh, 0, 0, 1.0f, 0, 255, false };
 }
 
+// The move screen also has Back (and, in triples, Shift) below its four move buttons.
+inline Element BattleMoveCrop()
+{
+    return Crop(1, 0, 30, 256, 162);
+}
+
+// A battle's question stays at full size. Its touch-screen choices stand above the
+// message box, so neither the text nor the buttons disappear behind another piece.
+inline Scene BattleChoiceScene(float viewWidth)
+{
+    Scene sc;
+    sc.name = "battle-choice";
+    sc.wide = viewWidth >= 300;
+    sc.smartEdges = true;
+    Element choices = FullScreen(1);
+    choices.scale = 0.55f;
+    choices.dx = 128 + viewWidth / 2 - choices.sw * choices.scale - 4;
+    choices.dy = 4;
+    choices.border = true;
+    sc.items = { FullScreen(0), choices };
+    return sc;
+}
+
 // Black and Black 2's Bag: the item card covers only the unused left part of the touch
 // screen. Its message box spans that whole screen, so the card must sit below it while
 // an item is selected or used. Keep the pocket controls at the bottom clear as well.

@@ -63,6 +63,22 @@ int main()
     std::fill(top.begin(), top.end(), blue);
     assert(BagScene(341.33f, screens).items.size() == 1);
     assert(BagScene(341.33f, nullptr).items.size() == 1);
+
+    // Battle choices must retain the full question and every button, including when
+    // the cursor reaches the lower part of the touch screen.
+    for (float width : { 256.0f, 341.33f, 512.0f })
+    {
+        const Scene question = BattleChoiceScene(width);
+        assert(question.items.size() == 2);
+        const Element& text = question.items[0];
+        const Element& buttons = question.items[1];
+        assert(text.screen == 0 && text.sy == 0 && text.sh == 192 && text.scale == 1);
+        assert(buttons.screen == 1 && buttons.sy == 0 && buttons.sh == 192);
+        assert(buttons.dy + buttons.sh * buttons.scale < 144); // Clear of the question.
+    }
+    const Element moves = BattleMoveCrop();
+    assert(moves.screen == 1 && moves.sx == 0 && moves.sw == 256);
+    assert(moves.sy <= 32 && moves.sy + moves.sh == 192); // All moves, Back and Shift.
     SDL_Quit();
-    puts("Bag layout: dialogue, move stats, controls and both compositors passed.");
+    puts("Gen 5 layouts: Bag text, battle choices, move controls and compositors passed.");
 }

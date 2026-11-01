@@ -127,6 +127,11 @@
 - French revision 0 ROMs of Black, White, Black 2, White 2, SoulSilver, HeartGold
   and Platinum, with separate French saves and regional widescreen map profiles.
 - Platinum: controller answers work with the French introduction's OUI/NON buttons.
+- **Black 2 and White 2: battle questions keep their buttons** while waiting for an answer,
+  including switching Pokémon between opponents and choosing whether to continue after
+  fainting. The question stays full size, with its choices above it. The move menu also
+  shows Back (and Shift in triple battles), so moving below the four moves keeps the cursor visible.
+
 - **Black, White, Black 2 and White 2: the Bag's messages stay readable** when selecting
   or using an item, including teaching a TM. The item card moves below the message box
   instead of covering its text, and includes the move's type, power, accuracy and PP.

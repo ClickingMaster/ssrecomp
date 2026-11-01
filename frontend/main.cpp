@@ -2603,6 +2603,7 @@ int main(int argc, char** argv)
         int dexOpen = -1, dexApp = -1;
         int startContinue = -1, confirmDialog = -1, startMain = -1, intro = -1, nameEntry = -1;
         int battleList = -1, battleBag = -1, battleChoice = -1, battleYesNo = -1;
+        int battleYesNoPoll = -1;
         int setupSingle = -1, setupDouble = -1, setupTriple = -1, setupRotation = -1;
         int save = -1, saveWrite = -1;
         std::vector<int> levelUpWin; // the level-up window in a battle (BtlvCore_Wait*LevelUp*)
@@ -2652,6 +2653,8 @@ int main(int argc, char** argv)
         bw2.battleBag = bw2Find("BBagMain_Task");       // the Bag in a battle
         bw2.battleChoice = bw2Find("BChoiceMain_Task"); // a choice on the touch screen in a battle
         bw2.battleYesNo = bw2Find("BtlvInput_YesNoTask"); // YES / NO in a battle ("Use next Pokemon?")
+        // The opening task ends before the player answers. The poll lasts for the question.
+        bw2.battleYesNoPoll = bw2Find("BtlvCore_PollYesNo");
         bw2.setupSingle = bw2Find("BtlMain_SetupAloneSingle"); // which kind of battle starts
         bw2.setupDouble = bw2Find("BtlMain_SetupAloneDouble");
         bw2.setupTriple = bw2Find("BtlMain_SetupAloneTriple");
@@ -3152,10 +3155,9 @@ int main(int argc, char** argv)
             // The party (after POKEMON, or to send out the next one after fainting) or the Bag:
             // a whole touch-screen page, shown as it is.
             only("battle-list", 1);
-        else if (funcWatch.Ran(bw2.battle, 2) && (funcWatch.Ran(bw2.battleChoice, 4) || funcWatch.Ran(bw2.battleYesNo, 4)))
-            // A question on the top screen ("Use next Pokemon?") answered on the touch screen:
-            // both, side by side.
-            sc = Stack("battle-choice", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+        else if (funcWatch.Ran(bw2.battle, 2) && (funcWatch.Ran(bw2.battleChoice, 4) ||
+            funcWatch.Ran(bw2.battleYesNo, 4) || funcWatch.Ran(bw2.battleYesNoPoll, 1)))
+            sc = BattleChoiceScene(viewWidth);
         else if (funcWatch.Ran(bw2.battle, 2))
         {
             // The battle is drawn in 3D on the top screen, so the widescreen renderer shows
@@ -3298,17 +3300,18 @@ int main(int argc, char** argv)
             if (wideView && screens && !bw1.on && kind == 2) style = 2;
             if ((moves || command || target) && style == 2)
             {
-                // PANEL: the corner panel's piece as tall as the message box (rows 147-189),
-                // against the view's right edge.
-                Element c = moves ? Crop(1, 0, 30, 256, 98) : target ? Crop(1, 0, 22, 256, 110) : Crop(1, 0, 78, 256, 114);
-                c.scale = 43.0f / c.sh;
+                // PANEL: against the right edge in the message box's band. Moves use its
+                // full height to include Back and Shift without shrinking their text further.
+                Element c = moves ? BattleMoveCrop() : target ? Crop(1, 0, 22, 256, 110) : Crop(1, 0, 78, 256, 114);
+                c.scale = (moves ? 53.0f : 43.0f) / c.sh;
                 c.dx = viewRight - 2 - c.sw * c.scale;
-                c.dy = 147;
+                c.dy = moves ? 137 : 147;
                 c.border = true;
                 sc.items.push_back(c);
             }
             else if (moves)
-                cornerPanel(Crop(1, 0, 30, 256, 98), 0.5f);   // the four moves, two by two (49 high)
+                // Keep Back (and Shift in triples) below the moves: the D-pad can select them.
+                cornerPanel(BattleMoveCrop(), 53.0f / 162);
             else if (command)
                 cornerPanel(Crop(1, 0, 78, 256, 114), 0.44f); // FIGHT above BAG, RUN and POKEMON (50 high)
             else if (target)
