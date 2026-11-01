@@ -96,6 +96,8 @@ inline const KnownGame* Known(const std::string& code)
         { "IPKE", "Pokemon HeartGold", "heartgold.sav" },
         { "IPGE", "Pokemon SoulSilver", "soulsilver.sav" },
         { "CPUE", "Pokemon Platinum", "platinum.sav" },
+        { "ADAE", "Pokemon Diamond", "diamond.sav" },
+        { "APAE", "Pokemon Pearl", "pearl.sav" },
     };
     // (Another language's version as the English one: frontend/gamecode.h.)
     const std::string base = BaseGameCode(code);
@@ -107,11 +109,12 @@ inline int Order(const std::string& code)
 {
     // (DS, then GBA: Emerald, Ultra Violet (UV22: its own code here, as FireRed's is BPRE too),
     // FireRed, LeafGreen.)
-    static const char* order[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "BPEE", "UV22", "BPRE", "BPGE" };
+    static const char* order[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "ADAE", "APAE", "BPEE", "UV22", "BPRE", "BPGE" };
     const std::string base = BaseGameCode(code);
-    for (int i = 0; i < 11; i++)
+    const int n = (int)(sizeof order / sizeof order[0]);
+    for (int i = 0; i < n; i++)
         if (base == order[i]) return i;
-    return 11;
+    return n;
 }
 
 // A name as the list has it (POKEMON EMERALD) as a title: Pokemon Emerald (FireRed and LeafGreen

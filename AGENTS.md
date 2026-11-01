@@ -64,6 +64,7 @@ Targets: Linux and Windows first, Android second. macOS is community-maintained.
 | `frontend/pc_launcher.cpp`, `tools/pc/` | the PC all-games download (Windows and Linux, `SSR_PC_ALL_GAMES`): the game list (launcher.h) when started without arguments, ROMs in `roms/`, saves in `saves/`, function tables in `data/funcs/`; `tools/pc/build_all.sh` builds and packs it (Windows with MinGW-w64 from Linux or WSL) |
 | `tools/switch/` | Switch builds: `build_game.sh` (any of the games; `bw`: the shared Black 2/White 2 build with its tables in the romfs; `all`: one program for all seven with the game list), `build.sh` (SoulSilver) |
 | `tools/port_version.py`, `tools/shift_table.py`, `tools/versions/`, `frontend/gamecode.h` | other languages (Spanish White, Platinum, SoulSilver, HeartGold): where their functions are, as shifts from the English version's (`tools/versions/<code>.txt` for the function tables, `tools/soulsilver/<name>.json` for SoulSilver's), found once by matching both ROMs; the frontend treats them as the English version (`BaseGameCode`) |
+| `tools/port_family.py`, `tools/platinum/ADAE.txt` | Diamond and Pearl: Platinum's table mapped onto Diamond (another overlay layout, so every module is searched; numpy, all cores); Pearl and Spanish Diamond are shifts from it (`tools/versions`); `platinum.h` runs for them |
 | `layouts/soulsilver-us.json` | section addresses and code/data map, so a plain ROM can be recompiled without the decompilation |
 
 ## Building

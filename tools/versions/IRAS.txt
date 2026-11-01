@@ -9,6 +9,7 @@ main 0201eef4 -0x4 WORDSET_SetSlotMonNickname
 main 0201ef5c -0xc WORDSET_SetSlotFromMsg118
 main 0201f134 -0x14 WORDSET_SetSlotFromMsgBE
 main 02026bfc -0x18 GAME_BEACON_GetLogFromWork
+itcm 01ff8020 +0x0 MIi_DmaSetParameters
 ov000 021542c0 -0x40 EVENT_GSYNC_Main
 ov001 021542c0 -0x40 EVENT_GTSNEGO_Main
 ov002 021542c0 -0x40 EVENT_WIFIBATTLEMATCH_Main

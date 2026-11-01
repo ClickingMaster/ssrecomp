@@ -80,6 +80,9 @@
 - Check official GitHub releases from Settings > Help and offer the Android APK download.
 
 
+- **Pokémon Diamond and Pearl (experimental):** in the game list, with Platinum's one-screen
+  layouts: their functions found from Platinum's (`tools/port_family.py`), in English and
+  Diamond in Spanish. Not yet played through.
 - **Spanish versions:** Pokémon White (Edición Blanca), Platinum (Platino), SoulSilver (Plata
   SoulSilver) and HeartGold (Oro HeartGold) in Spanish play with the one-screen view, as the
   English ones do. Another language's tables can be made the same way, from that language's

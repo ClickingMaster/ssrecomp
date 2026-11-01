@@ -22,7 +22,9 @@ struct PtFuncs
     // touch screen's picture (0xRRGGBB pixels): INTRO_YESNO, his YES / NO (YES red at x 100-140,
     // y 70-92, NO blue at y 110-132); INTRO_BALL, "Touch the button on the middle of the Poke
     // Ball" (the ball at x 58-200, y 26-170, its pale blue button at 128, 96); 0 for neither.
+    // (Diamond and Pearl's NO is higher, at y 102-124: IntroNoY says where NO was seen.)
     enum { INTRO_YESNO = 1, INTRO_BALL = 2 };
+    static inline int IntroNoY = 121;
     static int IntroTouch(const uint32_t* bottom)
     {
         if (!bottom) return 0;
@@ -32,7 +34,15 @@ struct PtFuncs
                    std::abs((int)(c & 0xFF) - b) < 40;
         };
         if (is(108, 76, 251, 89, 89) && is(132, 84, 251, 89, 89) && is(108, 116, 73, 154, 219) && is(132, 124, 73, 154, 219))
+        {
+            IntroNoY = 121;
             return INTRO_YESNO;
+        }
+        if (is(108, 76, 251, 89, 89) && is(132, 84, 251, 89, 89) && is(104, 108, 73, 154, 219) && is(136, 116, 73, 154, 219))
+        {
+            IntroNoY = 113;
+            return INTRO_YESNO;
+        }
         if (is(100, 70, 219, 97, 97) && is(156, 70, 219, 97, 97) && is(128, 60, 219, 97, 97) && is(100, 120, 251, 251, 251) &&
             is(156, 120, 251, 251, 251) && is(128, 130, 251, 251, 251) && is(128, 96, 211, 227, 251))
             return INTRO_BALL;
@@ -127,7 +137,8 @@ struct PtFuncs
             if (fseek(f, 0x0C, SEEK_SET) != 0 || fread(code, 1, 4, f) != 4) code[0] = 0;
             fclose(f);
         }
-        on = IsGame(code, "CPUE");
+        // (Diamond and Pearl: the same engine, their table has Platinum's names: tools/port_family.py.)
+        on = IsGame(code, "CPUE") || IsGame(code, "ADAE") || IsGame(code, "APAE");
         if (!on) return;
         auto find = [&](const char* name) {
             names.push_back(name);

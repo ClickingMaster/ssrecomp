@@ -31,12 +31,29 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "bw1"))
 from ndsrom import read_rom  # noqa: E402
 from match_bw2 import tokens  # noqa: E402
-from recomp import autoload_image  # noqa: E402
 
 WINDOW = 0x800      # searched either side of the running shift
 COMPARED = 0x100    # bytes of a function compared at most
 WIDE = 0x4000       # searched for a long function not found in WINDOW
 ITCM = 0x01FF8000
+
+
+def autoload_block(main, ram, addr):
+    """The main program's autoload block loaded at addr (the ITCM's code), from the module
+    parameters' autoload list (its entries: address, size, BSS size; their data back to back),
+    or None. (Where the list is varies: SoulSilver's at the end, Diamond's and the DSi games'
+    elsewhere.)"""
+    p = main.find(b"\x21\x06\xc0\xde\xde\xc0\x06\x21") - 0x1C
+    if p < 0:
+        return None
+    list_start, list_end, data_start = struct.unpack_from("<III", main, p)
+    pos, off = list_start - ram, data_start - ram
+    while 0 <= pos and pos + 12 <= list_end - ram and pos + 12 <= len(main):
+        at, size, _bss = struct.unpack_from("<III", main, pos)
+        if at == addr:
+            return main[off:off + size]
+        pos, off = pos + 12, off + size
+    return None
 
 
 class Modules:
@@ -48,10 +65,9 @@ class Modules:
         main, ovs = read_rom(path)
         # (The main program loads at 0x02000000, or 0x02004000 in the DSi-enhanced games.)
         self.mods = {"main": (struct.unpack_from("<I", rom, 0x28)[0], main)}
-        try:
-            self.mods["itcm"] = (ITCM, autoload_image(main, ITCM))
-        except SystemExit:
-            pass  # (the DSi-enhanced games keep their autoload list elsewhere: the ITCM is left as it is)
+        itcm = autoload_block(main, self.mods["main"][0], ITCM)
+        if itcm is not None:
+            self.mods["itcm"] = (ITCM, itcm)
         for oid, (ram, data) in ovs.items():
             self.mods["ov%d" % oid] = (ram, data)
 

@@ -6992,7 +6992,7 @@ int main(int argc, char** argv)
                 {
                     introTouch = 4;
                     introX = kind == PtFuncs::INTRO_YESNO ? 120 : 128;
-                    introY = kind == PtFuncs::INTRO_BALL ? 96 : (edge & (1u << KEY_A)) ? 81 : 121;
+                    introY = kind == PtFuncs::INTRO_BALL ? 96 : (edge & (1u << KEY_A)) ? 81 : PtFuncs::IntroNoY;
                     fprintf(stderr, "[intro] frame %u: touched %s\n", frame,
                             kind == PtFuncs::INTRO_BALL ? "the Poke Ball" : introY == 81 ? "YES" : "NO");
                 }

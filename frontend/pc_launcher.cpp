@@ -265,7 +265,7 @@ void SetRomFolder(Folders& fo)
 void ExtractFuncs(const Folders& fo)
 {
     // (With the other languages' tables made from tools/versions: keep in step with it.)
-    for (const char* code : { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "IRAS", "CPUS" })
+    for (const char* code : { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "ADAE", "IRAS", "CPUS", "ADAS", "APAE" })
     {
         SDL_RWops* rw = SDL_RWFromFile((std::string("funcs/") + code + ".txt").c_str(), "rb");
         if (!rw) continue;

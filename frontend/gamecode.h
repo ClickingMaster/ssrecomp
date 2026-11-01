@@ -8,7 +8,7 @@
 
 inline std::string BaseGameCode(const std::string& code)
 {
-    static const char* const english[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE" };
+    static const char* const english[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "ADAE", "APAE" };
     if (code.size() == 4)
         for (const char* e : english)
             if (!code.compare(0, 3, e, 3)) return e;
