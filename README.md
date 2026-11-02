@@ -45,6 +45,32 @@ DS games also have SAVE BACKUPS in the pause menu. Choose a dated backup, review
 and RESTORE AND RESTART. The previous save is kept beside it with `.before-restore.sav` added to
 its name. An interrupted restore reports its recovery files instead of overwriting them.
 
+### Regional support - beta
+
+**Regional DS support is now in beta across the platform builds.** Bring your own ROM;
+only the listed language/version profiles are recognised. This is not support for every
+language, revision or game, and complete playthroughs have not been verified.
+
+| Language | Games with added profiles |
+|---|---|
+| French (revision 0) | Black, White, Black 2, White 2, SoulSilver, HeartGold, Platinum |
+| Spanish | White, Platinum, SoulSilver, HeartGold |
+| Italian | HeartGold |
+| Experimental | English Diamond/Pearl and Spanish Diamond |
+
+Regional versions use separate save names, such as `heartgold-fr.sav`, `heartgold-es.sav`
+and `heartgold-it.sav`; keep a backup when bringing an existing save across. GBA regional
+compatibility is unchanged. DISPLAY > LANGUAGE offers English, Spanish and Italian menus;
+French ROM support does not currently include a French interface.
+
+Thanks to the contributors of [#41](../../pull/41), [#18](../../pull/18) and [#9](../../pull/9).
+See [regional support and controls](docs/REGIONAL-AND-TOUCH-CONTROLS.md) for details.
+
+Android also adds movable/resizable DS and GBA touch controls, a landscape launcher that
+allows portrait with auto-rotate enabled, larger settings menus, and inset FPS counters.
+The native libraries now support 16 KB Android memory pages; the previous APK crashed on
+our 16 KB emulator before drawing the launcher. Physical Odin 3 verification is pending.
+
 ## Use your own save
 
 Carry on from your own save: from another emulator, a flash cart or your real

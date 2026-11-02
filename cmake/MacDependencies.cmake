@@ -11,7 +11,8 @@ set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ssr_sdl2
-    URL https://www.libsdl.org/release/SDL2-2.32.10.tar.gz
+    URL https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.tar.gz
+        https://www.libsdl.org/release/SDL2-2.32.10.tar.gz
     TIMEOUT 90
     TLS_VERIFY TRUE
     URL_HASH SHA256=5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165)
