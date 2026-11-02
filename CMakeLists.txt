@@ -394,6 +394,9 @@ endif()
 # RetroAchievements: the library, and each platform's way to the internet (achievements_http.cpp);
 # the program's version, which the server is told with its name, from CHANGELOG.md's newest release.
 target_link_libraries(ssrecomp PRIVATE rcheevos)
+if(ANDROID)
+    target_link_options(ssrecomp PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384")
+endif()
 if(WIN32)
     target_link_libraries(ssrecomp PRIVATE winhttp)
 elseif(APPLE)

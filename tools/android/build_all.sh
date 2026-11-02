@@ -121,14 +121,14 @@ STRIP="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
 FILES=()
 for abi in $ABIS; do
     ARGS=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
-          -DANDROID_ABI="$abi" -DANDROID_PLATFORM="$PLATFORM")
+          -DANDROID_ABI="$abi" -DANDROID_PLATFORM="$PLATFORM" -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
+          -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384")
     SDL_PREFIX="$DEPS/sdl2-$abi"
-    if [ ! -f "$SDL_PREFIX/lib/libSDL2.so" ]; then
-        say "SDL2 for Android ($abi)"
-        cmake -S "$DEPS/$SDL_NAME" -B "$DEPS/build-sdl2-$abi" "${ARGS[@]}" -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" \
+    # Reconfigure cached SDL builds too: older cached libraries can still be 4 KB aligned.
+    say "SDL2 for Android ($abi)"
+    cmake -S "$DEPS/$SDL_NAME" -B "$DEPS/build-sdl2-$abi" "${ARGS[@]}" -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" \
             -DSDL_STATIC=OFF -DSDL_TEST=OFF >/dev/null
-        ninja -C "$DEPS/build-sdl2-$abi" install >/dev/null
-    fi
+    ninja -C "$DEPS/build-sdl2-$abi" install >/dev/null
     say "Compiling for Android ($abi)"
     # The JIT for every game, no libpng (screenshots are for tests), the world drawn by the CPU
     # (the graphics-chip version is OpenGL, Android has OpenGL ES), and on x86_64 SSE rather than
@@ -227,6 +227,7 @@ ok = re.compile(r'^(AndroidManifest\.xml|resources\.arsc|classes\.dex|res/.*\.pn
 bad = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if not ok.match(n)]
 if bad: sys.exit('unexpected files in the APK: %s' % bad)
 PY
+python3 tools/android/check_native_alignment.py "$APK"
 if [ -x "$BT/apksigner" ]; then "$BT/apksigner" verify "$APK" && echo "signature: ok"; fi
 python3 tools/updater/write_checksums.py "$HERE/build-android-dist" --build "pokemon-ds-wide-android.apk=$HERE/build-android-dist/fulldex-build-id.txt"
 ls -l "$APK"

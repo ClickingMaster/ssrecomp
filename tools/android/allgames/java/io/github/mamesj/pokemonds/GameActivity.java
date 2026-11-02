@@ -8,7 +8,15 @@
 package io.github.mamesj.pokemonds;
 
 import android.Manifest;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import android.system.Os;
+import android.system.OsConstants;
 import android.content.Intent;
+import android.database.ContentObserver;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ActivityInfo;
@@ -35,17 +43,60 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle state) {
         self = this;
+        startupTrace("Starting Android " + Build.VERSION.SDK_INT + " ABI " + java.util.Arrays.toString(Build.SUPPORTED_ABIS), false);
+        try { startupTrace("Memory page size " + Os.sysconf(OsConstants._SC_PAGESIZE), true); }
+        catch (Exception ignored) { }
         super.onCreate(state);
+        startupTrace("Activity created", true);
+        getContentResolver().registerContentObserver(Settings.System.getUriFor(
+            Settings.System.ACCELEROMETER_ROTATION), false, rotationObserver);
+        applyScreenOrientation();
+    }
+
+    private void startupTrace(String message, boolean append) {
+        Log.i(TAG, message);
+        try {
+            File folder = getExternalFilesDir(null);
+            if (folder == null) folder = getFilesDir();
+            try (FileOutputStream out = new FileOutputStream(new File(folder, "startup.log"), append)) {
+                out.write((message + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (Exception error) {
+            Log.w(TAG, "Could not write startup.log", error);
+        }
+    }
+
+    @Override
+    public void loadLibraries() {
+        startupTrace("Loading native libraries", true);
+        try {
+            super.loadLibraries();
+            startupTrace("Native libraries loaded", true);
+        } catch (UnsatisfiedLinkError error) {
+            startupTrace("Native load failed: " + error.getMessage(), true);
+            throw error;
+        } catch (RuntimeException error) {
+            startupTrace("Native load failed: " + error.getMessage(), true);
+            throw error;
+        }
     }
 
     // The launcher and both game engines share one activity. Keep its orientation tied to
     // the current screen, including when SDL recreates its window with a stale size/hint.
     private static volatile boolean playingGame;
+    private final ContentObserver rotationObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+        @Override public void onChange(boolean selfChange) { applyScreenOrientation(); }
+    };
 
     private void applyScreenOrientation() {
-        runOnUiThread(() -> setRequestedOrientation(playingGame
-            ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        runOnUiThread(() -> {
+            boolean autoRotate = Settings.System.getInt(getContentResolver(),
+                Settings.System.ACCELEROMETER_ROTATION, 0) != 0;
+            setRequestedOrientation(playingGame
+                ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                : autoRotate ? ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                             : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        });
     }
 
     public static void showLauncherOrientation() {
@@ -136,8 +187,16 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        applyScreenOrientation();
         // Back from Android's "All files access" page.
         if (picking && waitingForAccess) nextStep();
+    }
+
+    @Override
+    protected void onDestroy() {
+        getContentResolver().unregisterContentObserver(rotationObserver);
+        if (self == this) self = null;
+        super.onDestroy();
     }
 
     @Override

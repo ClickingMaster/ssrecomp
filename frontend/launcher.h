@@ -1231,7 +1231,12 @@ struct SettingsPage
     void Draw(Canvas& c, const std::string& hint, const Theme& th = Theme())
     {
         const int s = std::max(1, std::min(c.w, c.h) / 240);
+#ifdef __ANDROID__
+        // Portrait needs readable touch targets rather than desktop-density text.
+        const int ts = c.h > c.w ? std::max(2, s) : std::max(1, (s * 2 + 1) / 3);
+#else
         const int ts = std::max(1, (s * 2 + 1) / 3); // the text's scale: 2 at 720 lines, 3 at 1080
+#endif
         c.Fill(0, 0, c.w, c.h, th.bg);
         c.Fill(0, 0, c.w, (c.h > c.w ? 43 : 22) * s, th.band);
         c.Fill(0, (c.h > c.w ? 43 : 22) * s, c.w, th.bandLineH * s, th.bandLine);
@@ -1252,7 +1257,11 @@ struct SettingsPage
                 infoHeading = true;
             }
             if (i == selected) selFirst = (int)out.size();
-            out.push_back({ e.name, e.key ? Shown(e) : "", i, true });
+            const std::string value = e.key ? Shown(e) : "";
+            const bool stacked = Canvas::TextWidth(e.name, ts) + Canvas::TextWidth(value, ts) + 8 * ts > width;
+            out.push_back({ e.name, stacked ? "" : value, i, true });
+            if (stacked && !value.empty())
+                for (const std::string& l : Wrap(value, width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
             for (const std::string& l : Wrap(UiLang::Tr(e.text), width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
             if (i == selected) selLast = (int)out.size() - 1;
             out.push_back({ "", "", -1, false });

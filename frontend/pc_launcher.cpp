@@ -505,7 +505,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
 {
 #ifdef __ANDROID__
     JavaVoid("showLauncherOrientation");
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown");
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1"); // (taps come as clicks here; the game takes fingers one by one)
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
@@ -548,6 +548,9 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
         SDL_Quit();
         return -1;
     }
+    SDL_RendererInfo renderInfo = {};
+    if (SDL_GetRendererInfo(renderer, &renderInfo) == 0)
+        fprintf(stderr, "[launcher] renderer %s, max texture %dx%d\n", renderInfo.name, renderInfo.max_texture_width, renderInfo.max_texture_height);
     SDL_Texture* texture = nullptr;
     Canvas canvas;
     std::map<std::string, std::vector<uint32_t>> artCache;
@@ -602,7 +605,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
     // Held directions repeat, as on the Switch.
     int held = 0, heldDir = 0;
     Uint32 lastScan = SDL_GetTicks();
-    bool quit = false;
+    bool quit = false, appBackgrounded = false;
     // The settings page (Launcher::SettingsPage): H, F1 or a controller's Y; Esc or B back.
     // (Touch: a finger pressed at downY, dragged far enough to scroll the page.)
     int downY = 0, downScroll = 0;
@@ -962,6 +965,15 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
         bool any = SDL_WaitEventTimeout(&e, 50);
         while (any)
         {
+            if (e.type == SDL_APP_WILLENTERBACKGROUND) appBackgrounded = true;
+            if (e.type == SDL_APP_DIDENTERFOREGROUND) appBackgrounded = false;
+            if (e.type == SDL_RENDER_DEVICE_RESET || e.type == SDL_RENDER_TARGETS_RESET || e.type == SDL_APP_DIDENTERFOREGROUND)
+            {
+                // Android can replace its GL surface while choosing a folder or resuming.
+                if (texture) SDL_DestroyTexture(texture);
+                texture = nullptr;
+                fprintf(stderr, "[launcher] render surface reset; recreating launcher texture\n");
+            }
             // (RETROACHIEVEMENTS' LOG IN takes the keyboard, the buttons and taps while it is up.)
             if (raOpen && e.type != SDL_QUIT)
             {
@@ -1493,6 +1505,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
             if (selected < 0 || view().SpotOf(selected) < 0) selected = Launcher::FirstIn(view());
         }
 
+        if (appBackgrounded) { SDL_Delay(50); continue; }
         int ow = 1280, oh = 720;
         SDL_GetRendererOutputSize(renderer, &ow, &oh);
 #ifdef SSR_PHONE
@@ -1621,9 +1634,29 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                 y += 12 * s;
             }
         }
-        SDL_UpdateTexture(texture, nullptr, canvas.px.data(), canvas.w * 4);
-        SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        SDL_SetRenderDrawColor(renderer, 16, 16, 16, 255);
+        if (!texture || SDL_UpdateTexture(texture, nullptr, canvas.px.data(), canvas.w * 4) != 0 ||
+            SDL_RenderClear(renderer) != 0 || SDL_RenderCopy(renderer, texture, nullptr, nullptr) != 0)
+        {
+            fprintf(stderr, "[launcher] drawing failed: %s\n", SDL_GetError());
+            if (renderInfo.flags & SDL_RENDERER_SOFTWARE)
+            {
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pokemon Fulldex", "The launcher could not draw. Restart the app. Details are in game.log.", window);
+                break;
+            }
+            // A driver can accept renderer creation but fail its first texture or draw.
+            SDL_DestroyRenderer(renderer);
+            texture = nullptr;
+            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+            if (!renderer)
+            {
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pokemon Fulldex", "The launcher could not start its graphics. Details are in game.log.", window);
+                break;
+            }
+            SDL_GetRendererInfo(renderer, &renderInfo);
+            fprintf(stderr, "[launcher] switched to software renderer\n");
+            continue;
+        }
         SDL_RenderPresent(renderer);
         if (testPick && *testPick)
         {

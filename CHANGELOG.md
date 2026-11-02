@@ -1,5 +1,7 @@
 # Changelog
 
+- Android launcher defaults to landscape with rotation locked, follows device orientation with auto-rotate enabled, and uses larger portrait settings text with wrapped values.
+
 ## Unreleased
 
 - Combine French/Spanish regional profiles and Italian HeartGold, with separate save names for each language. The interface has one AUTO/English/Spanish/Italian language setting; translated pause menus expand to fit their labels. Integrated from PRs #41, #18 and #9.
@@ -7,6 +9,8 @@
 - Android touch controls can be moved and resized in a paused layout editor, with save, cancel and reset. Layouts are stored separately for DS/GBA and each screen orientation.
 
 - **LANGUAGE in the settings (DISPLAY): English or Spanish** for the game list, the settings page and the pause menu; Spanish's accented letters drawn in the menus' font.
+- Android: build both native libraries for 16 KB page-size compatibility, restore launcher textures after graphics-surface resets, fall back to software drawing if the graphics driver fails, and record early native loading in startup.log.
+
 - Mac: DESKTOP SHORTCUTS creates a game app on the desktop and in Applications, with its own picture. Adapted from HSolis95's PR #1; the existing Fulldex app and save folders are retained.
 
 - Fix the iPhone and iPad launcher build so the hotfix can be packaged for iOS.
