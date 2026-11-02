@@ -102,13 +102,13 @@ inline const KnownGame* Known(const std::string& code)
         { "IPGE", "Pokemon SoulSilver", "soulsilver.sav" },
         { "IPGF", "Pokemon SoulSilver (FR)", "soulsilver-fr.sav" },
         { "CPUE", "Pokemon Platinum", "platinum.sav" },
-        { "ADAE", "Pokemon Diamond", "diamond.sav" },
-        { "APAE", "Pokemon Pearl", "pearl.sav" },
+        { "ADAE", "Pokemon Diamond (Experimental)", "diamond.sav" },
+        { "APAE", "Pokemon Pearl (Experimental)", "pearl.sav" },
         { "IRAS", "Pokemon White (ES)", "white-es.sav" },
         { "CPUS", "Pokemon Platinum (ES)", "platinum-es.sav" },
         { "IPGS", "Pokemon SoulSilver (ES)", "soulsilver-es.sav" },
         { "IPKS", "Pokemon HeartGold (ES)", "heartgold-es.sav" },
-        { "ADAS", "Pokemon Diamond (ES)", "diamond-es.sav" },
+        { "ADAS", "Pokemon Diamond (ES, Experimental)", "diamond-es.sav" },
         { "IPKI", "Pokemon HeartGold (IT)", "heartgold-it.sav" },
         { "CPUF", "Pokemon Platinum (FR)", "platinum-fr.sav" },
     };
@@ -532,7 +532,8 @@ inline void SyncGbaSettings(const std::string& cfg, const std::string& dataDir)
 // (background.jpg or .png), at most 2048 pixels on a side (larger ones are read at a fraction).
 inline void LoadLook(const std::string& cfg, const std::string& folder, Theme& t, Background& b)
 {
-    UiLang::Set(ConfigValue(cfg, "list_lang"));
+    const std::string language = ConfigValue(cfg, "list_lang");
+    UiLang::Set(language.empty() ? ConfigValue(cfg, "language") : language);
     t = ThemeNamed(ConfigValue(cfg, "list_colour"));
     b = Background();
     t.background = nullptr;
@@ -953,7 +954,7 @@ inline std::vector<Setting> SettingsList()
                   "PUTS AN ICON FOR EACH GAME IN THIS LIST ON THE HOME MENU WITH ITS PICTURE. IT STARTS THAT GAME STRAIGHT AWAY. MADE ON THIS CONSOLE: NO PC OR KEYS FILE NEEDED. LIKE ANY FORWARDER THE ICONS NEED SIGPATCHES TO START. INSTALL AGAIN AFTER ADDING GAMES. REMOVE ONE IN THE HOME MENU (OPTIONS / DELETE SOFTWARE)." });
 #endif
     // The interface's language (UiLang, ui_lang.h), shown first among DISPLAY's options.
-    l.insert(l.begin(), { "list_lang", "LANGUAGE", { { "en", "ENGLISH" }, { "es", "ESPAÑOL" } }, "en",
+    l.insert(l.begin(), { "list_lang", "LANGUAGE", { { "auto", "AUTO" }, { "en", "ENGLISH" }, { "es", "ESPAÑOL" }, { "it", "ITALIANO" } }, "auto",
                           "THE LANGUAGE OF THE GAME LIST, THE SETTINGS AND THE PAUSE MENU (NOT OF THE GAMES)." });
     // The game list's own look (GAME LIST: ThemeNamed, Background).
     l.push_back({ "list_colour", "COLOUR", { { "red", "RED" }, { "blue", "BLUE" }, { "green", "GREEN" }, { "purple", "PURPLE" },

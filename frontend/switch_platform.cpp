@@ -23,6 +23,7 @@
 #include "thirdparty/stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION
 #include "launcher.h"
+#include "ui_lang_sdl.h"
 #include "controls.h"
 #ifdef SSR_GBA
 #include <map>
@@ -262,6 +263,7 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
     const std::string listDir = cfgPath.substr(0, cfgPath.find_last_of('/'));
     Launcher::Theme theme;
     Launcher::Background background;
+    UiLang::DetectSystem();
     Launcher::LoadLook(cfgPath, listDir, theme, background);
     auto change = [&](int d) {
         const char* key = page.Change(d);

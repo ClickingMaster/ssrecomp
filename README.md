@@ -459,8 +459,8 @@ Please tell us how it runs on yours, with your model (see [Reporting a bug](#rep
 | ![HeartGold: Totodile against a wild Pidgey on Route 29, with FIGHT, BAG, RUN, POKÉMON and the party beside the battle](docs/screenshots/heartgold-totodile-battle.jpg) | ![SoulSilver: Lugia following you along Route 7](docs/screenshots/soulsilver-lugia-following.jpg) |
 
 - **ROMs:** the English versions, US or Europe (the European English copies
-  are the same game as the US ones), and the Spanish ones. Other languages
-  start, but without the one-screen layouts.
+  are the same game as the US ones), Spanish and French revision 0; HeartGold
+  also supports Italian. Other languages start without the one-screen layouts.
 - **Saves:** `soulsilver.sav` and `heartgold.sav` (the same format, so either
   game reads the other's).
 - **No version exclusives:** OTHER VERSION POKEMON in the pause menu (off to
@@ -482,7 +482,7 @@ Please tell us how it runs on yours, with your model (see [Reporting a bug](#rep
 | ![Black: Reshiram against a wild Mantyke, with the game's FIGHT, BAG, RUN and POKÉMON panel beside the battle](docs/screenshots/black-reshiram-battle.jpg) | ![White: Zekrom in battle, with the FIGHT panel beside it](docs/screenshots/white-zekrom-battle.jpg) |
 | ![Black: a double battle, Reshiram and Excadrill against a wild Pelipper and Mantyke, the HP boxes down the edges](docs/screenshots/black-reshiram-double.jpg) | ![Black: Nimbasa City in widescreen](docs/screenshots/black-nimbasa.jpg) |
 
-- **ROMs:** any English copy (US or Europe), trimmed or not; White in Spanish too.
+- **ROMs:** any English copy (US or Europe), trimmed or not; French revision 0 for both games, and White in Spanish too.
 - **Saves:** `black.sav` and `white.sav` (the same format, so either game reads
   the other's; `tools/bw2/convert_save.py` turns `.dsv` and Action Replay saves
   into the raw 512 KB save).
@@ -503,7 +503,7 @@ Please tell us how it runs on yours, with your model (see [Reporting a bug](#rep
 | ![Platinum: Infernape against a wild Machoke, with FIGHT, BAG, RUN and POKÉMON beside the battle](docs/screenshots/platinum-infernape-battle.jpg) | ![Platinum: Snowpoint City in the snow, in widescreen](docs/screenshots/platinum-snowpoint.jpg) |
 
 - **ROM:** the English version, US or Europe (both game code `CPUE`), or the
-  Spanish one (`CPUS`), trimmed or not.
+  Spanish (`CPUS`) or French revision 0 (`CPUF`) versions, trimmed or not.
 - **Save:** `platinum.sav`.
 - **What you get:** Sinnoh in widescreen, the snow and rain reaching the edges
   of the view; battles with their buttons and moves beside the action; the X
@@ -547,9 +547,10 @@ OLED in handheld mode; a PC has room to spare, and draws the same picture up to
 
 ## Known limits
 
-- English versions (US or Europe) for every game; in Spanish, White, Platinum,
-  SoulSilver and HeartGold. Another language needs its own table, made once
-  from an English and that language's ROM with `tools/port_version.py`.
+- English versions (US or Europe) for the seven established DS games; French
+  revision 0 for all seven; Spanish White, Platinum, SoulSilver and HeartGold;
+  Italian HeartGold. Diamond/Pearl support is experimental. See
+  [regional profiles and touch controls](docs/REGIONAL-AND-TOUCH-CONTROLS.md).
 - Platinum: the Pokétch (the watch on the touch screen) isn't shown during
   normal play; its apps are one press of the screen-swap button away.
 - SoulSilver and HeartGold: at map borders (Route 29 and New Bark Town, Celadon
@@ -624,3 +625,9 @@ open an issue and it will be taken out.
 ---
 
 Built with the help of [Claude](https://claude.ai), Anthropic's AI.
+
+## Custom touch controls and regional profiles
+
+Android players can move and resize on-screen controls in the paused layout editor.
+The launcher and DS menus also offer AUTO, English, Spanish and Italian interface
+languages. See [controls, regional games and build notes](docs/REGIONAL-AND-TOUCH-CONTROLS.md).

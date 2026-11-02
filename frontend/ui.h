@@ -112,6 +112,7 @@ struct Canvas
             { 0x00, 0x04, 0x0A, 0x0A, 0x11, 0x1F, 0x00 },
             { 0x18, 0x19, 0x02, 0x04, 0x08, 0x13, 0x03 }, // % (VOLUME)
         };
+        if (c == '\'') { static const uint8_t apostrophe[] = { 4, 4, 8, 0, 0, 0, 0 }; return apostrophe; }
         if (c >= 'a' && c <= 'z') c -= 32;
         if (c >= 'A' && c <= 'Z') return font[c - 'A'];
         if (c >= '0' && c <= '9') return font[26 + c - '0'];
@@ -135,13 +136,18 @@ struct Canvas
         {
             char c = s[i];
             // Spanish's letters (UTF-8 C3 xx): the plain capital with its mark above the line.
-            int mark = 0; // 1 acute, 2 tilde
+            int mark = 0; // 1 acute, 2 tilde, 3 grave
             if ((unsigned char)c == 0xC3 && i + 1 < s.size())
             {
                 static const char from[] = "\x81\x89\x8D\x93\x9A\x91\xA1\xA9\xAD\xB3\xBA\xB1", to[] = "AEIOUNAEIOUN";
                 const char* p = strchr(from, s[++i]);
                 c = p ? to[p - from] : '?';
                 mark = p ? (c == 'N' ? 2 : 1) : 0;
+                if (!p)
+                {
+                    static const char grave[] = "\x80\x88\x8C\x92\x99\xA0\xA8\xAC\xB2\xB9", plain[] = "AEIOUAEIOU";
+                    if (const char* g = strchr(grave, s[i])) { c = plain[g - grave]; mark = 3; }
+                }
             }
             else if ((unsigned char)c >= 0x80) continue; // (another letter's other bytes)
             // \x05: E with an acute accent (the É of POKÉMON): a whole E, the accent above the
@@ -154,6 +160,11 @@ struct Canvas
             if (mark == 1)
             {
                 Fill(x + 3 * scale, y - 3 * scale, scale, scale, argb);
+                Fill(x + 2 * scale, y - 2 * scale, scale, scale, argb);
+            }
+            else if (mark == 3)
+            {
+                Fill(x + scale, y - 3 * scale, scale, scale, argb);
                 Fill(x + 2 * scale, y - 2 * scale, scale, scale, argb);
             }
             else if (mark == 2)
@@ -291,6 +302,9 @@ struct Menu
         const int rows = shown + (hasTitle ? 3 : 2);
         if (lineH * rows + 6 * scale > c.h - 4) lineH = std::max(9 * scale, (c.h - 4 - 6 * scale) / rows);
         int boxW = (boxUnits > 0 ? boxUnits : 190) * scale;
+        if (UiLang::lang)
+            for (const auto& item : items)
+                boxW = std::max(boxW, Canvas::TextWidth(item.label, scale) + Canvas::TextWidth(item.value, scale) + 20 * scale);
         if (boxW > c.w - 8) boxW = c.w - 8;
         int boxH = lineH * rows + 6 * scale;
         // The note's lines (up to 4, the last cut short), and the box moved up to make room.

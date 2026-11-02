@@ -8,7 +8,7 @@ enum { PAD_A, PAD_B, PAD_X, PAD_Y, PAD_BACK, PAD_GUIDE, PAD_START, PAD_LS, PAD_R
 
 int main()
 {
-    const std::string path = "/tmp/fulldex-touch-test-" + std::to_string(SDL_GetPerformanceCounter()) + ".cfg";
+    const std::string path = (std::filesystem::temp_directory_path() / ("fulldex-touch-test-" + std::to_string(SDL_GetPerformanceCounter()) + ".cfg")).string();
     TouchLayout::Profile profile;
     auto defaults = TouchPad::Defaults(1280, 720);
     assert(defaults.size() == 11);

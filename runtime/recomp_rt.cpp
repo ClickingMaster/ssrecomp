@@ -263,7 +263,9 @@ bool WatchChunkPresent(u32 id)
     const u32 start = chunkStart[id];
     const u32 base = c.section < portableImageBase.size() && portableImageBase[c.section] ? portableImageBase[c.section] : sec.base;
     u32 n = c.end - c.start < 16 ? c.end - c.start : 16;
-    if (start < base || start + n > base + sec.size) return false;
+    const size_t imageSize = c.section < portableImages.size() && !portableImages[c.section].empty()
+        ? portableImages[c.section].size() : sec.size;
+    if (start < base || start - base > imageSize || n > imageSize - (start - base)) return false;
     return memcmp(sec.image + (start - base), GuestPtr(&watchNds->ARM9, start), n) == 0;
 }
 

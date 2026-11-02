@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Combine French/Spanish regional profiles and Italian HeartGold, with separate save names for each language. The interface has one AUTO/English/Spanish/Italian language setting; translated pause menus expand to fit their labels. Integrated from PRs #41, #18 and #9.
+
 - Android touch controls can be moved and resized in a paused layout editor, with save, cancel and reset. Layouts are stored separately for DS/GBA and each screen orientation.
 
 - **LANGUAGE in the settings (DISPLAY): English or Spanish** for the game list, the settings page and the pause menu; Spanish's accented letters drawn in the menus' font.

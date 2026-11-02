@@ -165,7 +165,7 @@ stage() {
 check_contents() { # list of paths, one per line, relative to the download's top folder
     python3 -c "
 import re, sys
-ok = re.compile(r'^pokemon-ds-wide/(pokemon-ds-wide|Pokemon Fulldex\.exe|SDL2\.dll|libSDL2-2\.0\.so\.0|LICENSE\.txt|LICENSE-SDL2\.txt|LICENSE-mGBA\.txt|README\.txt|roms/|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE|IREF|IRDF|CPUF|IRBF|IRAF)\.txt)?$')
+ok = re.compile(r'^pokemon-ds-wide/(pokemon-ds-wide|Pokemon Fulldex\.exe|SDL2\.dll|libSDL2-2\.0\.so\.0|LICENSE\.txt|LICENSE-SDL2\.txt|LICENSE-mGBA\.txt|README\.txt|roms/|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF)\.txt)?$')
 bad = [l for l in sys.stdin.read().splitlines() if l and not ok.match(l)]
 if bad: sys.exit('unexpected files in the download: %s' % bad)
 "

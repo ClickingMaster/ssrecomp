@@ -43,6 +43,7 @@
 #include "thirdparty/stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION
 #include "launcher.h"
+#include "ui_lang_sdl.h"
 #include "controls.h"
 #include "achievements.h"
 #include "ssr_os.h"
@@ -531,6 +532,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
         fprintf(stderr, "[launcher] SDL_Init: %s\n", SDL_GetError());
         return -1;
     }
+    UiLang::DetectSystem();
     SDL_Window* window = SDL_CreateWindow("Pokémon Fulldex", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
 #ifdef SSR_IOS

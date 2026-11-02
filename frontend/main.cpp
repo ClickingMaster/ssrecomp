@@ -336,6 +336,7 @@ struct PadState
 };
 
 #include "touchpad.h"
+#include "ui_lang_sdl.h"
 #include "controls.h"
 #include "cheats.h"
 
@@ -1593,7 +1594,7 @@ struct Settings
             // pause menu's colour too.)
             else if (k == "list_colour") { listColour = v; Menu::Accent = AccentNamed(v); }
             else if (k == "list_background") listBackground = v;
-            else if (k == "list_lang") { listLang = v; UiLang::Set(v); }
+            else if (k == "list_lang" || k == "language") { listLang = v; UiLang::Set(v); }
             else if (k == "ff_low_res") ffLowRes = v == "1";
             else if (k == "start_button") startMenu = v != "ds";
             else if (k == "cpu_boost") cpuBoost = v == "1";
@@ -1882,13 +1883,14 @@ int main(int argc, char** argv)
                 if (!ov) return nullptr;
                 const unsigned base = PortableOverlayBase(id);
                 *ram = base ? base : ov->ram;
-                if (!base) {
+                if (!base || ov->ram < base) {
+                    *ram = ov->ram;
                     *size = (unsigned)ov->data.size();
                     return ov->data.data();
                 }
                 // Sections may move between languages. Images start at the
                 // lowest supported base, just as the address-only watch tables do.
-                if (ov->ram < base || ov->ram - base > 0x400000) return nullptr;
+                if (ov->ram - base > 0x400000) return nullptr;
                 auto& image = images[id];
                 image.assign(std::max<size_t>(PortableOverlaySize(id), ov->ram - base + ov->data.size()), 0);
                 std::copy(ov->data.begin(), ov->data.end(), image.begin() + (ov->ram - base));
@@ -2174,6 +2176,7 @@ int main(int argc, char** argv)
             fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
             return 1;
         }
+        UiLang::DetectSystem();
         int w, h;
         LayoutNativeSize(layout, w, h);
         w *= opt.scale;
@@ -4515,7 +4518,7 @@ int main(int argc, char** argv)
         M_RESUME, M_LAYOUT, M_LARGE, M_FPS60, M_FULLSCREEN, M_SMOOTH, M_WIDE, M_WIDEMAP, M_BATTLEBUTTONS,
         M_WIDELINES, M_AUTODETAIL, M_WIDEGPU, M_GPU3D, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_EMULATION,
         M_CONTROLS, M_TOUCHLAYOUT, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
-        M_DISPLAY, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
+        M_DISPLAY, M_LANGUAGE, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
         M_VOLUME, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
         M_CSEARCH, M_SEARCH_LETTER, M_SEARCH_DELETE, M_SEARCH_SPACE, M_SEARCH_CLEAR, M_SEARCH_DONE,
@@ -4629,6 +4632,7 @@ int main(int argc, char** argv)
         }
         else if (menuPage == PAGE_DISPLAY)
         {
+            add(M_LANGUAGE, "LANGUAGE", UiLang::choice == "es" ? "ESPAÑOL" : UiLang::choice == "it" ? "ITALIANO" : UiLang::choice == "en" ? "ENGLISH" : "AUTO");
 #ifndef __SWITCH__
             // (The Switch always shows the one wide screen these layouts are built around.)
             add(M_LAYOUT, "SCREEN LAYOUT", LayoutName(layout.mode));
@@ -6439,6 +6443,15 @@ int main(int argc, char** argv)
                 touchMenuHeld = prevTouchMenu = false;
                 navHoldOff = true;
                 break;
+            case M_LANGUAGE:
+            {
+                const char* choices[] = { "auto", "en", "es", "it" };
+                int index = 0;
+                for (int i = 0; i < 4; ++i) if (UiLang::choice == choices[i]) index = i;
+                cfg.listLang = choices[(index + (dir < 0 ? 3 : 1)) % 4];
+                UiLang::Set(cfg.listLang);
+                break;
+            }
             case M_CONTROLS:
                 capturing = -1;
                 // (The keyboard's keys shown first when no controller is connected.)
