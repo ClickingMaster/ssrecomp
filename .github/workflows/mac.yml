@@ -32,6 +32,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install "cmake>=3.21,<4" ninja
+      - name: Check Mac game shortcuts
+        run: python tests/mac_shortcuts.py
       - name: The inputs (tables of addresses, pictures, icon)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
