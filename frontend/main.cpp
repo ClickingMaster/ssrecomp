@@ -4477,7 +4477,7 @@ int main(int argc, char** argv)
     {
         M_RESUME, M_LAYOUT, M_LARGE, M_FPS60, M_FULLSCREEN, M_SMOOTH, M_WIDE, M_WIDEMAP, M_BATTLEBUTTONS,
         M_WIDELINES, M_AUTODETAIL, M_WIDEGPU, M_GPU3D, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_EMULATION,
-        M_CONTROLS, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
+        M_CONTROLS, M_TOUCHLAYOUT, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
         M_DISPLAY, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
         M_VOLUME, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
@@ -4825,6 +4825,9 @@ int main(int argc, char** argv)
         else if (menuPage == PAGE_CONTROLS)
         {
             add(M_CONTROLS, "KEYS AND BUTTONS", "");
+#ifdef SSR_PHONE
+            add(M_TOUCHLAYOUT, "TOUCH CONTROLS", "EDIT LAYOUT");
+#endif
             add(M_STARTBTN, "START BUTTON", cfg.startMenu ? "PAUSE MENU" : "DS START");
 #ifndef __SWITCH__
             // (Nothing to choose on the Switch: its labels are the DS's positions.)
@@ -4938,6 +4941,8 @@ int main(int argc, char** argv)
     int mouseX = 0, mouseY = 0;
     // On-screen controls (touch screens): shown while no controller is connected.
     TouchPad touchPad;
+    const std::string touchLayoutPath = TouchLayout::Profile::Path(opt.config, "ds");
+    touchPad.profile.Load(touchLayoutPath);
     bool touchPadUsed = false, touchMenuHeld = false, prevTouchMenu = false;
 #ifdef SSR_PHONE
     touchPadUsed = true;
@@ -6391,6 +6396,12 @@ int main(int argc, char** argv)
                 say("APPLIES THE NEXT TIME THE GAME STARTS");
                 break;
 #endif
+            case M_TOUCHLAYOUT:
+                say(touchPad.EditLayout(renderer, touchLayoutPath) ? "TOUCH LAYOUT SAVED" : "TOUCH LAYOUT UNCHANGED");
+                mouseDown = false;
+                touchMenuHeld = prevTouchMenu = false;
+                navHoldOff = true;
+                break;
             case M_CONTROLS:
                 capturing = -1;
                 // (The keyboard's keys shown first when no controller is connected.)

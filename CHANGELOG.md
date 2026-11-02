@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Android touch controls can be moved and resized in a paused layout editor, with save, cancel and reset. Layouts are stored separately for DS/GBA and each screen orientation.
+
 - Mac: DESKTOP SHORTCUTS creates a game app on the desktop and in Applications, with its own picture. Adapted from HSolis95's PR #1; the existing Fulldex app and save folders are retained.
 
 - Fix the iPhone and iPad launcher build so the hotfix can be packaged for iOS.

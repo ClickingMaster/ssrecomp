@@ -10,6 +10,7 @@
 #include <vector>
 #include <SDL.h>
 #include "ui.h"
+#include "touchlayout.h"
 
 struct TouchPad
 {
@@ -25,6 +26,7 @@ struct TouchPad
         const char* label;
     };
 
+    TouchLayout::Profile profile;
     bool visible = true;
     std::vector<Button> buttons;
     float dpadX = 0, dpadY = 0, dpadR = 0;
@@ -37,7 +39,7 @@ struct TouchPad
     SDL_Texture* labels = nullptr;
     std::map<std::string, SDL_Rect> labelRect;
 
-    void Layout(int outW, int outH)
+    void Layout(int outW, int outH, bool customise = true)
     {
         if (outW == w && outH == h) return;
         w = outW;
@@ -72,6 +74,39 @@ struct TouchPad
                     b.y = 0.55f * u;
                     b.w = 1.8f * u;
                 }
+        if (customise)
+        {
+            const auto controls = profile.Apply(Geometry(), w, h);
+            dpadX = controls[0].x; dpadY = controls[0].y; dpadR = controls[0].rx;
+            for (size_t i = 0; i < buttons.size(); ++i)
+            {
+                auto& b = buttons[i]; const auto& c = controls[i + 1];
+                b.x = c.x; b.y = c.y;
+                if (b.w > 0) { b.w = c.rx * 2; b.h = c.ry * 2; }
+                else b.r = c.rx;
+            }
+        }
+    }
+
+    std::vector<TouchLayout::Control> Geometry() const
+    {
+        std::vector<TouchLayout::Control> out = { { "DPAD", "D-PAD", dpadX, dpadY, dpadR, dpadR, false } };
+        for (const auto& b : buttons)
+            out.push_back({ b.label, b.label, b.x, b.y, b.w > 0 ? b.w / 2 : b.r, b.w > 0 ? b.h / 2 : b.r, b.w == 0 });
+        return out;
+    }
+    static std::vector<TouchLayout::Control> Defaults(int width, int height)
+    {
+        TouchPad pad;
+        pad.Layout(width, height, false);
+        return pad.Geometry();
+    }
+    bool EditLayout(SDL_Renderer* renderer, const std::string& path)
+    {
+        const bool saved = TouchLayout::Edit<Canvas>(renderer, profile, path, Defaults);
+        w = h = 0;
+        fingerOn.clear(); fingerAt.clear(); lifted.clear();
+        return saved;
     }
 
     int HitButton(float x, float y) const
