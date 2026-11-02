@@ -47,7 +47,6 @@ its name. An interrupted restore reports its recovery files instead of overwriti
 
 ### Regional support - beta
 
-**Download rollout:** Windows, Linux, Android and Switch are updated. Mac and iOS beta builds are in progress.
 
 **Regional DS support is now in beta across the platform builds.** Bring your own ROM;
 only the listed language/version profiles are recognised. This is not support for every
@@ -113,7 +112,7 @@ controller, or SETTINGS at the top), or in the pause menu while you play (**Esc*
 
 | Group | Settings |
 |---|---|
-| DISPLAY | SCREEN LAYOUT (MERGED: the one widescreen picture), LARGE SCREEN, BORDERLESS FULLSCREEN, SMOOTH SCALING, BATTLE BUTTONS, FPS COUNTER |
+| DISPLAY | LANGUAGE, SCREEN LAYOUT (MERGED: the one widescreen picture), LARGE SCREEN, BORDERLESS FULLSCREEN, SMOOTH SCALING, BATTLE BUTTONS, FPS COUNTER |
 | SOUND | VOLUME (a slider: OFF, then 10% to 100%) |
 | GRAPHICS | 60 FPS, WIDESCREEN WORLD, WIDE MAP LOADING, 3D RESOLUTION (WORLD DETAIL on the Switch), LOWER RES WHEN BUSY, WORLD ON GPU, FAST FORWARD LOW RES |
 | CONTROLS | **KEYS AND BUTTONS** (give any DS button, the pause menu, fast forward, swapping the screens, save state or load state another key or controller button), START BUTTON, BUTTONS, STICK TOUCH CURSOR |

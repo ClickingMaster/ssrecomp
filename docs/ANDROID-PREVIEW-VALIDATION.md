@@ -1,6 +1,6 @@
 # Android combined preview - 2 November 2026
 
-Ready for review; no public release or main-branch update has been made.
+Validation record for the 2 November 2026 hotfix and regional beta, published after preview approval.
 
 ## Included
 
@@ -36,3 +36,7 @@ Ready for review; no public release or main-branch update has been made.
 - Android 16 KB support: https://developer.android.com/guide/practices/page-sizes
 - Android OpenGL ES, Vulkan and ANGLE: https://developer.android.com/games/develop/vulkan/overview
 - Android orientation policy: https://developer.android.com/guide/topics/manifest/activity-element
+
+## Publication follow-up
+
+All platform downloads were rebuilt and published. Mac Intel/Apple silicon and iOS device packages contain all regional function tables; architecture, checksum and package checks passed. Intel Mac first start passed. The simulator app compiled, but its launch check stalled and was stopped. Simulator launch remains unconfirmed. No physical Apple gameplay was tested. The Switch NRO was rebuilt with all 15 regional tables and their embedded bytes verified.

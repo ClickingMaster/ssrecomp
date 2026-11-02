@@ -54,3 +54,5 @@ handling, save/cancel/reset, localisation, accented text and separate regional s
 The custom DS/GBA layouts were exercised on a Pixel 9 Pro XL. Private gameplay
 snapshots are tested with save writing disabled. See the preview's validation report
 for the completed checks and remaining device/gameplay limitations.
+
+Mac Intel/Apple silicon and iOS device/simulator builds also compiled for publication. The device IPA and both Mac ZIPs include the complete regional tables. Regional gameplay coverage remains limited as described above.
