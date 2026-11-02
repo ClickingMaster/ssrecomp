@@ -122,6 +122,7 @@ cp tools/platinum/CPUE.txt "$DATA/funcs/CPUE.txt"
 cp tools/platinum/ADAE.txt "$DATA/funcs/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
 # The other languages' tables (tools/versions: Spanish White, Platinum, ...), from the English ones.
 python3 tools/shift_table.py --all "$DATA/funcs"
+cp tools/regions/{IREF,IRDF,CPUF,IRBF,IRAF}.txt "$DATA/funcs/"
 
 # The build: the JIT for every game, no libpng (screenshots are for tests), OpenGL for WORLD ON
 # GPU (WGL on Windows, EGL on Linux), and SSE rather than the building machine's AVX2
@@ -164,7 +165,7 @@ stage() {
 check_contents() { # list of paths, one per line, relative to the download's top folder
     python3 -c "
 import re, sys
-ok = re.compile(r'^pokemon-ds-wide/(pokemon-ds-wide|Pokemon Fulldex\.exe|SDL2\.dll|libSDL2-2\.0\.so\.0|LICENSE\.txt|LICENSE-SDL2\.txt|LICENSE-mGBA\.txt|README\.txt|roms/|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt)?$')
+ok = re.compile(r'^pokemon-ds-wide/(pokemon-ds-wide|Pokemon Fulldex\.exe|SDL2\.dll|libSDL2-2\.0\.so\.0|LICENSE\.txt|LICENSE-SDL2\.txt|LICENSE-mGBA\.txt|README\.txt|roms/|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE|IREF|IRDF|CPUF|IRBF|IRAF)\.txt)?$')
 bad = [l for l in sys.stdin.read().splitlines() if l and not ok.match(l)]
 if bad: sys.exit('unexpected files in the download: %s' % bad)
 "

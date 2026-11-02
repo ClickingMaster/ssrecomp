@@ -90,19 +90,30 @@ inline const KnownGame* Known(const std::string& code)
 {
     static const KnownGame games[] = {
         { "IRBO", "Pokemon Black", "black.sav" },
+        { "IRBF", "Pokemon Black (FR)", "black-fr.sav" },
         { "IRAO", "Pokemon White", "white.sav" },
+        { "IRAF", "Pokemon White (FR)", "white-fr.sav" },
         { "IREO", "Pokemon Black 2", "black2.sav" },
+        { "IREF", "Pokemon Black 2 (FR)", "black2-fr.sav" },
         { "IRDO", "Pokemon White 2", "white2.sav" },
+        { "IRDF", "Pokemon White 2 (FR)", "white2-fr.sav" },
         { "IPKE", "Pokemon HeartGold", "heartgold.sav" },
+        { "IPKF", "Pokemon HeartGold (FR)", "heartgold-fr.sav" },
         { "IPGE", "Pokemon SoulSilver", "soulsilver.sav" },
+        { "IPGF", "Pokemon SoulSilver (FR)", "soulsilver-fr.sav" },
         { "CPUE", "Pokemon Platinum", "platinum.sav" },
         { "ADAE", "Pokemon Diamond", "diamond.sav" },
         { "APAE", "Pokemon Pearl", "pearl.sav" },
+        { "IRAS", "Pokemon White (ES)", "white-es.sav" },
+        { "CPUS", "Pokemon Platinum (ES)", "platinum-es.sav" },
+        { "IPGS", "Pokemon SoulSilver (ES)", "soulsilver-es.sav" },
+        { "IPKS", "Pokemon HeartGold (ES)", "heartgold-es.sav" },
+        { "ADAS", "Pokemon Diamond (ES)", "diamond-es.sav" },
+        { "IPKI", "Pokemon HeartGold (IT)", "heartgold-it.sav" },
+        { "CPUF", "Pokemon Platinum (FR)", "platinum-fr.sav" },
     };
-    // (Another language's version as the English one: frontend/gamecode.h.)
-    const std::string base = BaseGameCode(code);
     for (const KnownGame& g : games)
-        if (base == g.code) return &g;
+        if (code == g.code) return &g;
     return nullptr;
 }
 inline int Order(const std::string& code)

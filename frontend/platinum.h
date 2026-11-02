@@ -33,9 +33,16 @@ struct PtFuncs
             return std::abs((int)((c >> 16) & 0xFF) - r) < 40 && std::abs((int)((c >> 8) & 0xFF) - g) < 40 &&
                    std::abs((int)(c & 0xFF) - b) < 40;
         };
-        if (is(108, 76, 251, 89, 89) && is(132, 84, 251, 89, 89) && is(108, 116, 73, 154, 219) && is(132, 124, 73, 154, 219))
+        // Find the coloured button areas independently of translated lettering.
+        int red = 0, blue = 0, blueY = 0;
+        for (int y = 70; y < 92; ++y)
+            for (int x = 100; x < 140; ++x) red += is(x, y, 251, 89, 89);
+        for (int y = 96; y < 140; ++y)
+            for (int x = 100; x < 140; ++x)
+                if (is(x, y, 73, 154, 219)) { ++blue; blueY += y; }
+        if (red >= 250 && blue >= 250)
         {
-            IntroNoY = 121;
+            IntroNoY = blueY / blue;
             return INTRO_YESNO;
         }
         if (is(108, 76, 251, 89, 89) && is(132, 84, 251, 89, 89) && is(104, 108, 73, 154, 219) && is(136, 116, 73, 154, 219))

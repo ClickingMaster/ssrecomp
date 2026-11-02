@@ -8,10 +8,13 @@
 
 inline std::string BaseGameCode(const std::string& code)
 {
-    static const char* const english[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "ADAE", "APAE" };
-    if (code.size() == 4)
-        for (const char* e : english)
-            if (!code.compare(0, 3, e, 3)) return e;
+    static const char* const aliases[][2] = {
+        { "IRAS", "IRAO" }, { "CPUS", "CPUE" }, { "IPGS", "IPGE" }, { "IPKS", "IPKE" },
+        { "ADAS", "ADAE" }, { "IRBF", "IRBO" }, { "IRAF", "IRAO" }, { "IREF", "IREO" },
+        { "IRDF", "IRDO" }, { "IPGF", "IPGE" }, { "IPKF", "IPKE" }, { "CPUF", "CPUE" },
+        { "IPKI", "IPKE" }
+    };
+    for (const auto& alias : aliases) if (code == alias[0]) return alias[1];
     return code;
 }
 inline bool IsGame(const std::string& code, const char* english) { return BaseGameCode(code) == english; }

@@ -72,6 +72,7 @@ cp tools/platinum/CPUE.txt "$DATA/funcs/CPUE.txt"
 cp tools/platinum/ADAE.txt "$DATA/funcs/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
 # The other languages' tables (tools/versions: Spanish White, Platinum, ...), from the English ones.
 python3 tools/shift_table.py --all "$DATA/funcs"
+cp tools/regions/{IREF,IRDF,CPUF,IRBF,IRAF}.txt "$DATA/funcs/"
 
 if [ "$TARGET" = simulator ]; then
     SDK=iphonesimulator
@@ -182,7 +183,7 @@ rm -rf "$DIST/Payload"
 # Only the program, its tables, licence, icons and Info.plist: never a ROM, save or game code.
 python3 - "$IPA" <<'PY'
 import re, sys, zipfile
-ok = re.compile(r'^Payload/(Pokemon Fulldex\.app/(pokemon-ds-wide|Info\.plist|LICENSE\.txt|LICENSE-mGBA\.txt|AppIcon[0-9.x@~a-z]+\.png|_CodeSignature/(CodeResources)?|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt)?)?$')
+ok = re.compile(r'^Payload/(Pokemon Fulldex\.app/(pokemon-ds-wide|Info\.plist|LICENSE\.txt|LICENSE-mGBA\.txt|AppIcon[0-9.x@~a-z]+\.png|_CodeSignature/(CodeResources)?|data/|data/funcs/|data/funcs/(IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF)\.txt)?)?$')
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 bad = [n for n in names if not ok.match(n)]
 if bad: sys.exit('unexpected files in the iOS download: %s' % bad)

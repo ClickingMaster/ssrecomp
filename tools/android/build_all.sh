@@ -105,6 +105,7 @@ cp tools/platinum/CPUE.txt "$FUNCS/CPUE.txt"
 cp tools/platinum/ADAE.txt "$FUNCS/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
 # The other languages' tables (tools/versions: Spanish White, Platinum, ...), from the English ones.
 python3 tools/shift_table.py --all "$FUNCS"
+cp tools/regions/{IREF,IRDF,CPUF,IRBF,IRAF}.txt "$FUNCS/"
 
 DEPS="$HERE/build-android-deps"
 if [ ! -f "$DEPS/$SDL_NAME/CMakeLists.txt" ]; then
@@ -222,7 +223,7 @@ PY
 # Only the app's own files may be in it: never a ROM, save or game code.
 python3 - "$APK" <<'PY'
 import re, sys, zipfile
-ok = re.compile(r'^(AndroidManifest\.xml|resources\.arsc|classes\.dex|res/.*\.png|res/mipmap-anydpi-v26/ic_launcher\.xml|lib/(arm64-v8a|x86_64)/lib(main|SDL2)\.so|assets/funcs/(IREO|IRDO|IRBO|IRAO|CPUE)\.txt|assets/LICENSE(-mGBA)?\.txt)$')
+ok = re.compile(r'^(AndroidManifest\.xml|resources\.arsc|classes\.dex|res/.*\.png|res/mipmap-anydpi-v26/ic_launcher\.xml|lib/(arm64-v8a|x86_64)/lib(main|SDL2)\.so|assets/funcs/(IREO|IRDO|IRBO|IRAO|CPUE|IREF|IRDF|CPUF|IRBF|IRAF)\.txt|assets/LICENSE(-mGBA)?\.txt)$')
 bad = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if not ok.match(n)]
 if bad: sys.exit('unexpected files in the APK: %s' % bad)
 PY
