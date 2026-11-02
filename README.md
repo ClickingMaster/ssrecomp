@@ -47,6 +47,8 @@ its name. An interrupted restore reports its recovery files instead of overwriti
 
 ### Regional support - beta
 
+**Download rollout:** Windows, Linux, Android and Switch are updated. Mac and iOS beta builds are in progress.
+
 **Regional DS support is now in beta across the platform builds.** Bring your own ROM;
 only the listed language/version profiles are recognised. This is not support for every
 language, revision or game, and complete playthroughs have not been verified.
