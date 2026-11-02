@@ -601,16 +601,61 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
     return result;
 }
 
+// The saves of the games in a folder go in its saves/ folder: those an older build left beside the
+// ROMs (game.sav, emerald.sav, and their .sav1, .bak...) are moved there, none replaced.
+static void MoveSavesIn(const std::string& folder)
+{
+    DIR* d = opendir(folder.c_str());
+    if (!d) return;
+    std::vector<std::string> names;
+    while (dirent* e = readdir(d))
+    {
+        struct stat st;
+        const std::string n = e->d_name;
+        if (n[0] != '.' && n.find(".sav") != std::string::npos && stat((folder + "/" + n).c_str(), &st) == 0 && S_ISREG(st.st_mode))
+            names.push_back(n);
+    }
+    closedir(d);
+    if (names.empty()) return;
+    const std::string saves = folder + "/saves";
+    mkdir(saves.c_str(), 0777);
+    for (const std::string& n : names)
+    {
+        struct stat st;
+        if (stat((saves + "/" + n).c_str(), &st) != 0 && rename((folder + "/" + n).c_str(), (saves + "/" + n).c_str()) == 0)
+            fprintf(stderr, "[switch] save %s moved into %s\n", n.c_str(), saves.c_str());
+    }
+}
+
+// Where a DS game's save is: the saves folder of the game's folder (MoveSavesIn), made when missing.
+static std::string SavePath(const Launcher::Game& g)
+{
+    mkdir((g.folder + "/saves").c_str(), 0777);
+    return g.folder + "/saves/" + g.saveName;
+}
+
 // The games to choose from: rom.nds, or the ROMs in the program's folder (and its roms/ folder);
 // in the all-games program also those in the other folders of /switch (the one-game programs'
-// folders), each played with the save in its own folder, so that the two kinds of download share
-// a game's save.
+// folders), each played with the save in its own folder's saves/ (SavePath), so that the two
+// kinds of download share a game's save.
 std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
 {
     std::vector<Launcher::Game> games;
     Launcher::Game g;
     ownFolder = true;
-    if (Launcher::ReadGame(dir + "/rom.nds", dir, g)) return { g };
+    // (ReadGame and ScanFolder look for a save beside the ROMs: the DS games' are in saves/.)
+    auto savesIn = [](std::vector<Launcher::Game>& list) {
+        struct stat st;
+        for (Launcher::Game& x : list)
+            if (x.platform == Launcher::DS) x.hasSave = stat(SavePath(x).c_str(), &st) == 0;
+    };
+    MoveSavesIn(dir);
+    if (Launcher::ReadGame(dir + "/rom.nds", dir, g))
+    {
+        games = { g };
+        savesIn(games);
+        return games;
+    }
 #ifndef SSR_ALL_GAMES
     // (A one-game program: its own folder only, as always.)
     Launcher::ScanFolder(dir, games, false);
@@ -625,20 +670,23 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
                 const std::string folder = std::string("sdmc:/switch/") + e->d_name;
                 if (e->d_name[0] == '.' || folder == dir) continue;
                 struct stat st;
-                if (stat(folder.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) Launcher::ScanFolder(folder, games);
+                if (stat(folder.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+                const size_t had = games.size();
+                Launcher::ScanFolder(folder, games);
+                if (games.size() > had) MoveSavesIn(folder); // (only a folder with DS games of its own)
             }
             closedir(d);
         }
         ownFolder = own > 0;
     }
 #ifdef SSR_GBA
-    // The GBA games: in this folder's roms (their saves beside the DS games') and a GBA folder in
+    // The GBA games: in this folder's roms (their saves in saves/ with the DS games') and a GBA folder in
     // it (with that folder's saves), and in Pokemon GBA Widescreen's own folder if it is on the
     // card too (with its saves, so they carry on).
     {
         std::map<std::string, std::vector<uint32_t>> art;
         const size_t before = games.size();
-        GbaGames::AddWithGbaFolder(dir + "/roms", dir, games, art);
+        GbaGames::AddWithGbaFolder(dir + "/roms", dir + "/saves", games, art);
         const std::string gbaApp = "sdmc:/switch/pokemon-gba-wide";
         struct stat st;
         if (dir != gbaApp && stat((gbaApp + "/roms").c_str(), &st) == 0)
@@ -653,6 +701,7 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
     }
 #endif
 #endif
+    savesIn(games);
     Launcher::AddComingSoon(games);
     Launcher::Sort(games);
     // The same game in two folders (two ROMs, two saves): each says where it is.
@@ -915,13 +964,12 @@ bool Start(int& argc, char**& argv)
     // SoulSilver and HeartGold (US): the same program, layouts from its own tables.
     const bool heartSilver = IsGame(code, "IPGE") || IsGame(code, "IPKE");
     // The save is named after the game (SoulSilver's name is the one earlier builds used), in
-    // the game's own folder.
-    const std::string saveName = game.saveName;
-    fprintf(stderr, "[switch] %s (game code %s), save %s/%s%s\n", rom.c_str(), code[0] ? code : "?", gameDir.c_str(),
-        saveName.c_str(), ownFolder ? "" : " (from another folder)");
+    // the saves folder of the game's own folder.
+    fprintf(stderr, "[switch] %s (game code %s), save %s%s\n", rom.c_str(), code[0] ? code : "?",
+        SavePath(game).c_str(), ownFolder ? "" : " (from another folder)");
     // The settings: settings.cfg beside the game (ssrecomp.cfg before; an old one is renamed).
     const std::string cfgPath = SettingsPath(dir);
-    g_args = { argc > 0 && argv[0] ? argv[0] : "pokemon-ds-wide", rom, "--save", gameDir + "/" + saveName, "--fullscreen",
+    g_args = { argc > 0 && argv[0] ? argv[0] : "pokemon-ds-wide", rom, "--save", SavePath(game), "--fullscreen",
                "--config", cfgPath };
     // A game that is not recompiled (Black, White, Black 2, White 2) comes with its function table, made on the
     // PC by tools/bw2/funcmap.py or tools/bw1/funcmap.py; its layouts follow the functions that

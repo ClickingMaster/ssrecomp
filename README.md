@@ -353,9 +353,11 @@ so the all-in-one is the one to use.
 
 **Saves:** each game keeps its save under its own name (`black2.sav`,
 `white2.sav`, `black.sav`, `white.sav`, `soulsilver.sav`, `heartgold.sav`,
-`platinum.sav`): in `/switch/pokemon-ds-wide/` for a ROM in its `roms` folder,
-or in an older one-game download's folder for a ROM there. To carry on from an
-emulator or a flash cart, copy your save in under that name.
+`platinum.sav`), with the GBA games' (`emerald.sav`...): in the `saves` folder of
+`/switch/pokemon-ds-wide/` for a ROM in its `roms` folder, or of an older one-game
+download's folder for a ROM there. Saves an earlier version left beside the ROMs are
+moved into `saves` the first time the list opens (that older download no longer finds
+them). To carry on from an emulator or a flash cart, copy your save in under that name.
 
 **Pictures:** each game shows its box art. For your own, put a square JPEG
 or PNG in `/switch/pokemon-ds-wide/icons/` named after the game's code: `IRBO`
