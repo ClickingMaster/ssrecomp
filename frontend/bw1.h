@@ -18,6 +18,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+
+#include "gamecode.h"
 #include <vector>
 
 #include "funcwatch.h"
@@ -58,7 +60,7 @@ public:
             if (fseek(f, 0x0C, SEEK_SET) != 0 || fread(code, 1, 4, f) != 4) code[0] = 0;
             fclose(f);
         }
-        on = !strcmp(code, "IRBO") || !strcmp(code, "IRAO");
+        on = IsGame(code, "IRBO") || IsGame(code, "IRAO");
         if (!on) return;
         Fw = &fw;
         auto find = [&](const char* name) {

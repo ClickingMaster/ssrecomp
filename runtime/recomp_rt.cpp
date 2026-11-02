@@ -150,6 +150,7 @@ const RcPortable* portable = nullptr;
 const RcPortableGame* portableGame = nullptr;
 bool portableLoaded = false;
 std::vector<std::vector<u8>> portableImages;
+std::vector<u32> portableImageBase; // where the ROM's overlay loads (another language's can be elsewhere)
 std::vector<u32> chunkStart, chunkEnd;
 
 // A SoulSilver address in section `sec` as it is in the game being played.
@@ -187,7 +188,15 @@ bool rc_register_portable(const RcPortable* tables)
 
 bool rc_portable_needed() { return portable && !portableLoaded; }
 
-const char* rc_portable_load(const char code[4], const unsigned char* (*overlay)(void*, int, unsigned*), void* user)
+bool rc_portable_knows(const char code[4])
+{
+    if (!portable) return !memcmp(code, "IPGE", 4) || !memcmp(code, "IPKE", 4);
+    for (unsigned g = 0; g < portable->numGames; g++)
+        if (!memcmp(portable->games[g].code, code, 4)) return true;
+    return false;
+}
+
+const char* rc_portable_load(const char code[4], const unsigned char* (*overlay)(void*, int, unsigned*, unsigned*), void* user)
 {
     if (!portable) return nullptr;
     portableLoaded = true;
@@ -200,14 +209,16 @@ const char* rc_portable_load(const char code[4], const unsigned char* (*overlay)
         return nullptr;
     }
     portableImages.assign(rc_num_sections, {});
+    portableImageBase.assign(rc_num_sections, 0);
     unsigned loaded = 0, missing = 0;
     for (u32 s = 0; s < rc_num_sections; s++)
     {
         if (portable->overlayOf[s] < 0) continue;
-        unsigned size = 0;
-        const unsigned char* data = overlay(user, portable->overlayOf[s], &size);
+        unsigned size = 0, ram = rc_sections[s].base;
+        const unsigned char* data = overlay(user, portable->overlayOf[s], &size, &ram);
         if (!data) { missing++; continue; }
         portableImages[s].assign(data, data + size);
+        portableImageBase[s] = ram;
         rc_sections[s].image = portableImages[s].data();
         // (An overlay can be a little longer in another game: HeartGold's title screen.)
         if (size > rc_sections[s].size) rc_sections[s].size = size;
@@ -247,9 +258,10 @@ bool WatchChunkPresent(u32 id)
     if (!sectionShared[c.section]) return true;
     if (!sec.image) return false;
     const u32 start = chunkStart[id];
+    const u32 base = c.section < portableImageBase.size() && portableImageBase[c.section] ? portableImageBase[c.section] : sec.base;
     u32 n = c.end - c.start < 16 ? c.end - c.start : 16;
-    if (start + n > sec.base + sec.size) return false;
-    return memcmp(sec.image + (start - sec.base), GuestPtr(&watchNds->ARM9, start), n) == 0;
+    if (start < base || start + n > base + sec.size) return false;
+    return memcmp(sec.image + (start - base), GuestPtr(&watchNds->ARM9, start), n) == 0;
 }
 
 void WatchHit(void*, u32 addr, bool thumb)

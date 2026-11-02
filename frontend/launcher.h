@@ -17,6 +17,7 @@
 #include <vector>
 #include <dirent.h>
 #include "ssr_os.h"
+#include "gamecode.h"
 #include <sys/stat.h>
 
 #include "ui.h"
@@ -95,19 +96,25 @@ inline const KnownGame* Known(const std::string& code)
         { "IPKE", "Pokemon HeartGold", "heartgold.sav" },
         { "IPGE", "Pokemon SoulSilver", "soulsilver.sav" },
         { "CPUE", "Pokemon Platinum", "platinum.sav" },
+        { "ADAE", "Pokemon Diamond", "diamond.sav" },
+        { "APAE", "Pokemon Pearl", "pearl.sav" },
     };
+    // (Another language's version as the English one: frontend/gamecode.h.)
+    const std::string base = BaseGameCode(code);
     for (const KnownGame& g : games)
-        if (code == g.code) return &g;
+        if (base == g.code) return &g;
     return nullptr;
 }
 inline int Order(const std::string& code)
 {
     // (DS, then GBA: Emerald, Ultra Violet (UV22: its own code here, as FireRed's is BPRE too),
     // FireRed, LeafGreen.)
-    static const char* order[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "BPEE", "UV22", "BPRE", "BPGE" };
-    for (int i = 0; i < 11; i++)
-        if (code == order[i]) return i;
-    return 11;
+    static const char* order[] = { "IRBO", "IRAO", "IREO", "IRDO", "IPKE", "IPGE", "CPUE", "ADAE", "APAE", "BPEE", "UV22", "BPRE", "BPGE" };
+    const std::string base = BaseGameCode(code);
+    const int n = (int)(sizeof order / sizeof order[0]);
+    for (int i = 0; i < n; i++)
+        if (base == order[i]) return i;
+    return n;
 }
 
 // A name as the list has it (POKEMON EMERALD) as a title: Pokemon Emerald (FireRed and LeafGreen
@@ -514,6 +521,7 @@ inline void SyncGbaSettings(const std::string& cfg, const std::string& dataDir)
 // (background.jpg or .png), at most 2048 pixels on a side (larger ones are read at a fraction).
 inline void LoadLook(const std::string& cfg, const std::string& folder, Theme& t, Background& b)
 {
+    UiLang::Set(ConfigValue(cfg, "list_lang"));
     t = ThemeNamed(ConfigValue(cfg, "list_colour"));
     b = Background();
     t.background = nullptr;
@@ -933,6 +941,9 @@ inline std::vector<Setting> SettingsList()
     l.push_back({ "!forwarders", "HOME MENU ICONS", { { "", "INSTALL" } }, "",
                   "PUTS AN ICON FOR EACH GAME IN THIS LIST ON THE HOME MENU WITH ITS PICTURE. IT STARTS THAT GAME STRAIGHT AWAY. MADE ON THIS CONSOLE: NO PC OR KEYS FILE NEEDED. LIKE ANY FORWARDER THE ICONS NEED SIGPATCHES TO START. INSTALL AGAIN AFTER ADDING GAMES. REMOVE ONE IN THE HOME MENU (OPTIONS / DELETE SOFTWARE)." });
 #endif
+    // The interface's language (UiLang, ui_lang.h), shown first among DISPLAY's options.
+    l.insert(l.begin(), { "list_lang", "LANGUAGE", { { "en", "ENGLISH" }, { "es", "ESPAÑOL" } }, "en",
+                          "THE LANGUAGE OF THE GAME LIST, THE SETTINGS AND THE PAUSE MENU (NOT OF THE GAMES)." });
     // The game list's own look (GAME LIST: ThemeNamed, Background).
     l.push_back({ "list_colour", "COLOUR", { { "red", "RED" }, { "blue", "BLUE" }, { "green", "GREEN" }, { "purple", "PURPLE" },
                   { "gold", "GOLD" }, { "pink", "PINK" }, { "teal", "TEAL" } }, "red",
@@ -1028,6 +1039,7 @@ inline int GroupOf(const Setting& s)
 {
     if (s.key && !strcmp(s.key, "!updates")) return 7;
     if (!s.key) return !strcmp(s.name, "KEYS AND BUTTONS") ? 3 : 7;
+    if (!strcmp(s.key, "list_lang")) return 0;
     if (!strncmp(s.key, "list_", 5)) return 5;
     if (!strcmp(s.key, "ra") || !strcmp(s.key, "!ra_login")) return 6;
     static const char* display[] = { "view", "large_screen", "fullscreen", "smooth", "battle_buttons", "show_fps" };
@@ -1229,7 +1241,7 @@ struct SettingsPage
             }
             if (i == selected) selFirst = (int)out.size();
             out.push_back({ e.name, e.key ? Shown(e) : "", i, true });
-            for (const std::string& l : Wrap(e.text, width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
+            for (const std::string& l : Wrap(UiLang::Tr(e.text), width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
             if (i == selected) selLast = (int)out.size() - 1;
             out.push_back({ "", "", -1, false });
         }

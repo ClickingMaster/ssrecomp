@@ -4,6 +4,7 @@
 
 - Android touch controls can be moved and resized in a paused layout editor, with save, cancel and reset. Layouts are stored separately for DS/GBA and each screen orientation.
 
+- **LANGUAGE in the settings (DISPLAY): English or Spanish** for the game list, the settings page and the pause menu; Spanish's accented letters drawn in the menus' font.
 - Mac: DESKTOP SHORTCUTS creates a game app on the desktop and in Applications, with its own picture. Adapted from HSolis95's PR #1; the existing Fulldex app and save folders are retained.
 
 - Fix the iPhone and iPad launcher build so the hotfix can be packaged for iOS.
@@ -84,6 +85,13 @@
 - Check official GitHub releases from Settings > Help and offer the Android APK download.
 
 
+- **Pokémon Diamond and Pearl (experimental):** in the game list, with Platinum's one-screen
+  layouts: their functions found from Platinum's (`tools/port_family.py`), in English and
+  Diamond in Spanish. Not yet played through.
+- **Spanish versions:** Pokémon White (Edición Blanca), Platinum (Platino), SoulSilver (Plata
+  SoulSilver) and HeartGold (Oro HeartGold) in Spanish play with the one-screen view, as the
+  English ones do. Another language's tables can be made the same way, from that language's
+  ROM and the English one (`tools/port_version.py`).
 - **A new address: github.com/mamesj/pokemon-fulldex** (the old pokemon-ds-widescreen address
   still leads there). The bug report link, the PC download's `README.txt` and the Linux
   AppImage's updates use it.

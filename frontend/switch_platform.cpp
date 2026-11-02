@@ -45,6 +45,7 @@ namespace PcLauncher { const unsigned char* BuiltInArt(const char* code, size_t&
 
 // How many chunks the program's SoulSilver tables have: none in a build for the Black games only.
 extern const uint32_t rc_num_chunks;
+bool rc_portable_knows(const char code[4]); // (runtime/recomp_api.h)
 
 namespace SwitchPlatform
 {
@@ -88,7 +89,7 @@ bool Playable(const Launcher::Game& g)
 {
     if (g.platform == Launcher::GBA) return true; // (any GBA game plays, with widescreen or without)
     if (!g.known) return false;
-    if (g.code == "IPGE" || g.code == "IPKE") return rc_num_chunks > 0;
+    if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE")) return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
     struct stat st;
     if (stat((g.folder + "/funcs.txt").c_str(), &st) == 0) return true;
     return RomfsReady() && stat(("romfs:/funcs/" + g.code + ".txt").c_str(), &st) == 0;
@@ -910,7 +911,7 @@ bool Start(int& argc, char**& argv)
     char code[5] = {};
     memcpy(code, game.code.data(), std::min<size_t>(4, game.code.size()));
     // SoulSilver and HeartGold (US): the same program, layouts from its own tables.
-    const bool heartSilver = !strcmp(code, "IPGE") || !strcmp(code, "IPKE");
+    const bool heartSilver = IsGame(code, "IPGE") || IsGame(code, "IPKE");
     // The save is named after the game (SoulSilver's name is the one earlier builds used), in
     // the game's own folder.
     const std::string saveName = game.saveName;
@@ -945,7 +946,10 @@ bool Start(int& argc, char**& argv)
                             "    and Pokemon White (IRAO), US and Europe;\n"
                             "    Pokemon SoulSilver (IPGE) and Pokemon HeartGold (IPKE), US, with the\n"
                             "    SoulSilver and HeartGold download;\n"
-                            "    Pokemon Platinum (CPUE), with the Platinum download.\n"
+                            "    Pokemon Platinum (CPUE), with the Platinum download;\n"
+                            "    Pokemon Diamond (ADAE) and Pearl (APAE);\n"
+                            "    and in Spanish: White (IRAS), Platinum (CPUS), SoulSilver (IPGS),\n"
+                            "    HeartGold (IPKS) and Diamond (ADAS).\n"
                             "  Other languages put the game's code in other places.");
                 return false;
             }

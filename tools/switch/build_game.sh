@@ -152,6 +152,8 @@ all)
     ROMFS="$HERE/$BUILD/romfs"
     bw_tables "$ROMFS"
     cp tools/platinum/CPUE.txt "$ROMFS/funcs/CPUE.txt"
+    cp tools/platinum/ADAE.txt "$ROMFS/funcs/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
+    python3 tools/shift_table.py --all "$ROMFS/funcs" # (the other languages: tools/versions)
     # The HOME Menu entries' program (HOME MENU ICONS in the list's settings: frontend/switch_forwarder.cpp).
     say "The HOME Menu icons' loader (tools/switch/forwarder)"
     build bash tools/switch/build_forwarder.sh "$HERE/$BUILD/forwarder-build" "$ROMFS/forwarder"
@@ -324,6 +326,8 @@ platinum)
     ROMFS="$HERE/$BUILD/romfs"
     mkdir -p "$ROMFS/funcs"
     cp tools/platinum/CPUE.txt "$ROMFS/funcs/CPUE.txt"
+    cp tools/platinum/ADAE.txt "$ROMFS/funcs/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
+    python3 tools/shift_table.py --all "$ROMFS/funcs" # (the other languages: tools/versions)
     rm -f "$BUILD/icon.jpg"
     icon="${SSR_SWITCH_ICON_PLATINUM:-${SSR_SWITCH_ICON:-}}"
     [ -n "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
