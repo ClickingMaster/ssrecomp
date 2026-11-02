@@ -56,6 +56,22 @@
          bool any = true;
          if (screen == LIST) DrawList(ui);
          else if (screen == SETTINGS) DrawSettings(ui);
+@@ -1606,8 +1620,13 @@
+                 fpsSince = now;
+             }
+             const std::string f = std::to_string(fpsShown) + " FPS";
+-            ui.Fill(2, 2, Canvas::TextWidth(f, 1) + 6, 11, 0xA0000000);
+-            ui.Text(5, 4, f, 1, Colour::Bright);
++            int fpsX = 2, fpsY = 2;
++#ifdef __ANDROID__
++            fpsX = std::max(2, ui.w / 20);
++            fpsY = std::max(2, ui.h / 20);
++#endif
++            ui.Fill(fpsX, fpsY, Canvas::TextWidth(f, 1) + 6, 11, 0xA0000000);
++            ui.Text(fpsX + 3, fpsY + 2, f, 1, Colour::Bright);
+             any = true;
+         }
+         if (!toast.empty() && now < toastUntil)
 --- a/frontend/touch.h
 +++ b/frontend/touch.h
 @@ -9,6 +9,7 @@

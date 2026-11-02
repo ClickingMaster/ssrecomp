@@ -1232,8 +1232,8 @@ struct SettingsPage
     {
         const int s = std::max(1, std::min(c.w, c.h) / 240);
 #ifdef __ANDROID__
-        // Portrait needs readable touch targets rather than desktop-density text.
-        const int ts = c.h > c.w ? std::max(2, s) : std::max(1, (s * 2 + 1) / 3);
+        // Phone settings use readable touch targets in either orientation.
+        const int ts = std::max(2, s);
 #else
         const int ts = std::max(1, (s * 2 + 1) / 3); // the text's scale: 2 at 720 lines, 3 at 1080
 #endif

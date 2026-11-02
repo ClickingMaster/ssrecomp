@@ -1,8 +1,11 @@
 # Changelog
 
-- Android launcher defaults to landscape with rotation locked, follows device orientation with auto-rotate enabled, and uses larger portrait settings text with wrapped values.
 
 ## Unreleased
+
+- Android launcher defaults to landscape with rotation locked, follows device orientation with auto-rotate enabled, and uses larger settings text in both orientations with wrapped values.
+
+- Android DS/GBA FPS counters sit inward from screen edges to avoid rounded corners and camera cutouts.
 
 - Combine French/Spanish regional profiles and Italian HeartGold, with separate save names for each language. The interface has one AUTO/English/Spanish/Italian language setting; translated pause menus expand to fit their labels. Integrated from PRs #41, #18 and #9.
 

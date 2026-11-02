@@ -7775,20 +7775,26 @@ int main(int argc, char** argv)
         // The top right corner, below the on-screen R button when those controls are shown
         // (their top row ends at 12% of the height).
         int cornerY = touchPadUsed && touchPad.visible ? outH * 13 / 100 : 0;
+        int cornerInset = 0;
+#ifdef __ANDROID__
+        // Full-screen phones may have rounded corners or a camera cutout on either side.
+        cornerInset = std::max(4, outW / 20);
+        cornerY = std::max(cornerY, outH / 20);
+#endif
         if (cfg.showFps && !opt.headless)
         {
             int sc = outH / 240 < 1 ? 1 : outH / 240;
             const std::string text = std::to_string(shownFps) + " FPS";
             const int tw = Canvas::TextWidth(text, sc) + 8 * sc;
-            canvas.Fill(outW - tw, cornerY, tw, 13 * sc, 0xC0000000);
-            canvas.Text(outW - tw + 4 * sc, cornerY + 3 * sc, text, sc, 0xFFFFFFFF);
+            canvas.Fill(outW - cornerInset - tw, cornerY, tw, 13 * sc, 0xC0000000);
+            canvas.Text(outW - cornerInset - tw + 4 * sc, cornerY + 3 * sc, text, sc, 0xFFFFFFFF);
             cornerY += 13 * sc;
             overlayUsed = true;
         }
         if (speed > 1)
         {
             int sc = outH / 240 < 1 ? 1 : outH / 240;
-            canvas.Text(outW - Canvas::TextWidth(">>", sc) - 4 * sc, cornerY + 4 * sc, ">>", sc, 0xFFFFFFFF);
+            canvas.Text(outW - cornerInset - Canvas::TextWidth(">>", sc) - 4 * sc, cornerY + 4 * sc, ">>", sc, 0xFFFFFFFF);
             overlayUsed = true;
         }
 #if defined(__ANDROID__) && !defined(SSR_PC_LAUNCHER)
