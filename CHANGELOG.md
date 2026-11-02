@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **LANGUAGE in the settings (DISPLAY): English or Spanish** for the game list, the settings page and the pause menu; Spanish's accented letters drawn in the menus' font.
 - Fix the iPhone and iPad launcher build so the hotfix can be packaged for iOS.
 
 - Keep the established Windows renderer and frame clock by default. The recovered Direct3D 11 display-pacing path measured about 53 FPS on a 240 Hz display where the earlier path sustained about 60 FPS; it remains available with SSR_DISPLAY_PACING=1 for further testing.

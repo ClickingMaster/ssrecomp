@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "ui_lang.h"
+
 struct Canvas
 {
     int w = 0, h = 0;
@@ -118,19 +120,48 @@ struct Canvas
         return p ? font[36 + (p - punct)] : nullptr;
     }
 
-    static int TextWidth(const std::string& s, int scale) { return (int)s.size() * 6 * scale; }
-
-    void Text(int x, int y, const std::string& s, int scale, uint32_t argb)
+    // (In the interface's language, UiLang: its UTF-8 letters are one character each.)
+    static int TextWidth(const std::string& s, int scale)
     {
-        for (char c : s)
+        int n = 0;
+        for (unsigned char c : UiLang::Tr(s)) n += (c & 0xC0) != 0x80;
+        return n * 6 * scale;
+    }
+
+    void Text(int x, int y, const std::string& text, int scale, uint32_t argb)
+    {
+        const std::string s = UiLang::Tr(text);
+        for (size_t i = 0; i < s.size(); i++)
         {
+            char c = s[i];
+            // Spanish's letters (UTF-8 C3 xx): the plain capital with its mark above the line.
+            int mark = 0; // 1 acute, 2 tilde
+            if ((unsigned char)c == 0xC3 && i + 1 < s.size())
+            {
+                static const char from[] = "\x81\x89\x8D\x93\x9A\x91\xA1\xA9\xAD\xB3\xBA\xB1", to[] = "AEIOUNAEIOUN";
+                const char* p = strchr(from, s[++i]);
+                c = p ? to[p - from] : '?';
+                mark = p ? (c == 'N' ? 2 : 1) : 0;
+            }
+            else if ((unsigned char)c >= 0x80) continue; // (another letter's other bytes)
             // \x05: E with an acute accent (the É of POKÉMON): a whole E, the accent above the
             // line, two pixels slanting up to the right with a row's gap.
             if (c == '\x05')
             {
+                c = 'E';
+                mark = 1;
+            }
+            if (mark == 1)
+            {
                 Fill(x + 3 * scale, y - 3 * scale, scale, scale, argb);
                 Fill(x + 2 * scale, y - 2 * scale, scale, scale, argb);
-                c = 'E';
+            }
+            else if (mark == 2)
+            {
+                Fill(x + 1 * scale, y - 2 * scale, scale, scale, argb);
+                Fill(x + 2 * scale, y - 3 * scale, scale, scale, argb);
+                Fill(x + 3 * scale, y - 2 * scale, scale, scale, argb);
+                Fill(x + 4 * scale, y - 3 * scale, scale, scale, argb);
             }
             if (const uint8_t* g = Glyph(c))
                 for (int row = 0; row < 7; row++)
@@ -273,7 +304,7 @@ struct Menu
                 if (!line.empty() && Canvas::TextWidth(t, scale) > maxW) { noteLines.push_back(line); line = w; }
                 else line = t;
             };
-            for (char ch : note + " ")
+            for (char ch : UiLang::Tr(note) + " ")
             {
                 if (ch == ' ') { if (!word.empty()) push(word); word.clear(); }
                 else word += ch;
