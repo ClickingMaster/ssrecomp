@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Mac: DESKTOP SHORTCUTS creates a game app on the desktop and in Applications, with its own picture. Adapted from HSolis95's PR #1; the existing Fulldex app and save folders are retained.
+
 - Fix the iPhone and iPad launcher build so the hotfix can be packaged for iOS.
 
 - Keep the established Windows renderer and frame clock by default. The recovered Direct3D 11 display-pacing path measured about 53 FPS on a 240 Hz display where the earlier path sustained about 60 FPS; it remains available with SSR_DISPLAY_PACING=1 for further testing.
