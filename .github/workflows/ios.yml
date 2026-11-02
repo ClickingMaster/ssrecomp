@@ -21,6 +21,7 @@ jobs:
       matrix:
         target: [device, simulator]
     runs-on: macos-15-intel
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,6 +51,7 @@ jobs:
             build-ios-dist/SHA256SUMS.txt
           if-no-files-found: error
       - name: A first start in the iOS Simulator
+        timeout-minutes: 6
         if: matrix.target == 'simulator'
         run: |
           set -euo pipefail
