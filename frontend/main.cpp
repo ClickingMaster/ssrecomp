@@ -2619,10 +2619,15 @@ int main(int argc, char** argv)
         // (Platinum: which panel the battle drew last, when known. Its "Use next Pokemon?" is a
         // red bar on top like the first battle's FIGHT, with RUN below it in neither colour.)
         const int ptPanel = pt.on ? pt.BattlePanel(funcWatch) : 0;
-        battleFightOnly = pt.on && (ptPanel == 0 || ptPanel == 2) &&
-            red(128, 60) && !orange(40, 160) && !blue(128, 166) && !blue(40, 166);
-        const bool cmd = (red(128, 60) && orange(40, 160) && blue(128, 166) && ptPanel != 4) || battleFightOnly;
-        const bool moves = !cmd && ptPanel != 4 && blue(40, 166) && blue(128, 166) && blue(216, 166);
+        // (Diamond and Pearl: the panel drawn last alone, their colours unchecked against these.)
+        const bool dpShown = pt.dp && !AutoFocus::Blank(screens[1].pixels);
+        battleFightOnly = pt.dp ? dpShown && ptPanel == 2
+                                : pt.on && (ptPanel == 0 || ptPanel == 2) &&
+                                  red(128, 60) && !orange(40, 160) && !blue(128, 166) && !blue(40, 166);
+        const bool cmd = pt.dp ? (dpShown && ptPanel == 1) || battleFightOnly
+                               : (red(128, 60) && orange(40, 160) && blue(128, 166) && ptPanel != 4) || battleFightOnly;
+        const bool moves = pt.dp ? dpShown && ptPanel == 3
+                                 : !cmd && ptPanel != 4 && blue(40, 166) && blue(128, 166) && blue(216, 166);
         const bool idle = AutoFocus::Blank(screens[1].pixels) || (!blue(128, 166) && !red(128, 60));
         battleUnknown = (cmd || moves || idle) ? 0 : battleUnknown + 1;
         // (Another of Platinum's panels, known for what it is: the touch screen shown at once.)
@@ -2648,7 +2653,11 @@ int main(int argc, char** argv)
             // the touch screen's arrangement: FIGHT above BAG, RUN and POKeMON; the four
             // moves two by two.
             const float bandY = 144, bandH = 48, viewL = 128 - viewWidth / 2, viewR = 128 + viewWidth / 2;
-            const int edgeW = 10, boxW = std::min(246, (int)(viewWidth / 2) - edgeW);
+            // (Another language's message is longer: "¿Qué debería hacer CHIMCHAR?" ends near x 232, so
+            // its box takes up to 60% of the view and the buttons the rest.)
+            const bool translated = BaseGameCode(gameCode) != gameCode;
+            const int edgeW = 10, half = (int)(viewWidth / 2) - edgeW;
+            const int boxW = std::min(246, translated ? std::max(half, std::min(240, (int)(viewWidth * 0.6f) - edgeW)) : half);
             sc.items.push_back({ 0, 0, 144, boxW, 48, viewL, bandY, 1.0f, 0, 255, false });
             Element boxEdge = { 0, 0, 144, edgeW, 48, viewL + boxW, bandY, 1.0f, 0, 255, false };
             boxEdge.flipX = true;
@@ -2723,9 +2732,11 @@ int main(int argc, char** argv)
                 // apart from the label).
                 static const Cut cuts[4] = { { 30, 67, 196, 34, 86, 146, 33, 4 }, { 6, 152, 66, 34, 30, 51, 9, 4 },
                                              { 182, 151, 68, 34, 192, 241, 185, 4 }, { 94, 158, 68, 34, 118, 139, 97, 4 } };
-                // (Platinum's buttons are shaded towards their edges: their flat insides only.)
-                static const Cut ptCuts[4] = { { 39, 64, 178, 34, 84, 146, 50, 4 }, { 12, 154, 56, 33, 30, 51, 14, 4 },
-                                               { 188, 154, 56, 33, 192, 241, 188, 4 }, { 100, 162, 56, 30, 118, 139, 102, 4 } };
+                // (Platinum's buttons are shaded towards their edges: their flat insides only. The
+                // label is all of it but the plain columns at each end, as "BOLSA" and "HUIR" in
+                // Spanish Diamond are wider than "BAG" and "RUN" and were split across the button.)
+                static const Cut ptCuts[4] = { { 39, 64, 178, 34, 54, 202, 50, 4 }, { 12, 154, 56, 33, 18, 62, 14, 4 },
+                                               { 188, 154, 56, 33, 192, 240, 188, 4 }, { 100, 162, 56, 30, 106, 150, 102, 4 } };
                 const Cut* cut = pt.on ? ptCuts : cuts;
                 const float cellW = (innerW - 2 * gap) / 3;
                 button(cut[0], innerX, rowY, 2 * cellW + gap, 0);                           // FIGHT

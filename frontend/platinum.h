@@ -89,6 +89,7 @@ struct PtFuncs
     }
 
     bool on = false;
+    bool dp = false; // Diamond or Pearl (their battle panels are told by which was drawn, not by colour)
     int field = -1;          // the overworld, every frame
     int startMenu = -1;      // the X menu (and the applications started from it)
     int dex = -1, party = -1, bag = -1, trainerCard = -1, options = -1, summary = -1;
@@ -139,6 +140,7 @@ struct PtFuncs
         }
         // (Diamond and Pearl: the same engine, their table has Platinum's names: tools/port_family.py.)
         on = IsGame(code, "CPUE") || IsGame(code, "ADAE") || IsGame(code, "APAE");
+        dp = IsGame(code, "ADAE") || IsGame(code, "APAE");
         if (!on) return;
         auto find = [&](const char* name) {
             names.push_back(name);
