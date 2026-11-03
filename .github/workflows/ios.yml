@@ -118,10 +118,11 @@ jobs:
             local console_pid=""
             cleanup() {
               if [ -n "$console_pid" ]; then
-                kill "$console_pid" 2>/dev/null || true
-                wait "$console_pid" || true
+                # simctl --console may ignore TERM after the app redirects stderr.
+                # Kill only our capture helper; never wait indefinitely for it.
+                kill -KILL "$console_pid" 2>/dev/null || true
               fi
-              xcrun simctl shutdown "$udid" || true
+              python3 tools/ios/shutdown_simulator.py "$udid"
             }
             trap cleanup EXIT
             xcrun simctl boot "$udid" || exit 1

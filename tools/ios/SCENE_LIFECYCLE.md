@@ -180,3 +180,13 @@ Run the additional host regressions with:
 ```sh
 python3 tools/ios/test_simulator_capture.py
 ```
+
+### Cleanup timeout correction
+
+Run 41601843189 passed the ARM64 Duo screenshot check: correct renderer/window,
+1398x2034 drawable, submitted frame and nonblank full-screen cover screenshot.
+It then stalled in cleanup before starting the iPad test. The console capture
+helper is now killed without waiting, and simulator shutdown has a 30-second
+subprocess deadline. Shutdown failure is logged as a cleanup warning and does
+not erase a completed rendering result. The overall test deadline is unchanged.
+This run is evidence of cover-screen rendering, not unfolded or iPad validation.

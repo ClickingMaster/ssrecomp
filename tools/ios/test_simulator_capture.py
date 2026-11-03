@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from capture_simulator_displays import capture
 from check_simulator_start import check_screens
+from shutdown_simulator import shutdown
 import test_simulator_start as fixtures
 
 LOG = fixtures.LOG
@@ -42,6 +43,19 @@ class CaptureChecks(unittest.TestCase):
         Image.new("RGB", (400, 800)).save(self.shot)
         with self.assertRaises(ValueError):
             check_screens(LOG, [self.shot])
+
+    def test_shutdown_has_command_deadline(self):
+        calls = []
+        def run(cmd, **kwargs):
+            calls.append(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        shutdown("duo", run)
+        self.assertEqual(calls[0]["timeout"], 30)
+
+    def test_shutdown_timeout_does_not_block_next_device(self):
+        def run(cmd, **kwargs):
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        shutdown("duo", run)
 
 
 if __name__ == "__main__":
