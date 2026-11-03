@@ -6,7 +6,7 @@
 enum { PAD_A, PAD_B, PAD_X, PAD_Y, PAD_BACK, PAD_GUIDE, PAD_START, PAD_LS, PAD_RS, PAD_LB, PAD_RB, PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT, PAD_COUNT };
 #include "touchpad.h"
 
-int main()
+int main(int, char**)
 {
     const std::string path = (std::filesystem::temp_directory_path() / ("fulldex-touch-test-" + std::to_string(SDL_GetPerformanceCounter()) + ".cfg")).string();
     TouchLayout::Profile profile;
