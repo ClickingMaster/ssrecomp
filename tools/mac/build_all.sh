@@ -102,6 +102,7 @@ cp build-mac/ssrecomp "$APP/Contents/MacOS/pokemon-ds-wide"
 strip -x "$APP/Contents/MacOS/pokemon-ds-wide"
 cp -r "$DATA/funcs" "$APP/Contents/Resources/data/funcs"
 cp LICENSE "$APP/Contents/Resources/LICENSE.txt"
+cp LICENSE-Noto.txt "$APP/Contents/Resources/LICENSE-Noto.txt"
 GBA_DOCS=""
 if [ -n "${SSR_GBA_DIR:-}" ]; then
     MGBA_SRC="${GBAW_MGBA:-${GBAW_WORK:-$HOME/pokemon-gba-wide}/mgba}"
@@ -173,7 +174,7 @@ ZIP="$DIST/pokemon-ds-wide-pc-macos-$ARCH.zip"
 python3 - "$ZIP" <<'PY'
 import re, sys, zipfile
 regional_codes = '|'.join(p['code'] for p in __import__('json').loads(__import__('pathlib').Path('tools/regions/profiles.json').read_text())['profiles'] if p['kind']=='functions')
-ok = re.compile(r'^Pokemon Fulldex\.app/(Contents/(Info\.plist|MacOS/(pokemon-ds-wide)?|_CodeSignature/(CodeResources)?|Resources/(AppIcon\.icns|README\.txt|LICENSE\.txt|LICENSE-mGBA\.txt|data/|data/funcs/|data/funcs/(?:IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF|' + regional_codes + r')\.txt)?)?)?$')
+ok = re.compile(r'^Pokemon Fulldex\.app/(Contents/(Info\.plist|MacOS/(pokemon-ds-wide)?|_CodeSignature/(CodeResources)?|Resources/(AppIcon\.icns|README\.txt|LICENSE\.txt|LICENSE-mGBA\.txt|LICENSE-Noto\.txt|data/|data/funcs/|data/funcs/(?:IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF|' + regional_codes + r')\.txt)?)?)?$')
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 bad = [n for n in names if not ok.match(n)]
 if bad: sys.exit('unexpected files in the Mac download: %s' % bad)

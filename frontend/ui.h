@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "ui_lang.h"
+#include "ui_text.h"
 
 struct Canvas
 {
@@ -124,64 +124,16 @@ struct Canvas
     // (In the interface's language, UiLang: its UTF-8 letters are one character each.)
     static int TextWidth(const std::string& s, int scale)
     {
-        int n = 0;
-        for (unsigned char c : UiLang::Tr(s)) n += (c & 0xC0) != 0x80;
-        return n * 6 * scale;
+        return UiLang::Units(UiLang::Tr(s)) * scale;
     }
 
-    void Text(int x, int y, const std::string& text, int scale, uint32_t argb)
+    static int TextWidthRaw(const std::string& text,int scale) { return UiLang::Units(text)*scale; }
+    void TextRaw(int x,int y,const std::string& text,int scale,uint32_t argb) { UiText::DrawRaw(*this,x,y,text,scale,argb); }
+    void Text(int x,int y,const std::string& text,int scale,uint32_t argb)
     {
-        const std::string s = UiLang::Tr(text);
-        for (size_t i = 0; i < s.size(); i++)
-        {
-            char c = s[i];
-            // Spanish's letters (UTF-8 C3 xx): the plain capital with its mark above the line.
-            int mark = 0; // 1 acute, 2 tilde, 3 grave
-            if ((unsigned char)c == 0xC3 && i + 1 < s.size())
-            {
-                static const char from[] = "\x81\x89\x8D\x93\x9A\x91\xA1\xA9\xAD\xB3\xBA\xB1", to[] = "AEIOUNAEIOUN";
-                const char* p = strchr(from, s[++i]);
-                c = p ? to[p - from] : '?';
-                mark = p ? (c == 'N' ? 2 : 1) : 0;
-                if (!p)
-                {
-                    static const char grave[] = "\x80\x88\x8C\x92\x99\xA0\xA8\xAC\xB2\xB9", plain[] = "AEIOUAEIOU";
-                    if (const char* g = strchr(grave, s[i])) { c = plain[g - grave]; mark = 3; }
-                }
-            }
-            else if ((unsigned char)c >= 0x80) continue; // (another letter's other bytes)
-            // \x05: E with an acute accent (the É of POKÉMON): a whole E, the accent above the
-            // line, two pixels slanting up to the right with a row's gap.
-            if (c == '\x05')
-            {
-                c = 'E';
-                mark = 1;
-            }
-            if (mark == 1)
-            {
-                Fill(x + 3 * scale, y - 3 * scale, scale, scale, argb);
-                Fill(x + 2 * scale, y - 2 * scale, scale, scale, argb);
-            }
-            else if (mark == 3)
-            {
-                Fill(x + scale, y - 3 * scale, scale, scale, argb);
-                Fill(x + 2 * scale, y - 2 * scale, scale, scale, argb);
-            }
-            else if (mark == 2)
-            {
-                Fill(x + 1 * scale, y - 2 * scale, scale, scale, argb);
-                Fill(x + 2 * scale, y - 3 * scale, scale, scale, argb);
-                Fill(x + 3 * scale, y - 2 * scale, scale, scale, argb);
-                Fill(x + 4 * scale, y - 3 * scale, scale, scale, argb);
-            }
-            if (const uint8_t* g = Glyph(c))
-                for (int row = 0; row < 7; row++)
-                    for (int col = 0; col < 5; col++)
-                        if (g[row] & (0x10 >> col))
-                            Fill(x + col * scale, y + row * scale, scale, scale, argb);
-            x += 6 * scale;
-        }
+        UiText::Draw(*this,x,y,text,scale,argb);
     }
+
 };
 
 // The accent colours of COLOUR (the game list's settings, GAME LIST): the game list's lines and
@@ -287,46 +239,38 @@ struct Menu
         const uint32_t hintCol = shade(Accent, [](int v) { return 110 + v * 35 / 100; });
         const uint32_t barOffSel = shade(Accent, [](int v) { return v + (255 - v) * 3 / 10; });
         const uint32_t barOff = shade(Accent, [](int v) { return v / 2; });
-        int scale = c.h / 240;
+        int scale = std::min(c.w, c.h) / 240;
         if (scale < 1) scale = 1;
-        int lineH = 11 * scale;
+        int lineH = (UiLang::Tall() ? 16 : 11) * scale;
         // (Rows closer together if they would not all fit on the screen, down to 9 * scale.)
         // With no title the box starts with the first item.
         const bool hasTitle = !title.empty();
         // (As many rows as fit at the smallest spacing; the rest scroll into view.)
-        const int fit = std::max(1, (c.h - 4 - 6 * scale) / (9 * scale) - (hasTitle ? 3 : 2));
+        const int fit = std::max(1, (c.h - 4 - 6 * scale) / ((UiLang::Tall() ? 14 : 9) * scale) - (hasTitle ? 3 : 2));
         const int shown = std::min((int)items.size(), fit);
         if (selected < scroll) scroll = selected;
         if (selected >= scroll + shown) scroll = selected - shown + 1;
         scroll = std::max(0, std::min(scroll, (int)items.size() - shown));
         const int rows = shown + (hasTitle ? 3 : 2);
-        if (lineH * rows + 6 * scale > c.h - 4) lineH = std::max(9 * scale, (c.h - 4 - 6 * scale) / rows);
+        if (lineH * rows + 6 * scale > c.h - 4) lineH = std::max(UiLang::LineUnits() * scale, (c.h - 4 - 6 * scale) / rows);
+        // (A value as drawn: translated before its arrows go round it, as the whole would not be
+        // in the language's table.)
+        auto shownValue = [](const MenuItem& item) { return item.info ? item.value : "< " + UiLang::Tr(item.value) + " >"; };
         int boxW = (boxUnits > 0 ? boxUnits : 190) * scale;
         if (UiLang::lang)
             for (const auto& item : items)
-                boxW = std::max(boxW, Canvas::TextWidth(item.label, scale) + Canvas::TextWidth(item.value, scale) + 20 * scale);
+                boxW = std::max(boxW, Canvas::TextWidth(item.label, scale) + (item.value.empty() ? 0 : Canvas::TextWidth(shownValue(item), scale)) + 20 * scale);
         if (boxW > c.w - 8) boxW = c.w - 8;
         int boxH = lineH * rows + 6 * scale;
         // The note's lines (up to 4, the last cut short), and the box moved up to make room.
         std::vector<std::string> noteLines;
         if (!note.empty())
         {
-            std::string line, word;
             const int maxW = boxW - 12 * scale;
-            auto push = [&](const std::string& w) {
-                const std::string t = line.empty() ? w : line + " " + w;
-                if (!line.empty() && Canvas::TextWidth(t, scale) > maxW) { noteLines.push_back(line); line = w; }
-                else line = t;
-            };
-            for (char ch : UiLang::Tr(note) + " ")
-            {
-                if (ch == ' ') { if (!word.empty()) push(word); word.clear(); }
-                else word += ch;
-            }
-            if (!line.empty()) noteLines.push_back(line);
-            if (noteLines.size() > 4) { noteLines.resize(4); noteLines[3] += "..."; }
+            noteLines = UiLang::Wrap(UiLang::Tr(note), maxW / scale);
+            if (noteLines.size() > 4) { noteLines.resize(4); noteLines[3] = UiLang::Elide(noteLines[3]+"...",maxW/scale); }
         }
-        const int noteH = noteLines.empty() ? 0 : (int)noteLines.size() * 9 * scale + 6 * scale;
+        const int noteH = noteLines.empty() ? 0 : (int)noteLines.size() * UiLang::LineUnits() * scale + 6 * scale;
         int bx = (c.w - boxW) / 2, by = std::max(2, (c.h - boxH - noteH) / 2);
         // (Kept for ItemAt: where the rows were drawn.)
         drawnX = bx;
@@ -353,7 +297,7 @@ struct Menu
             c.Text(bx + 6 * scale, y, items[i].label, scale, col);
             if (!items[i].value.empty())
             {
-                std::string v = items[i].info ? items[i].value : "< " + items[i].value + " >";
+                const std::string v = shownValue(items[i]);
                 // (A slider's value right-aligned in room for its widest, "< 100% >", the bar left
                 // of it, so the bar stays put as the number changes.)
                 const int vx = bx + boxW - 6 * scale - Canvas::TextWidth(items[i].slider >= 0 ? "< 100% >" : v, scale);
@@ -376,7 +320,7 @@ struct Menu
             c.Fill(bx - scale, ny - scale, boxW + 2 * scale, noteH + 2 * scale, 0xFFE8E8E8);
             c.Fill(bx, ny, boxW, noteH, noteBox);
             for (size_t i = 0; i < noteLines.size(); i++)
-                c.Text(bx + 6 * scale, ny + 4 * scale + (int)i * 9 * scale, noteLines[i], scale, textCol);
+                c.TextRaw(bx + 6 * scale, ny + 4 * scale + (int)i * UiLang::LineUnits() * scale, noteLines[i], scale, textCol);
         }
     }
 };

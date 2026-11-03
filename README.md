@@ -61,8 +61,7 @@ language, revision or game, and complete playthroughs have not been verified.
 
 Regional versions use separate save names, such as `heartgold-fr.sav`, `heartgold-es.sav`
 and `heartgold-it.sav`; keep a backup when bringing an existing save across. GBA regional
-compatibility is unchanged. DISPLAY > LANGUAGE offers English, Spanish and Italian menus;
-French ROM support does not currently include a French interface.
+compatibility is unchanged. DISPLAY > LANGUAGE offers AUTO, English, Spanish, Italian, French, German, Japanese and Korean menus. AUTO follows a supported system language. The interface language is independent of the ROM language.
 
 Thanks to the contributors of [#41](../../pull/41), [#18](../../pull/18) and [#9](../../pull/9).
 See [regional support and controls](docs/REGIONAL-AND-TOUCH-CONTROLS.md) for details.
@@ -656,5 +655,4 @@ Built with the help of [Claude](https://claude.ai), Anthropic's AI.
 ## Custom touch controls and regional profiles
 
 Android players can move and resize on-screen controls in the paused layout editor.
-The launcher and DS menus also offer AUTO, English, Spanish and Italian interface
-languages. See [controls, regional games and build notes](docs/REGIONAL-AND-TOUCH-CONTROLS.md).
+The launcher and Fulldex menus offer AUTO, English, Spanish, Italian, French, German, Japanese and Korean interface languages. Embedded GBA menus follow the launcher language too. See [controls, regional games and build notes](docs/REGIONAL-AND-TOUCH-CONTROLS.md).

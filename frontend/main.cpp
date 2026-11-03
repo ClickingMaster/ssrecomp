@@ -4644,7 +4644,7 @@ int main(int argc, char** argv)
         }
         else if (menuPage == PAGE_DISPLAY)
         {
-            add(M_LANGUAGE, "LANGUAGE", UiLang::choice == "es" ? "ESPAÑOL" : UiLang::choice == "it" ? "ITALIANO" : UiLang::choice == "en" ? "ENGLISH" : "AUTO");
+            add(M_LANGUAGE, "LANGUAGE", UiLang::ChoiceName());
 #ifndef __SWITCH__
             // (The Switch always shows the one wide screen these layouts are built around.)
             add(M_LAYOUT, "SCREEN LAYOUT", LayoutName(layout.mode));
@@ -6459,10 +6459,7 @@ int main(int argc, char** argv)
                 break;
             case M_LANGUAGE:
             {
-                const char* choices[] = { "auto", "en", "es", "it" };
-                int index = 0;
-                for (int i = 0; i < 4; ++i) if (UiLang::choice == choices[i]) index = i;
-                cfg.listLang = choices[(index + (dir < 0 ? 3 : 1)) % 4];
+                cfg.listLang = UiLang::NextChoice(dir);
                 UiLang::Set(cfg.listLang);
                 break;
             }

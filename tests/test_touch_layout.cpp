@@ -42,6 +42,12 @@ int main(int, char**)
     SDL_Window* window = SDL_CreateWindow("Touch layout test", 0, 0, 1280, 720, SDL_WINDOW_HIDDEN);
     assert(window);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE); assert(renderer);
+    for(const auto* language:UiLang::Codes) {
+        UiLang::Set(language);pad.MakeLabels(renderer);
+        assert(pad.labelsLanguage==UiLang::lang && pad.labels);
+        assert(pad.labelRect.at("MENU").h >= (UiLang::Tall()?42:21));
+    }
+    UiLang::Set("en");
     SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
     auto tap = [](float x, float y) {
         SDL_Event e{}; e.type = SDL_FINGERDOWN; e.tfinger.fingerId = 123; e.tfinger.x = x; e.tfinger.y = y; SDL_PushEvent(&e);

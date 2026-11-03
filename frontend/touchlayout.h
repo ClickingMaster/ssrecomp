@@ -9,9 +9,20 @@
 #include <string>
 #include <vector>
 #include <SDL.h>
+#include "ui_lang.h"
 
 namespace TouchLayout
 {
+// Keep translated editor actions inside their existing touch rectangles, even on narrow phones.
+template<class Canvas> inline void DrawAction(Canvas& canvas,int left,int right,int top,int height,const std::string& action,int scale,uint32_t colour)
+{
+    while(scale>1 && Canvas::TextWidth(action,scale)>right-left-8)--scale;
+    const auto lines=UiLang::Wrap(UiLang::Tr(action),std::max(12,(right-left-8)/scale));
+    const int line=(UiLang::Tall()?14:9)*scale;
+    int y=top+(height-int(lines.size())*line)/2+(UiLang::Tall()?3*scale:0);
+    for(const auto& text:lines) {canvas.TextRaw((left+right-Canvas::TextWidthRaw(text,scale))/2,y,text,scale,colour);y+=line;}
+}
+
 struct Control
 {
     std::string key, label;
@@ -205,7 +216,7 @@ bool Edit(SDL_Renderer* renderer, Profile& profile, const std::string& path, Def
         text(12, 10, "TOUCH CONTROLS", 0xFFFFFFFF);
         const auto it = working.orientations[Profile::Orientation(w, h)].find(controls[chosen].key);
         const int size = it == working.orientations[Profile::Orientation(w, h)].end() ? 100 : (int)std::lround(it->second.size * 100);
-        text(12, 32, controls[chosen].label + "  SIZE " + std::to_string(size) + "%", 0xFF7DD3FC);
+        text(12, 32, controls[chosen].label + "  " + UiLang::Tr("SIZE") + " " + std::to_string(size) + "%", 0xFF7DD3FC);
         for (int i = 0; i < (int)controls.size(); ++i)
         {
             const auto& c = controls[i];
@@ -228,7 +239,7 @@ bool Edit(SDL_Renderer* renderer, Profile& profile, const std::string& path, Def
         {
             const int left = i * cw / 7, right = (i + 1) * cw / 7;
             canvas.Fill(left + 2, ch - 46, right - left - 4, 44, i == 6 ? 0xFF0369A1 : 0xFF34465F);
-            text((left + right - ((int)std::string(actions[i]).size() * 6 - 1) * font) / 2, ch - 29, actions[i], 0xFFFFFFFF);
+            DrawAction(canvas,left,right,ch-46,44,actions[i],font,0xFFFFFFFF);
         }
         if (!texture || cw != tw || ch != th)
         {

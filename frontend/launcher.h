@@ -582,7 +582,7 @@ inline Grid Layout(const Canvas& c)
     Grid g;
     g.s = std::max(1, std::min(c.w, c.h) / 240); // the font's scale: 3 at 720 lines
     g.gap = 8 * g.s;
-    g.labelH = 20 * g.s;
+    g.labelH = (UiLang::Tall() ? 32 : 20) * g.s;
     g.tabsY = (c.h > c.w ? 46 : 25) * g.s;
     g.tabsH = 13 * g.s;
     g.headH = 13 * g.s;
@@ -766,7 +766,7 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
         const int y = top + h.y - scroll;
         if (h.empty)
         {
-            const std::string none = std::string("NO ") + PlatformName(h.platform) + " GAMES YET";
+            const std::string none = UiLang::Tr("NO GAMES FOUND") + " (" + PlatformName(h.platform) + ")";
             // (On its own tab: in the middle of the page.)
             if (tab != 0) c.Text((c.w - Canvas::TextWidth(none, s)) / 2, (top + bottom) / 2 - 4 * s, none, s, th.hint);
             else if (y >= top && y + 10 * s <= bottom) c.Text(grid.gx, y + 2 * s, none, s, th.hint);
@@ -829,17 +829,18 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
         if (name.rfind("POKEMON ", 0) == 0) name = name.substr(8);
         const int ns = Canvas::TextWidth(name, s) <= tile ? s : std::max(1, s - 1);
         c.Text(x + (tile - Canvas::TextWidth(name, ns)) / 2, y + tile + 3 * s, name, ns, sel ? th.nameSel : th.name);
-        if (sel && th.selBar) c.Fill(x + tile / 4, y + tile + 19 * s, tile / 2, s, th.selBar);
+        if (sel && th.selBar) c.Fill(x + tile / 4, y + tile + (UiLang::Tall() ? 31 : 19) * s, tile / 2, s, th.selBar);
         std::string sub = g.comingSoon ? "COMING SOON" : !g.known ? "NOT PLAYABLE" : g.hasSave ? "SAVE FOUND" : "NEW GAME";
         if (!g.where.empty() && g.known) sub = (g.hasSave ? "SAVE " : "NEW ") + g.where; // e.g. SAVE IN BLACK2
         const int ss = std::max(1, s * 2 / 3);
-        c.Text(x + (tile - Canvas::TextWidth(sub, ss)) / 2, y + tile + 12 * s, sub, ss, !g.known && !g.comingSoon ? th.bad : sel ? th.subSel : th.sub);
+        c.Text(x + (tile - Canvas::TextWidth(sub, ss)) / 2, y + tile + (UiLang::Tall() ? 19 : 12) * s, sub, ss, !g.known && !g.comingSoon ? th.bad : sel ? th.subSel : th.sub);
     }
     // More games below the ones shown. (None drawn for above: under the tabs it looked like one
     // of their underlines, and the cut tiles at the top say it already.)
     if (scroll + (bottom - top) < v.height - grid.gap) c.Fill(c.w / 2 - 8 * s, bottom - 2 * s, 16 * s, s, th.hint);
     const std::string hint = !note.empty() ? note : !hintText.empty() ? hintText : "A: PLAY    Y: SETTINGS    L / R: TABS    +: QUIT";
-    const int hintScale = std::max(1, std::min(s, (c.w - 8) / std::max(1, (int)hint.size() * 6)));
+    int hintScale=s;
+        while(hintScale>1 && Canvas::TextWidth(hint,hintScale)>c.w-8)--hintScale;
     c.Text((c.w - Canvas::TextWidth(hint, hintScale)) / 2, c.h - 12 * s, hint, hintScale, th.hint);
 }
 
@@ -960,7 +961,7 @@ inline std::vector<Setting> SettingsList()
                   "PUTS AN ICON FOR EACH GAME IN THIS LIST ON THE HOME MENU WITH ITS PICTURE. IT STARTS THAT GAME STRAIGHT AWAY. MADE ON THIS CONSOLE: NO PC OR KEYS FILE NEEDED. LIKE ANY FORWARDER THE ICONS NEED SIGPATCHES TO START. INSTALL AGAIN AFTER ADDING GAMES. REMOVE ONE IN THE HOME MENU (OPTIONS / DELETE SOFTWARE)." });
 #endif
     // The interface's language (UiLang, ui_lang.h), shown first among DISPLAY's options.
-    l.insert(l.begin(), { "list_lang", "LANGUAGE", { { "auto", "AUTO" }, { "en", "ENGLISH" }, { "es", "ESPAÑOL" }, { "it", "ITALIANO" } }, "auto",
+    l.insert(l.begin(), { "list_lang", "LANGUAGE", UiLang::Choices(), "auto",
                           "THE LANGUAGE OF THE GAME LIST, THE SETTINGS AND THE PAUSE MENU (NOT OF THE GAMES)." });
     // The game list's own look (GAME LIST: ThemeNamed, Background).
     l.push_back({ "list_colour", "COLOUR", { { "red", "RED" }, { "blue", "BLUE" }, { "green", "GREEN" }, { "purple", "PURPLE" },
@@ -1010,27 +1011,9 @@ inline std::vector<Setting> SettingsList()
 // Words to lines of at most `chars` characters.
 inline std::vector<std::string> Wrap(const std::string& text, int chars)
 {
-    std::vector<std::string> lines;
-    std::string line, word;
-    auto flush = [&]() {
-        if (word.empty()) return;
-        if (!line.empty() && (int)(line.size() + 1 + word.size()) > chars)
-        {
-            lines.push_back(line);
-            line.clear();
-        }
-        line += (line.empty() ? "" : " ") + word;
-        word.clear();
-    };
-    for (char ch : text)
-        if (ch == ' ') flush();
-        else word += ch;
-    flush();
-    if (!line.empty()) lines.push_back(line);
-    return lines;
+    return UiLang::Wrap(text, chars * 6);
 }
 
-// The settings page's groups: first the list of them, then one group's options (Enter, Back).
 struct SettingsGroup
 {
     const char* key;  // its row in the list of groups (a "!" key: chosen, not stored)
@@ -1246,8 +1229,10 @@ struct SettingsPage
         c.Fill(0, 0, c.w, c.h, th.bg);
         c.Fill(0, 0, c.w, (c.h > c.w ? 43 : 22) * s, th.band);
         c.Fill(0, (c.h > c.w ? 43 : 22) * s, c.w, th.bandLineH * s, th.bandLine);
-        const std::string title = group < 0 ? "SETTINGS" : std::string("SETTINGS: ") + SettingsGroups()[group].name;
-        c.Text((c.w - Canvas::TextWidth(title, s + 1)) / 2, 6 * s, title, s + 1, th.title);
+        const std::string title = group < 0 ? "SETTINGS" : std::string("SETTINGS: ") + UiLang::Tr(SettingsGroups()[group].name);
+        int titleScale=s+1;
+        while(titleScale>1 && Canvas::TextWidth(title,titleScale)>c.w-8)--titleScale;
+        c.Text((c.w-Canvas::TextWidth(title,titleScale))/2,6*s,title,titleScale,th.title);
         const int width = std::min(c.w - 24 * s, 100 * 6 * ts);
         const int x = (c.w - width) / 2;
         struct Line { std::string text, value; int item; bool name; };
@@ -1264,16 +1249,18 @@ struct SettingsPage
             }
             if (i == selected) selFirst = (int)out.size();
             const std::string value = e.key ? Shown(e) : "";
-            const bool stacked = Canvas::TextWidth(e.name, ts) + Canvas::TextWidth(value, ts) + 8 * ts > width;
+            const bool arrows = !value.empty() && i == selected && e.key && strncmp(e.key, "!group", 6);
+            const std::string drawnValue = arrows ? "< " + UiLang::Tr(value) + " >" : UiLang::Tr(value);
+            const bool stacked = Canvas::TextWidth(e.name, ts) + Canvas::TextWidth(drawnValue, ts) + 8 * ts > width;
             out.push_back({ e.name, stacked ? "" : value, i, true });
             if (stacked && !value.empty())
-                for (const std::string& l : Wrap(value, width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
+                for (const std::string& l : Wrap(UiLang::Tr(value), width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
             for (const std::string& l : Wrap(UiLang::Tr(e.text), width / (6 * ts) - 2)) out.push_back({ l, "", i, false });
             if (i == selected) selLast = (int)out.size() - 1;
             out.push_back({ "", "", -1, false });
         }
         const int top = (c.h > c.w ? 48 : 30) * s, bottom = c.h - 18 * s;
-        lineH = 10 * ts;
+        lineH = (UiLang::Tall() ? 16 : 10) * ts;
         const int fit = std::max(1, (bottom - top) / lineH);
         if (follow)
         {
@@ -1296,16 +1283,17 @@ struct SettingsPage
                 if (!l.value.empty())
                 {
                     const bool group = !strncmp(items[l.item].key, "!group", 6);
-                const std::string v = sel && !group ? "< " + l.value + " >" : l.value;
+                    const std::string v = sel && !group ? "< " + UiLang::Tr(l.value) + " >" : l.value;
                     c.Text(x + width - Canvas::TextWidth(v, ts), y, v, ts, sel ? th.nameSel : th.name);
                 }
             }
             else if (!l.text.empty())
-                c.Text(x + 2 * 6 * ts, y, l.text, ts, sel ? th.name : th.sub);
+                c.TextRaw(x + 2 * 6 * ts, y, l.text, ts, sel ? th.name : th.sub);
         }
         if (scroll > 0) c.Fill(c.w / 2 - 8 * s, top - 4 * s, 16 * s, s, th.hint);
         if (scroll + fit < (int)out.size()) c.Fill(c.w / 2 - 8 * s, bottom + s, 16 * s, s, th.hint);
-        const int hintScale = std::max(1, std::min(s, (c.w - 8) / std::max(1, (int)hint.size() * 6)));
+        int hintScale=s;
+        while(hintScale>1 && Canvas::TextWidth(hint,hintScale)>c.w-8)--hintScale;
     c.Text((c.w - Canvas::TextWidth(hint, hintScale)) / 2, c.h - 12 * s, hint, hintScale, th.pokemon ? 0xFFDBE9FAu : th.hint);
     }
 };

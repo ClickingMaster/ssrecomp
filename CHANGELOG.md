@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- Add French, German, Japanese and Korean to the launcher and Fulldex menus, with automatic language detection, embedded fonts and translated controller/touch labels. Embedded GBA menus follow the selected language.
+
+- Complete Italian translations for newer menu pages, translate Spanish/Italian option values inside their arrows, and fit pause menus to narrow displays. Update regional ROM guidance. Adapted from AlessioGiacobbe’s PR #9.
+
 - Fix Platinum introduction controls so A can advance the dialogue shown before the Poke Ball touch prompt.
 
 - Expand the regional beta to 42 supplied ROM versions across French, German, Italian, Spanish, Japanese and Korean. Japanese casino screens use the generic two-screen fallback. Korean Platinum has passed startup and menu checks; broader battle and single-screen testing continues.

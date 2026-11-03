@@ -190,7 +190,8 @@ all)
     cp "$BUILD/ssrecomp.nro" build-sd/switch/pokemon-ds-wide/pokemon-ds-wide.nro
     # The licences: this program's (GPL-3) and, with the GBA games built in, mGBA's (MPL-2.0).
     cp LICENSE build-sd/switch/pokemon-ds-wide/LICENSE.txt
-    LICENCES="switch/pokemon-ds-wide/LICENSE.txt"
+    cp LICENSE-Noto.txt build-sd/switch/pokemon-ds-wide/LICENSE-Noto.txt
+    LICENCES="switch/pokemon-ds-wide/LICENSE.txt switch/pokemon-ds-wide/LICENSE-Noto.txt"
     GBA_WORK="${GBAW_WORK:-$HOME/pokemon-gba-wide}"
     if [ -n "${SSR_GBA_DIR:-}" ]; then
         [ -f "$GBA_WORK/mgba/LICENSE" ] || fail "no mGBA in $GBA_WORK (Pokemon GBA Widescreen's setup.sh makes it; GBAW_WORK if elsewhere)"

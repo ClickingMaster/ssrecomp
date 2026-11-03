@@ -37,6 +37,7 @@ struct TouchPad
     std::map<SDL_FingerID, int> lifted;            // up, frames left to count as held (see Up)
 
     SDL_Texture* labels = nullptr;
+    int labelsLanguage = -1;
     std::map<std::string, SDL_Rect> labelRect;
 
     void Layout(int outW, int outH, bool customise = true)
@@ -211,7 +212,9 @@ struct TouchPad
 
     void MakeLabels(SDL_Renderer* r)
     {
-        if (labels) return;
+        if (labels && labelsLanguage == UiLang::lang) return;
+        if (labels) SDL_DestroyTexture(labels);
+        labels=nullptr;labelRect.clear();labelsLanguage=UiLang::lang;
         const char* names[] = { "A", "B", "X", "Y", "L", "R", "SELECT", "START", "MENU", ">>" };
         const int scale = 3;
         Canvas c;
@@ -219,14 +222,16 @@ struct TouchPad
         for (const char* n : names)
         {
             int tw = Canvas::TextWidth(n, scale);
-            labelRect[n] = { x, 0, tw, 7 * scale };
+            const auto text=UiLang::Tr(n);int height=7;
+            for(size_t at=0;at<text.size();) {auto code=UiLang::Next(text,at);if(code>=0x1100)height=14;else if(code>=128)height=std::max(height,10);}
+            labelRect[n] = { x, 0, tw, height * scale };
             x += tw + 2;
         }
-        c.Resize(x, 7 * scale);
+        c.Resize(x, 14 * scale);
         x = 0;
         for (const char* n : names)
         {
-            c.Text(labelRect[n].x, 0, n, scale, 0xFFFFFFFF);
+            c.Text(labelRect[n].x, labelRect[n].h > 7*scale ? 3*scale : 0, n, scale, 0xFFFFFFFF);
         }
         labels = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, c.w, c.h);
         SDL_UpdateTexture(labels, nullptr, c.px.data(), c.w * 4);
