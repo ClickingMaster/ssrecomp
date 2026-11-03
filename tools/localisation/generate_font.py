@@ -10,7 +10,7 @@ for f,sha in zip([a.japanese,a.korean],expected):
  if hashlib.sha256(f.read_bytes()).hexdigest()!=sha:raise ValueError('Unexpected font source: '+str(f))
 jp=ImageFont.truetype(str(a.japanese),12);ko=ImageFont.truetype(str(a.korean),12);latin=ImageFont.truetype(str(a.japanese),9)
 chars=set(range(33,127))|set(range(0xa0,0x250))|set(range(0x3000,0x3100))|set(range(0x1100,0x1200))|set(range(0x3130,0x3190))|set(range(0x4e00,0xa000))|set(range(0xac00,0xd7a4))
-d=json.loads((ROOT/'localisation/translations.json').read_text())
+d=json.loads((ROOT/'localisation/translations.json').read_text(encoding='utf-8'))
 for table in d['tables'].values():
  for text in table.values():chars.update(ord(c) for c in text if ord(c)>=128)
 lines=['// Generated from Noto Sans CJK JP/KR. SIL Open Font License 1.1; see LICENSE-Noto.txt.','// Font source SHA-256 values pinned in tools/localisation/generate_font.py.','#pragma once','#include <cstdint>','#include <cstddef>','namespace UiFont {','struct Glyph { uint32_t code; uint8_t advance; uint16_t rows[14]; };','inline constexpr Glyph glyphs[] = {']
@@ -23,4 +23,4 @@ for i,code in enumerate(sorted(chars)):
  lines.append('    {0x%x, %d, {%s}},'%(code,advance,','.join('0x%x'%v for v in rows)))
  if i%5000==0:print('Baked',i,'/',len(chars),flush=True)
 lines+=['};','inline const Glyph* Find(uint32_t code) {','    size_t lo=0,hi=sizeof(glyphs)/sizeof(glyphs[0]);','    while(lo<hi) { size_t mid=lo+(hi-lo)/2; if(glyphs[mid].code<code)lo=mid+1;else hi=mid; }','    return lo<sizeof(glyphs)/sizeof(glyphs[0]) && glyphs[lo].code==code ? &glyphs[lo] : nullptr;','}','} // namespace UiFont','']
-(ROOT/'frontend/ui_font.h').write_text('\n'.join(lines));print('Baked glyphs',len(chars),flush=True)
+(ROOT/'frontend/ui_font.h').write_text('\n'.join(lines),encoding='utf-8');print('Baked glyphs',len(chars),flush=True)

@@ -14,7 +14,7 @@ for name in ['CMakeLists.txt','LICENSE','frontend','tools','art','patches']:
   if not f.is_file():continue
   if f.suffix.lower() in ['.nds','.gba','.sav','.state','.st','.nef','.sbin']:raise ValueError('Unexpected game/test file in GBA source')
   write(output/f.relative_to(source),f.read_bytes())
-ui=(source/'frontend/ui.h').read_text()
+ui=(source/'frontend/ui.h').read_text(encoding='utf-8')
 ui=ui.replace('#pragma once','#pragma once\n#include "ui_text.h"',1)
 a0=ui.index('    static int TextWidth(');b0=ui.index('    void TextCentred(',a0)
 ui=ui[:a0]+'    static int TextWidthRaw(const std::string& s,int scale) { return UiLang::Units(s)*scale; }\n    void TextRaw(int x,int y,const std::string& text,int scale,uint32_t colour) { UiText::DrawRaw(*this,x,y,text,scale,colour); }\n    static int TextWidth(const std::string& s,int scale) { return UiText::Width(s,scale); }\n    void Text(int x,int y,const std::string& text,int scale,uint32_t colour) { UiText::Draw(*this,x,y,text,scale,colour); }\n'+ui[b0:]
@@ -25,7 +25,7 @@ ui=ui.replace('const int lineH = big ?', 'const int baseLine = UiLang::Tall() ? 
 ui=ui.replace('const int headH = 7 * s + 10, footH = 18;','const int headH = (UiLang::Tall()?12:7) * s + 10, footH = UiLang::Tall()?24:18;')
 ui=ui.replace('const int ty = y + (lineH - 7 * s) / 2;','const int ty = y + (lineH - (UiLang::Tall()?10:7) * s) / 2;')
 write(output/'frontend/ui.h',ui.encode())
-main=(source/'frontend/main.cpp').read_text();main=main.replace('"< " + ln.value + " >"','"< " + UiLang::Tr(ln.value) + " >"').replace('const int top = 36, bottom = c.h - 22, lineH = 10;','const int top = 36, bottom = c.h - 22, lineH = UiLang::Tall()?16:10;')
+main=(source/'frontend/main.cpp').read_text(encoding='utf-8');main=main.replace('"< " + ln.value + " >"','"< " + UiLang::Tr(ln.value) + " >"').replace('const int top = 36, bottom = c.h - 22, lineH = 10;','const int top = 36, bottom = c.h - 22, lineH = UiLang::Tall()?16:10;')
 main=main.replace('c.Text(x + 12, y, ln.text, 1, sel ? Colour::Text : Colour::Hint);','c.TextRaw(x + 12, y, ln.text, 1, sel ? Colour::Text : Colour::Hint);')
 write(output/'frontend/main.cpp',main.encode())
 print('Prepared localised GBA UI at '+str(output))
@@ -34,6 +34,6 @@ print('Prepared localised GBA UI at '+str(output))
 host_editor=Path(__file__).resolve().parents[2]/"frontend/touchlayout.h"
 write(output/"frontend/touchlayout.h",host_editor.read_bytes())
 
-touch=(source/'frontend/touch.h').read_text()
+touch=(source/'frontend/touch.h').read_text(encoding='utf-8')
 touch=touch.replace('c.TextCentred(r.x + r.w / 2, r.y + (r.h - 7) / 2, label, 1, text);','if(UiLang::Tr(label)!=label)TouchLayout::DrawAction(c,r.x,r.x+r.w,r.y,r.h,label,1,text);else c.TextCentred(r.x + r.w / 2, r.y + (r.h - 7) / 2, label, 1, text);')
 write(output/'frontend/touch.h',touch.encode())

@@ -71,4 +71,5 @@ int main(int, char**)
     assert(edited.orientations[0].empty());
     SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit(); std::remove(path.c_str());
     puts("Touch layout persistence, bounds, DS hit detection, editor save/cancel/reset passed");
+    return 0;
 }

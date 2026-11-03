@@ -1,9 +1,8 @@
-#define SDL_MAIN_HANDLED
 #include "ui.h"
 #include "touchlayout.h"
 #include <cassert>
 #include <iostream>
-int main() {
+int main(int, char**) {
  for(const auto* language:UiLang::Codes) {
   UiLang::Set(language);
   for(int width:{320,360,720,1280}) {
@@ -18,4 +17,5 @@ int main() {
   }
  }
  std::cout<<"Translated touch actions fit all seven languages at 320/360/720/1280 pixels\n";
+ return 0;
 }
