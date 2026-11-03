@@ -13,8 +13,12 @@ int main()
     UiLang::Set("auto"); assert(UiLang::lang == 0);
     const char* codes[] = {"IRBF","IRAF","IREF","IRDF","IPGF","IPKF","CPUF","IRAS","CPUS","IPGS","IPKS","ADAS","IPKI"};
     for (auto code : codes) { const auto* game = Launcher::Known(code); assert(game); assert(std::string(game->code) == code); }
-    assert(!Launcher::Known("IPKJ")); assert(!Launcher::Known("IPKD")); assert(!Launcher::Known("CPUI"));
-    assert(BaseGameCode("IPKJ") == "IPKJ");
+    for (const auto& profile : RegionalProfiles::profiles) {
+        const auto* game = Launcher::Known(profile.code); assert(game);
+        assert(std::string(game->code) == profile.code);
+        assert(BaseGameCode(profile.code) == profile.base);
+    }
+    assert(!Launcher::Known("IPKZ")); assert(BaseGameCode("IPKZ") == "IPKZ");
     assert(std::string(Launcher::Known("IPKF")->save) != Launcher::Known("IPKE")->save);
     assert(std::string(Launcher::Known("IPKS")->save) != Launcher::Known("IPKI")->save);
 }
