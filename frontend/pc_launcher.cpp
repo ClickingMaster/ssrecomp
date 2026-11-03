@@ -535,15 +535,27 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
     UiLang::DetectSystem();
     SDL_Window* window = SDL_CreateWindow("Pokémon Fulldex", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+    if (!window)
+    {
+        fprintf(stderr, "[launcher] window creation failed: %s\n", SDL_GetError());
+        SDL_Quit();
+        return -1;
+    }
 #ifdef SSR_IOS
     // The window exists now: ask iOS to turn, in case the device was already sideways.
     IosOrientLauncher();
 #endif
-    SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : nullptr;
-    if (window && !renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer)
     {
-        fprintf(stderr, "[launcher] no window: %s\n", SDL_GetError());
+#ifdef SSR_IOS
+        fprintf(stderr, "[launcher] accelerated renderer failed: %s; trying software\n", SDL_GetError());
+#endif
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    }
+    if (!renderer)
+    {
+        fprintf(stderr, "[launcher] renderer initialisation failed: %s\n", SDL_GetError());
         if (window) SDL_DestroyWindow(window);
         SDL_Quit();
         return -1;
@@ -551,6 +563,13 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
     SDL_RendererInfo renderInfo = {};
     if (SDL_GetRendererInfo(renderer, &renderInfo) == 0)
         fprintf(stderr, "[launcher] renderer %s, max texture %dx%d\n", renderInfo.name, renderInfo.max_texture_width, renderInfo.max_texture_height);
+#ifdef SSR_IOS
+    fprintf(stderr, "[launcher] iOS window=%u renderer-window=%u association=%s\n",
+        SDL_GetWindowID(window), SDL_GetWindowID(SDL_RenderGetWindow(renderer)),
+        SDL_RenderGetWindow(renderer) == window ? "correct" : "WRONG");
+    int loggedDrawableW = -1, loggedDrawableH = -1;
+    bool loggedPresent = false, loggedDrawableError = false;
+#endif
     SDL_Texture* texture = nullptr;
     Canvas canvas;
     std::map<std::string, std::vector<uint32_t>> artCache;
@@ -1507,7 +1526,27 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
 
         if (appBackgrounded) { SDL_Delay(50); continue; }
         int ow = 1280, oh = 720;
+#ifdef SSR_IOS
+        if (SDL_GetRendererOutputSize(renderer, &ow, &oh) != 0 || ow <= 0 || oh <= 0)
+        {
+            if (!loggedDrawableError) fprintf(stderr, "[launcher] waiting for drawable: %dx%d %s\n", ow, oh, SDL_GetError());
+            loggedDrawableError = true;
+            SDL_Delay(16);
+            continue; // SDL_PollEvent on the next iteration pumps UIKit's lifecycle.
+        }
+        loggedDrawableError = false;
+        if (ow != loggedDrawableW || oh != loggedDrawableH)
+        {
+            int pointsW = 0, pointsH = 0;
+            SDL_GetWindowSize(window, &pointsW, &pointsH);
+            fprintf(stderr, "[launcher] drawable window=%u points=%dx%d pixels=%dx%d\n",
+                SDL_GetWindowID(window), pointsW, pointsH, ow, oh);
+            loggedDrawableW = ow; loggedDrawableH = oh;
+            loggedPresent = false;
+        }
+#else
         SDL_GetRendererOutputSize(renderer, &ow, &oh);
+#endif
 #ifdef SSR_PHONE
         // Bound software composition work on high density phone displays.
         const double scale = std::min(1.0, 1280.0 / std::max(ow, oh));
@@ -1658,6 +1697,15 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
             continue;
         }
         SDL_RenderPresent(renderer);
+#ifdef SSR_IOS
+        if (!loggedPresent)
+        {
+            fprintf(stderr, "[launcher] frame presented window=%u renderer=%s canvas=%dx%d drawable=%dx%d\n",
+                SDL_GetWindowID(window), renderInfo.name ? renderInfo.name : "unknown",
+                canvas.w, canvas.h, loggedDrawableW, loggedDrawableH);
+            loggedPresent = true;
+        }
+#endif
         if (testPick && *testPick)
         {
             for (size_t i = 0; i < games.size(); i++)

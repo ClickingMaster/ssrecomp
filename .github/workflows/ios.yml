@@ -1,6 +1,6 @@
 # Builds the iPhone and iPad download (pokemon-ds-wide-ios.ipa, tools/ios/build_all.sh), unsigned
 # for sideloading, and starts a Simulator build on an iPhone and an iPad to check that it
-# opens on its game list, upright
+# submits a launcher frame and produces a nonblank full-screen screenshot
 # (a screenshot and its game.log are the run's artifacts; no ROM is ever given to this workflow,
 # so no game is played here). Started by the maintainer's script or by hand (Actions tab).
 #
@@ -19,15 +19,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [device, simulator]
-    runs-on: macos-15-intel
-    timeout-minutes: 30
+        include:
+          - target: device
+            os: xcode-27
+            arch: arm64
+          - target: simulator
+            os: xcode-27
+            arch: arm64
+          # Retain coverage of older Intel simulator toolchains as well.
+          - target: simulator
+            os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install "cmake>=3.21,<4" ninja
+      - run: python -m pip install "cmake==3.31.10" ninja Pillow
+      - name: Toolchain and available simulator runtimes
+        run: |
+          uname -m
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun simctl list runtimes
+      - name: Check simulator failure detection
+        run: python tools/ios/test_simulator_start.py
       - name: The inputs (tables of addresses, pictures, icon)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +59,23 @@ jobs:
       - run: tools/ios/build_all.sh inputs/build-gen-tables inputs/box-art inputs/icon.jpg
         env:
           SSR_IOS_TARGET: ${{ matrix.target }}
-          SSR_IOS_ARCH: x86_64
+          SSR_IOS_ARCH: ${{ matrix.arch }}
+      - name: Check SDL scene integration and cache upgrades
+        run: |
+          mkdir -p scene-check
+          curl --fail --location --retry 3 https://www.libsdl.org/release/SDL2-2.32.10.tar.gz -o scene-check/SDL2.tar.gz
+          echo '5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165  scene-check/SDL2.tar.gz' | shasum -a 256 -c -
+          tar -xzf scene-check/SDL2.tar.gz -C scene-check
+          python tools/ios/check_scene_integration.py scene-check/SDL2-2.32.10
+      - name: Archive the simulator app
+        if: matrix.target == 'simulator'
+        run: ditto -c -k --sequesterRsrc --keepParent "build-ios-dist/Pokemon Fulldex.app" "build-ios-dist/pokemon-fulldex-simulator-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        if: matrix.target == 'simulator'
+        with:
+          name: ios-simulator-app-${{ matrix.arch }}
+          path: build-ios-dist/pokemon-fulldex-simulator-${{ matrix.arch }}.zip
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: matrix.target == 'device'
         with:
@@ -51,28 +85,39 @@ jobs:
             build-ios-dist/SHA256SUMS.txt
           if-no-files-found: error
       - name: A first start in the iOS Simulator
-        timeout-minutes: 6
+        timeout-minutes: 10
         if: matrix.target == 'simulator'
+        env:
+          IOS_TEST_MIN_MAJOR: ${{ matrix.os == 'xcode-27' && '27' || '0' }}
         run: |
           set -euo pipefail
           mkdir -p sim
+          xcrun simctl list devices available -j > sim/available-devices.json
           # An iPhone and an iPad. The list should come up upright on both.
           start_one() {
             local kind="$1"
             local udid
             udid="$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
+          import json, os, sys
           kind = sys.argv[1]
+          minimum = int(os.environ["IOS_TEST_MIN_MAJOR"])
           d = json.load(sys.stdin)["devices"]
-          found = [x["udid"] for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith(kind)]
+          import re
+          def version(runtime):
+              return tuple(map(int, re.findall(r"[0-9]+", runtime.split("iOS-")[-1])))
+          found = [(version(k), x) for k, v in d.items() if "iOS" in k and version(k) >= (minimum,) for x in v if x.get("isAvailable", True) and x["name"].startswith(kind)]
           if not found:
               raise SystemExit("no " + kind + " simulator")
-          print(found[-1])
+          # Prefer Duo where installed, then the newest compatible runtime.
+          _, device = max(found, key=lambda item: ("Duo" in item[1]["name"], item[0], item[1]["name"]))
+          print("Testing " + device["name"], file=sys.stderr)
+          print(device["udid"])
           ' "$kind")"
             xcrun simctl boot "$udid"
             xcrun simctl bootstatus "$udid" -b
             xcrun simctl install "$udid" "build-ios-dist/Pokemon Fulldex.app"
-            xcrun simctl launch "$udid" io.github.mamesj.pokemonds
+            xcrun simctl launch --terminate-running-process --console "$udid" io.github.mamesj.pokemonds > "sim/${kind}-console.log" 2>&1 &
+            local console_pid=$!
             sleep 25
             xcrun simctl io "$udid" screenshot "sim/${kind}-first-start.png"
             local data
@@ -81,22 +126,16 @@ jobs:
             cp "$data/Documents/game.log" "sim/${kind}-game.log" || true
             xcrun simctl spawn "$udid" log show --last 3m --style compact --predicate 'process == "pokemon-ds-wide"' > "sim/${kind}-system.log" || true
             cat "sim/${kind}-game.log" || true
-            grep -q '\[launcher\] folder' "sim/${kind}-game.log"
-            python3 -c '
-          import struct, sys
-          kind, path = sys.argv[1], sys.argv[2]
-          w, h = struct.unpack(">II", open(path, "rb").read(24)[16:24])
-          print("%s screenshot %dx%d" % (kind, w, h))
-          if h <= w:
-              raise SystemExit("%s list is not upright (%dx%d)" % (kind, w, h))
-          ' "$kind" "sim/${kind}-first-start.png"
+            python3 tools/ios/check_simulator_start.py "sim/${kind}-game.log" "sim/${kind}-first-start.png"
             xcrun simctl shutdown "$udid" || true
+            kill "$console_pid" 2>/dev/null || true
+            wait "$console_pid" || true
           }
           start_one iPhone
           start_one iPad
       - uses: actions/upload-artifact@v4
         if: always() && matrix.target == 'simulator'
         with:
-          name: ios-simulator-first-start
+          name: ios-simulator-first-start-${{ matrix.arch }}
           path: sim/
           if-no-files-found: warn

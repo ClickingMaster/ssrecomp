@@ -35,6 +35,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         WORKING_DIRECTORY "${ssr_sdl2_SOURCE_DIR}" RESULT_VARIABLE _scene_applied
         OUTPUT_QUIET ERROR_QUIET)
     if(NOT _scene_applied EQUAL 0)
+        # Upgrade the exact previous Fulldex patch in existing Mac build caches.
+        # Only reverse a recognised patch; never overwrite arbitrary local edits.
+        set(_scene_v1 "${CMAKE_CURRENT_LIST_DIR}/../tools/ios/sdl2-scene-lifecycle-v1.patch")
+        execute_process(COMMAND ${_scene_git} apply --reverse --check "${_scene_v1}"
+            WORKING_DIRECTORY "${ssr_sdl2_SOURCE_DIR}" RESULT_VARIABLE _scene_legacy
+            OUTPUT_QUIET ERROR_QUIET)
+        if(_scene_legacy EQUAL 0)
+            execute_process(COMMAND ${_scene_git} apply --reverse "${_scene_v1}"
+                WORKING_DIRECTORY "${ssr_sdl2_SOURCE_DIR}" RESULT_VARIABLE _scene_unpatch)
+            if(NOT _scene_unpatch EQUAL 0)
+                message(FATAL_ERROR "Could not upgrade the previous SDL2 scene patch")
+            endif()
+        endif()
         execute_process(COMMAND ${_scene_git} apply --check "${_scene_patch}"
             WORKING_DIRECTORY "${ssr_sdl2_SOURCE_DIR}" RESULT_VARIABLE _scene_check)
         if(NOT _scene_check EQUAL 0)

@@ -1,87 +1,157 @@
-# iOS scene lifecycle
+# iOS scene lifecycle and black-screen investigation
 
-## Diagnosis
+## What the supplied log proves
 
-The reported `___UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption_block_invoke`
-trap matches Apple's iOS 27 requirement for apps linked against the latest SDK:
-https://developer.apple.com/documentation/uikit/transitioning-to-the-uikit-scene-based-life-cycle
+The original iOS 27 no-scene-lifecycle crash is resolved. The new log reaches
+`[launcher] no window: No connected UIWindowScene for SDL display`. This error
+comes from the previous SDL backend patch, before a native SDL window, renderer
+or launcher texture has been created. The update worker can continue logging
+while the launcher has already returned; that is not evidence of rendering.
 
-The original packaged Info.plist had no `UIApplicationSceneManifest`. The pinned
-SDL 2.32.10 backend scheduled `SDL_main` from `didFinishLaunchingWithOptions:` and
-created `UIWindow` objects using screen bounds without attaching a window scene.
-This is a source-level confirmation of the lifecycle mismatch, not a reproduction
-of the supplied simulator crash on this Windows development machine.
+In that implementation only `scene:willConnectToSession:options:` schedules the
+launcher entry point. Reaching the launcher therefore establishes that the scene
+delegate was registered, instantiated and called, assuming the supplied binary
+matches this source. A plist-only change cannot fix the window creation failure.
 
-## Implementation
+The old lookup requires a member of `UIApplication.connectedScenes` whose screen
+is pointer-equal to SDL's cached display screen and whose state is not unattached.
+It schedules SDL_main immediately after connection, without waiting for activation.
+SDL still enumerates `UIScreen.screens` independently. The error establishes that
+no candidate satisfied both conditions; the supplied log does not distinguish
+an attachment timing issue from a screen identity mismatch. We cannot reproduce
+that distinction on Windows. The fix removes both dependencies rather than
+ignoring the failure or substituting an arbitrary connected scene.
 
-`cmake/MacDependencies.cmake` applies `tools/ios/sdl2-scene-lifecycle.patch` to the
-hash-pinned SDL source before configuring it, for iOS only. It also handles an
-existing populated source cache. An incompatible source cache fails configuration.
-macOS and other platforms retain upstream SDL behaviour.
+## Changes
 
-The scene manifest declares one application scene and `SDLUIKitSceneDelegate`.
-Scene connection schedules the existing SDL main entry point once, after UIKit
-finishes connecting. Every SDL window is attached to the connected `UIWindowScene`
-before the existing SDL controller and views are installed. This also covers
-launcher/game window replacement and the optional GBA integration. Scene reconnect
-reattaches the surviving window without restarting the emulator. Scene notifications
-feed SDL's existing foreground/background handlers; file-opening scene callbacks
-feed its existing drop-file path, including initial launch URLs.
+- The UIKit-supplied application scene is retained explicitly. During connection
+  a native scene-owned bootstrap window lets UIKit finish activation. After
+  `sceneDidBecomeActive:`, a deferred callback checks foreground-active state,
+  screen availability and positive bounds before entering SDL_main once. Failed
+  readiness checks return to UIKit; activation and geometry callbacks retry.
+  There is no sleep loop, semaphore or nested run-loop wait in window creation.
+- SDL display zero is initialised from that scene's screen. Other displays are
+  enumerated only for connected window scenes, not inactive physical screens. Primary window
+  creation uses the explicit scene rather than rediscovering it through cached
+  screen identity. Secondary displays still require an exact active scene match.
+  Native windows are created with `initWithWindowScene:`; `setScreen:` is no
+  longer called after attaching a scene. Showing the real SDL window replaces
+  the bootstrap window and retains SDL keyboard/mouse focus on display zero.
+- Scene geometry, foreground and reconnect callbacks rebind surviving primary
+  SDL windows and their existing controllers/views. Display bounds/modes track
+  scene geometry, and stale physical-screen mode objects are released when the
+  scene's screen changes. A physical screen disconnect does not delete the
+  application's logical display. A different display's window is not moved
+  into the application scene.
+- Views use the full window bounds. View scale/layout and SDL resize/expose
+  events update drawable dimensions and renderer viewports, including pixel
+  density changes without a point-size change. Both the iOS 14 geometry callback
+  and the SDK-guarded iOS 26+ effective-geometry callback are handled.
+- The launcher still creates its renderer for its own SDL window, draws into
+  that renderer and calls SDL_RenderPresent on it. New logs record the association,
+  point and pixel sizes, composition size and the first submitted frame after
+  each drawable-size change. Zero-size/unavailable drawables return to the event
+  loop instead of allocating a 1-pixel canvas. A present log means the call was
+  submitted; only a simulator/device screenshot proves pixels were displayed.
+- Existing iOS deployment target, device families, manifest, orientation hints,
+  touch paths and emulator/gameplay code are unchanged by this follow-up.
 
-Scene/window bounds replace screen bounds and the old orientation dimension-swap
-workaround when sizing views. SDL's existing flexible views, layout resize events
-and renderer drawable-size queries continue to handle geometry changes and touch
-coordinates. The full-screen-only restriction is removed to allow resizing and
-fold/unfold changes. The iPad manifest permits all four orientations; launcher
-and game orientation hints remain in place. Status bar visibility is controlled
-by SDL's view controller. No SDK version, deployment metadata or runtime checks
-are spoofed. Minimum iOS remains 14.0 and device families remain iPhone and iPad.
+The SDL patch remains against hash-pinned SDL 2.32.10. CMake recognises and
+reverses the exact v1 patch before applying this revision to an existing build
+cache. Arbitrary modified caches still fail rather than being overwritten.
+Other platforms retain upstream SDL; launcher diagnostics are guarded by SSR_IOS.
 
-## Checks performed on Windows
+## Diagnostics to capture on the Mac
 
-- CMake 3.31.10/Ninja isolated dependency integration: pristine SDL patching,
-  repeat cached configuration and incompatible-source rejection passed.
-- Device and simulator plist templates parse, declare the scene class/delegate,
-  retain iOS 14.0 and both device families, and allow resizing.
-- Build script shell syntax check and Git whitespace checks passed.
+Early messages may precede redirection into Documents/game.log. Capture simulator
+console output as well as game.log. Expected order (geometry messages may interleave):
 
-Repeat the host checks with a pristine SDL 2.32.10 source tree, CMake, Ninja and Git:
+1. `[ios-scene] application launched; scene delegate registered=1`
+2. `SDLUIKitSceneDelegate instantiated`, then `will-connect`
+3. `did-become-active`, then `starting-SDL-main` once
+4. `[ios-display] initialising ...` and scene/display dimensions
+5. `[ios-window] create ...`, then `shown ... key=1 hidden=0`
+6. `[launcher] renderer ...`, `association=correct`, `drawable ...`
+7. `[launcher] frame presented ...`
+
+Logs include scene/session identifiers, activation state, screen identity and
+bounds. On fold/unfold expect geometry updates, updated drawable dimensions and
+another frame-presented message if pixel dimensions changed. Initialising output
+also records the legacy main-screen identity to expose differences from scene.screen.
+
+## Checks available on Windows
+
+Run with pristine SDL 2.32.10 sources, CMake 3.31.10, Ninja, Git and Python:
 
 ```sh
 python3 tools/ios/check_scene_integration.py /path/to/SDL2-2.32.10
 ```
 
-These checks do not compile Objective-C or prove runtime behaviour. Windows has
-no Xcode/UIKit SDK, iOS simulator or connected physical iOS device. No iOS binary
-was built here, and launcher, touch, gameplay and rendering preservation still
-need the runtime checks below.
+The check parses device/simulator plist templates, checks scene startup/window
+wiring, configures an isolated CMake fixture with the actual patch integration,
+reconfigures it, upgrades a fixture containing the exact previous patch, and
+checks rejection of an incompatible cache. This is not a UIKit compile or a
+runtime lifecycle test. Windows has no Apple SDK or iPhone Duo simulator.
 
-## Mac verification required
+## Rebuild and validate on the Mac
 
-Use the existing generated inputs (substitute their actual paths):
+Apply the supplied uncommitted change set to the Mac checkout first. Substitute
+the existing generated input paths; no cache deletion should be needed:
 
 ```sh
-SSR_IOS_TARGET=simulator SSR_IOS_ARCH=arm64 tools/ios/build_all.sh TABLES ART ICON
+SSR_IOS_TARGET=simulator SSR_IOS_ARCH=arm64 \
+  tools/ios/build_all.sh /path/to/TABLES /path/to/ART /path/to/ICON
 xcrun simctl install booted "build-ios-dist/Pokemon Fulldex.app"
-xcrun simctl launch booted io.github.mamesj.pokemonds
+xcrun simctl launch --terminate-running-process --console booted io.github.mamesj.pokemonds
 ```
 
-1. Cold launch on the iOS 27.2 iPhone Duo simulator, folded and unfolded. Verify
-   the launcher appears and no lifecycle trap occurs. Inspect the installed
-   Info.plist for the scene manifest if testing an old cached installation.
-2. Fold/unfold and rotate while the launcher, settings and a game are visible.
-   Verify the view fills the available scene, the drawable updates without large
-   compatibility margins, and touch controls and menu hit targets stay aligned.
-   Intentional game aspect-ratio padding may still be present.
-3. Launch DS and optional GBA games, return to the launcher, and repeat. Verify
-   orientation changes, rendering, audio, controller input and touch input.
-4. Background/foreground, lock/unlock, and disconnect/reconnect the scene. Verify
-   gameplay resumes and the launcher/main entry point does not start twice.
-5. Open a supported GBA document from Files both with the app closed and running.
-6. Repeat launch, rotation, touch and suspend/resume checks on an iOS 14 simulator
-   where available, a physical iPhone and an iPad. On iPad also resize the app.
-7. Build the device package with `SSR_IOS_TARGET=device` using the same command;
-   install with the existing signing/sideloading process and repeat the checks.
+Keep the console attached while testing, using another terminal for screenshots:
 
-The existing GitHub iOS workflow remains useful for basic iPhone/iPad first-start
-coverage, but its macOS Intel runner is not evidence of ARM64 iOS 27 Duo behaviour.
+```sh
+xcrun simctl io booted screenshot /tmp/fulldex-cover.png
+# Unfold the simulator, then capture the inner display.
+xcrun simctl io booted screenshot /tmp/fulldex-inner.png
+DATA="$(xcrun simctl get_app_container booted io.github.mamesj.pokemonds data)"
+cat "$DATA/Documents/game.log"
+```
+
+Verify cold launch folded and unfolded, game-list visibility to the scene edges,
+repeated fold/unfold while running, touch alignment, portrait/landscape transitions,
+background/foreground, scene reconnect, and DS/GBA launcher/game round trips.
+Check that `starting-SDL-main` occurs once per process and that drawable and canvas
+logs change with the display. Intentional gameplay aspect-ratio padding may remain.
+Repeat on an iOS 14-compatible runtime where available, a physical iPhone and an
+iPad (including app-window resizing), with controller input/audio and Files opening.
+Device packaging uses `SSR_IOS_TARGET=device` and the existing signing process.
+
+No iOS build or runtime success is claimed until these Mac/device checks pass.
+
+## GitHub build coverage
+
+The iOS download workflow now uses the Xcode 27 Apple Silicon runner for device
+packaging and ARM64 simulator testing. The Intel simulator job remains for older
+toolchain coverage. The ARM64 first-start check requires an installed iOS 27+
+runtime, prefers iPhone Duo where available, and also tests an iPad. Exact Xcode,
+SDK/runtime versions and selected devices are printed in the run logs. This does
+not claim a specific 27.2 runtime or automated fold/unfold coverage.
+
+The smoke check requires a correctly associated renderer, positive drawable
+sizes, a submitted frame for that drawable, and a nonblank screenshot that fills
+the initial full-screen scene. It compares screenshot pixels with drawable
+pixels rather than the smaller software-composition canvas. Screenshots still
+need visual review; this is failure detection, not a game-list image comparison.
+It catches the supplied no-window log and black or uniformly blank screenshots.
+
+Artifacts retain the sideloadable IPA and checksums, and add zipped simulator
+apps and architecture-specific screenshots/console/game logs. Cache-upgrade
+checks run against a separately downloaded, SHA-256 verified pristine SDL source.
+Use Actions > iOS download > Run workflow after publishing the reviewed changes.
+The workflow still uses the existing mac-build-inputs release and optional GBA
+inputs; no ROM, save or recompiled game code is added.
+
+Host validation:
+
+```sh
+python3 -m pip install Pillow
+python3 tools/ios/test_simulator_start.py
+```

@@ -1,0 +1,166 @@
+diff --git a/src/video/uikit/SDL_uikitappdelegate.m b/src/video/uikit/SDL_uikitappdelegate.m
+index 31b114a..27e19eb 100644
+--- a/src/video/uikit/SDL_uikitappdelegate.m
++++ b/src/video/uikit/SDL_uikitappdelegate.m
+@@ -50,6 +50,53 @@ static int forward_argc;
+ static char **forward_argv;
+ static int exit_status;
+
++/* Fulldex: single-scene lifecycle backport for the pinned SDL2 backend. */
++static UIWindowScene *fulldexScene;
++static BOOL fulldexMainStarted;
++static NSSet<UIOpenURLContext *> *fulldexLaunchURLs;
++
++@interface SDLUIKitDelegate (FulldexScene)
++- (void)postFinishLaunch;
++- (void)sendDropFileForURL:(NSURL *)url;
++@end
++
++@interface SDLUIKitSceneDelegate : NSObject <UIWindowSceneDelegate>
++@end
++
++@implementation SDLUIKitSceneDelegate
++- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options
++{
++    if (![scene isKindOfClass:[UIWindowScene class]]) return;
++    fulldexScene = (UIWindowScene *)scene;
++    UIWindow *window = [[SDLUIKitDelegate sharedAppDelegate] window];
++    if (window) {
++        window.windowScene = fulldexScene;
++        window.frame = fulldexScene.coordinateSpace.bounds;
++        [window makeKeyAndVisible];
++    }
++    if (fulldexMainStarted) {
++        [self scene:scene openURLContexts:options.URLContexts];
++    } else {
++        fulldexLaunchURLs = options.URLContexts;
++    }
++    if (!fulldexMainStarted) {
++        fulldexMainStarted = YES;
++        /* Defer SDL_main until UIKit has finished connecting the window scene. */
++        [[SDLUIKitDelegate sharedAppDelegate] performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
++    }
++}
++- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)contexts
++{
++    for (UIOpenURLContext *context in contexts) {
++        [[SDLUIKitDelegate sharedAppDelegate] sendDropFileForURL:context.URL];
++    }
++}
++- (void)sceneDidDisconnect:(UIScene *)scene
++{
++    if (scene == fulldexScene) fulldexScene = nil;
++}
++@end
++
+ int SDL_UIKitRunApp(int argc, char *argv[], SDL_main_func mainFunction)
+ {
+     int i;
+@@ -371,6 +418,11 @@ static UIImage *SDL_LoadLaunchImageNamed(NSString *name, int screenh)
+
+ - (void)hideLaunchScreen
+ {
++    /* SDL has initialised its event queue by the first event pump. */
++    for (UIOpenURLContext *context in fulldexLaunchURLs) {
++        [self sendDropFileForURL:context.URL];
++    }
++    fulldexLaunchURLs = nil;
+     UIWindow *window = launchWindow;
+
+     if (!window || window.hidden) {
+@@ -414,7 +466,7 @@ static UIImage *SDL_LoadLaunchImageNamed(NSString *name, int screenh)
+ {
+     NSBundle *bundle = [NSBundle mainBundle];
+
+-#ifdef SDL_IPHONE_LAUNCHSCREEN
++#if 0 /* Fulldex uses UIKit's scene launch screen, not a detached launch window. */
+     /* The normal launch screen is displayed until didFinishLaunching returns,
+      * but SDL_main is called after that happens and there may be a noticeable
+      * delay between the start of SDL_main and when the first real frame is
+@@ -470,7 +522,7 @@ static UIImage *SDL_LoadLaunchImageNamed(NSString *name, int screenh)
+                         SDL_IdleTimerDisabledChanged, NULL);
+
+     SDL_SetMainReady();
+-    [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
++    /* SDL_main is scheduled by scene:willConnectToSession:options:. */
+
+     return YES;
+ }
+diff --git a/src/video/uikit/SDL_uikitevents.m b/src/video/uikit/SDL_uikitevents.m
+index 0a96c68..27cdf80 100644
+--- a/src/video/uikit/SDL_uikitevents.m
++++ b/src/video/uikit/SDL_uikitevents.m
+@@ -53,10 +53,11 @@ static BOOL UIKit_EventPumpEnabled = YES;
+     NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
+     if (UIKit_EventPumpEnabled && !self.isObservingNotifications) {
+         self.isObservingNotifications = YES;
+-        [notificationCenter addObserver:self selector:@selector(applicationDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
+-        [notificationCenter addObserver:self selector:@selector(applicationWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
+-        [notificationCenter addObserver:self selector:@selector(applicationDidEnterBackground) name:UIApplicationDidEnterBackgroundNotification object:nil];
+-        [notificationCenter addObserver:self selector:@selector(applicationWillEnterForeground) name:UIApplicationWillEnterForegroundNotification object:nil];
++        /* Fulldex: scene transitions drive the existing SDL lifecycle handlers. */
++        [notificationCenter addObserver:self selector:@selector(applicationDidBecomeActive) name:UISceneDidActivateNotification object:nil];
++        [notificationCenter addObserver:self selector:@selector(applicationWillResignActive) name:UISceneWillDeactivateNotification object:nil];
++        [notificationCenter addObserver:self selector:@selector(applicationDidEnterBackground) name:UISceneDidEnterBackgroundNotification object:nil];
++        [notificationCenter addObserver:self selector:@selector(applicationWillEnterForeground) name:UISceneWillEnterForegroundNotification object:nil];
+         [notificationCenter addObserver:self selector:@selector(applicationWillTerminate) name:UIApplicationWillTerminateNotification object:nil];
+         [notificationCenter addObserver:self selector:@selector(applicationDidReceiveMemoryWarning) name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
+ #if !TARGET_OS_TV
+diff --git a/src/video/uikit/SDL_uikitvideo.m b/src/video/uikit/SDL_uikitvideo.m
+index f7aa3fd..53e945e 100644
+--- a/src/video/uikit/SDL_uikitvideo.m
++++ b/src/video/uikit/SDL_uikitvideo.m
+@@ -209,6 +209,9 @@ CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen)
+      * is used on an iPad. */
+     if (data != nil && data.uiwindow != nil) {
+         frame = data.uiwindow.bounds;
++        /* Fulldex: scene geometry is authoritative, including square displays.
++         * Do not apply the old screen/orientation dimension-swap workaround. */
++        if (data.uiwindow.windowScene) return frame;
+     }
+
+ #if !TARGET_OS_TV
+diff --git a/src/video/uikit/SDL_uikitwindow.m b/src/video/uikit/SDL_uikitwindow.m
+index 0e0ea05..4b9e409 100644
+--- a/src/video/uikit/SDL_uikitwindow.m
++++ b/src/video/uikit/SDL_uikitwindow.m
+@@ -90,7 +90,7 @@ static int SetupWindowData(_THIS, SDL_Window *window, UIWindow *uiwindow, SDL_bo
+     SDL_DisplayData *displaydata = (__bridge SDL_DisplayData *) display->driverdata;
+     SDL_uikitview *view;
+
+-    CGRect frame = UIKit_ComputeViewFrame(window, displaydata.uiscreen);
++    CGRect frame = uiwindow.bounds; /* Fulldex: scene size, including fold/unfold. */
+     int width  = (int) frame.size.width;
+     int height = (int) frame.size.height;
+
+@@ -113,7 +113,7 @@ static int SetupWindowData(_THIS, SDL_Window *window, UIWindow *uiwindow, SDL_bo
+     }
+
+ #if !TARGET_OS_TV
+-    if (displaydata.uiscreen == [UIScreen mainScreen]) {
++    if (!uiwindow.windowScene && displaydata.uiscreen == [UIScreen mainScreen]) {
+         NSUInteger orients = UIKit_GetSupportedOrientations(window);
+         BOOL supportsLandscape = (orients & UIInterfaceOrientationMaskLandscape) != 0;
+         BOOL supportsPortrait = (orients & (UIInterfaceOrientationMaskPortrait|UIInterfaceOrientationMaskPortraitUpsideDown)) != 0;
+@@ -207,7 +207,20 @@ int UIKit_CreateWindow(_THIS, SDL_Window *window)
+
+         /* ignore the size user requested, and make a fullscreen window */
+         /* !!! FIXME: can we have a smaller view? */
+-        uiwindow = [[SDL_uikitwindow alloc] initWithFrame:data.uiscreen.bounds];
++        /* Fulldex: attach every replacement SDL window (launcher, DS, GBA)
++         * before installing its controller or making it visible. */
++        UIWindowScene *scene = nil;
++        for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
++            if ([candidate isKindOfClass:[UIWindowScene class]] &&
++                ((UIWindowScene *)candidate).screen == data.uiscreen &&
++                candidate.activationState != UISceneActivationStateUnattached) {
++                scene = (UIWindowScene *)candidate;
++                break;
++            }
++        }
++        if (!scene) return SDL_SetError("No connected UIWindowScene for SDL display");
++        uiwindow = [[SDL_uikitwindow alloc] initWithWindowScene:scene];
++        uiwindow.frame = scene.coordinateSpace.bounds;
+
+         /* put the window on an external display if appropriate. */
+         if (data.uiscreen != [UIScreen mainScreen]) {

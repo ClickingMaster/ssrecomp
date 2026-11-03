@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- iPhone and iPad: wait for the active app scene before opening the game list, and keep rendering aligned when the available display changes.
+
 - iPhone and iPad: adopt the modern app lifecycle to fix launch failures on iOS 27, and size the game window to the available display when folding, unfolding or resizing.
 
 - Android launcher defaults to landscape with rotation locked, follows device orientation with auto-rotate enabled, and uses larger settings text in both orientations with wrapped values.
