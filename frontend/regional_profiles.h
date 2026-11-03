@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include "sha1/sha1.hpp"
+#include "../melonDS/src/sha1/sha1.hpp"
 namespace RegionalProfiles {
 struct Profile { const char *code, *base, *name, *save, *sha1; unsigned revision; size_t bytes; bool functions; uint32_t mapTable, heapSetup, heapUser, mapCount; };
 inline constexpr Profile profiles[] = {
