@@ -6397,6 +6397,9 @@ int main(int argc, char** argv)
                 break;
             case M_WIDELINES:
                 cfg.wideLines = detailLines[(detailIndex() + (dir < 0 ? detailCount - 1 : 1)) % detailCount];
+                // A manual choice takes effect directly; an older automatic reduction must
+                // not silently keep the picture below the resolution the player just chose.
+                cfg.autoDetail = false;
                 break;
             case M_AUTODETAIL:
                 cfg.autoDetail = !cfg.autoDetail;
@@ -7539,6 +7542,7 @@ int main(int argc, char** argv)
                 }
             }
         }
+        MergedPrepareEdgeWindows(scene, screenImages);
         sceneMark(1);
         // Black 2: a picture in 2D covering the world (the Surf and Fly cut-ins) is shown at 4:3:
         // continuing it beside the screen would only make streaks.

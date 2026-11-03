@@ -1202,6 +1202,15 @@ struct SettingsPage
                 found = true;
             }
         if (!found) lines.push_back(line);
+        if (!strcmp(s.key, "wide_lines"))
+        {
+            // Match the in-game menu: choosing a manual resolution disables automatic
+            // lowering, so starting the game honours that choice.
+            bool haveBusy = false;
+            for (std::string& l : lines)
+                if (l.rfind("busy_detail=", 0) == 0) { l = "busy_detail=0"; haveBusy = true; }
+            if (!haveBusy) lines.push_back("busy_detail=0");
+        }
         const std::string tmp = path + ".tmp";
         if (FILE* f = fopen(tmp.c_str(), "w"))
         {

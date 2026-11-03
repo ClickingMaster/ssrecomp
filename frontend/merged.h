@@ -140,6 +140,10 @@ struct Scene
     // snapshot of the world shown in 2D, which would turn into streaks), and a translucent
     // fill is blended with the wide world instead of the screen's own 3D (stripes otherwise).
     bool smartEdges = false;
+    // Rows of a closed 2D window whose non-repeating border must stay inside the
+    // original screen, including its otherwise-flat top and bottom strokes.
+    uint8_t edgeWindow[2][192] = {};
+
     // With `wide`: this frame shows the top screen at 4:3 after all, while the widescreen
     // renderer keeps running (a picture in 2D covers the world; see MergedEdgesArePicture).
     bool narrow = false;
@@ -273,12 +277,62 @@ inline uint32_t MergedEdgePatternPixel(const ScreenImage& top, int sy, int x)
     return top.pixels[sy * 256 + m] & 0xFFFFFF;
 }
 
+// A horizontal tile is continued only if the adjacent inward tile matches.
+inline bool MergedEdgeTileRepeats(const ScreenImage& top, int y, int side)
+{
+    for (int k = 0; k < 16; ++k)
+    {
+        const int x = side ? 255 - k : k, inner = side ? x - 16 : x + 16;
+        if (top.flags[y * 256 + x] != top.flags[y * 256 + inner] ||
+            ((top.pixels[y * 256 + x] ^ top.pixels[y * 256 + inner]) & 0xFFFFFF)) return false;
+    }
+    return true;
+}
+
+// Find whole opaque background bands with a non-repeating edge, once per scene.
+// Suppressing just their patterned rows leaves the window's flat horizontal strokes
+// sticking out into the world. A genuinely tiled banner and a solid fade still extend.
+inline void MergedPrepareEdgeWindows(Scene& scene, const ScreenImage* screens)
+{
+    for (auto& side : scene.edgeWindow) std::fill(std::begin(side), std::end(side), 0);
+    if (!scene.smartEdges || scene.items.empty() || scene.items[0].screen < 0) return;
+    const ScreenImage& top = screens[scene.items[0].screen];
+    if (!top.flags || !top.pixels || !top.edgeBlend || !top.edgeFlat) return;
+    for (int side = 0; side < 2; ++side)
+    {
+        const int x = side ? 255 : 0;
+        for (int y = 0; y < 192;)
+        {
+            const uint8_t cls = LayerClass(top.flags[y * 256 + x]);
+            if (!(cls & 0x0F) || (top.edgeBlend[y * 2 + side] >> 8) != 0) { ++y; continue; }
+            const int first = y;
+            bool window = false;
+            do
+            {
+                if (!(top.edgeFlat[y * 2 + side] & 3))
+                {
+                    bool band = true;
+                    const uint8_t flag = top.flags[y * 256 + x];
+                    for (int k = 0; k < 16; ++k)
+                    {
+                        const int sx = side ? 255 - k : k;
+                        if (top.flags[y * 256 + sx] != flag || scene.items[0].Skips(sx, y)) { band = false; break; }
+                    }
+                    if (band && !MergedEdgeTileRepeats(top, y, side)) window = true;
+                }
+                ++y;
+            } while (y < 192 && LayerClass(top.flags[y * 256 + x]) == cls && (top.edgeBlend[y * 2 + side] >> 8) == 0);
+            if (window) std::fill(scene.edgeWindow[side] + first, scene.edgeWindow[side] + y, 1);
+        }
+    }
+}
+
 inline EdgeContinuation MergedEdgeContinuation(const Scene& scene, const ScreenImage& top, int sy, int side)
 {
     const int sx = side ? 255 : 0;
     const EdgeContinuation none = { 0, 0, 16 };
     // (Nor where the piece leaves the screen out: that part is drawn elsewhere.)
-    if (scene.items[0].Skips(sx, sy)) return none;
+    if (scene.items[0].Skips(sx, sy) || scene.edgeWindow[side][sy]) return none;
     const uint8_t cls = LayerClass(top.flags[sy * 256 + sx]);
     // (Not a layer the scene leaves out: that one is not drawn on the screen either.)
     if (cls == LAYER_3D || (cls & scene.items[0].drop)) return none;
@@ -309,7 +363,13 @@ inline EdgeContinuation MergedEdgeContinuation(const Scene& scene, const ScreenI
         for (int k = 0; k < 16; k++)
         {
             const int x = side ? 255 - k : k;
-            if (top.flags[sy * 256 + x] != flag || scene.items[0].Skips(x, sy)) return none;
+            const int inner = side ? x - 16 : x + 16;
+            // A frame edge or advance arrow can occupy one background just like a tiled
+            // banner. Repeat only when the next inward tile actually has the same pattern;
+            // otherwise Platinum's frame 18 grows extra borders and arrows in the margins.
+            if (top.flags[sy * 256 + x] != flag || top.flags[sy * 256 + inner] != flag ||
+                scene.items[0].Skips(x, sy) || scene.items[0].Skips(inner, sy) ||
+                ((top.pixels[sy * 256 + x] ^ top.pixels[sy * 256 + inner]) & 0xFFFFFF)) return none;
         }
         EdgeContinuation p = finished;
         p.pattern = true;
