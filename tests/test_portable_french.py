@@ -1,6 +1,8 @@
 """Address-only portable table regression fixtures."""
 from pathlib import Path
 import subprocess
+import json
+import re
 import sys
 import tempfile
 import unittest
@@ -34,9 +36,17 @@ class PortableFrenchTests(unittest.TestCase):
             table = (tmp / 'out/rc_tables.cpp').read_text()
             header = (tmp / 'out/portable_images.h').read_text()
             portable = (tmp / 'out/rc_portable.cpp').read_text()
-            self.assertIn('{"OVY_19", 0x02259820u, 0x920u, nullptr,', table)
-            self.assertIn('case 19: return 0x02259820u;', header)
-            self.assertIn('case 19: return 0x920u;', header)
+            # The shared origin must cover every registered region, including overlays
+            # placed below the French baseline by the new Korean versions.
+            match = re.search(r'\{"OVY_19", 0x([0-9A-F]+)u, 0x([0-9A-F]+)u, nullptr,', table)
+            self.assertIsNotNone(match)
+            base, size = (int(value,16) for value in match.groups())
+            self.assertEqual(base+size,0x022598C0+0x880)
+            for profile in (ROOT/'tools/soulsilver').glob('*.json'):
+                origin=json.loads(profile.read_text()).get('overlay_bases',{}).get('OVY_19',0x022598C0)
+                self.assertLessEqual(base,origin,profile.name)
+            self.assertIn(f'case 19: return 0x{base:08X}u;',header)
+            self.assertIn(f'case 19: return 0x{size:X}u;',header)
             self.assertIn('"IPGF"', portable)
             self.assertIn('"IPKF"', portable)
             self.assertIn('"IPGE"', portable)

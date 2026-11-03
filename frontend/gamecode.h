@@ -5,6 +5,7 @@
 // where its functions are; what it is, for everything else, is the English version's code.
 #include <cstring>
 #include <string>
+#include "regional_profiles.h"
 
 inline std::string BaseGameCode(const std::string& code)
 {
@@ -15,6 +16,7 @@ inline std::string BaseGameCode(const std::string& code)
         { "IPKI", "IPKE" }
     };
     for (const auto& alias : aliases) if (code == alias[0]) return alias[1];
+    if (const auto* p = RegionalProfiles::Find(code.c_str())) return p->base;
     return code;
 }
 inline bool IsGame(const std::string& code, const char* english) { return BaseGameCode(code) == english; }

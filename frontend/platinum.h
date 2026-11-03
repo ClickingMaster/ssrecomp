@@ -24,6 +24,12 @@ struct PtFuncs
     // Ball" (the ball at x 58-200, y 26-170, its pale blue button at 128, 96); 0 for neither.
     // (Diamond and Pearl's NO is higher, at y 102-124: IntroNoY says where NO was seen.)
     enum { INTRO_YESNO = 1, INTRO_BALL = 2 };
+    // The ball is visible before its touch prompt: A must still advance that dialogue.
+    // YES/NO uses touch alone, so its button keys are consumed while that prompt is up.
+    static uint32_t IntroDialogueKeys(int kind, uint32_t keys, uint32_t answer)
+    {
+        return kind == INTRO_YESNO ? keys & ~answer : keys;
+    }
     static inline int IntroNoY = 121;
     static int IntroTouch(const uint32_t* bottom)
     {

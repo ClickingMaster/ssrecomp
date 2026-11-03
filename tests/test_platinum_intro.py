@@ -27,6 +27,13 @@ int main() {
     pixels[76*256+108]=pixels[84*256+132]=pixels[116*256+108]=pixels[124*256+132]=0xffffff;
     assert(PtFuncs::IntroTouch(pixels)==PtFuncs::INTRO_YESNO);
     assert(PtFuncs::IntroTouch(nullptr)==0);
+    // A must advance Rowan's dialogue even while the Poke Ball artwork is already visible.
+    const uint32_t a=1, b=2;
+    assert(PtFuncs::IntroDialogueKeys(PtFuncs::INTRO_BALL,a,a)==a);
+    assert(PtFuncs::IntroDialogueKeys(PtFuncs::INTRO_BALL,a|b,a)==(a|b));
+    assert(PtFuncs::IntroDialogueKeys(PtFuncs::INTRO_YESNO,a|b,a|b)==0);
+    assert(PtFuncs::IntroDialogueKeys(0,a,0)==a);
+
 }
 ''')
             binary = tmp/'intro'

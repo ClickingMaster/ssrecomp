@@ -3,6 +3,12 @@
 
 ## Unreleased
 
+- Fix Platinum introduction controls so A can advance the dialogue shown before the Poke Ball touch prompt.
+
+- Expand the regional beta to 42 supplied ROM versions across French, German, Italian, Spanish, Japanese and Korean. Japanese casino screens use the generic two-screen fallback. Korean Platinum has passed startup and menu checks; broader battle and single-screen testing continues.
+
+- Add locally tested regional beta profiles with exact-version checks; unsupported dumps are rejected before loading a save.
+
 - iPhone and iPad: wait for the active app scene before opening the game list, and keep rendering aligned when the available display changes.
 
 - iPhone and iPad: adopt the modern app lifecycle to fix launch failures on iOS 27, and size the game window to the available display when folding, unfolding or resizing.

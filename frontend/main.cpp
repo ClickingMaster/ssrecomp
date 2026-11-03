@@ -651,6 +651,7 @@ struct Options
     std::string stateLoad;       // snapshot to resume from
     std::string stateSave;       // snapshot to write
     uint32_t stateSaveAt = 0;    // frame at which to write it
+    bool rawShots = false;       // also capture unmodified DS screens beside composed screenshots
     int composeW = 0, composeH = 0; // screenshots use the single-display layout at this size
     int scale = 3;
     std::string layout = "merged";
@@ -698,6 +699,7 @@ static void Usage()
         "  --no-ds3d-gpu        with --wide-gpu, the DS-resolution 3D picture still by the processor\n"
         "  --shot-dir <dir>     where screenshots go\n"
         "  --shot-at <a,b,c>    screenshot these frames\n"
+        "  --shot-raw           also save the unmodified DS screens for composed screenshots\n"
         "  --shot-every <n>     screenshot every n frames\n"
         "  --hash-every <n>     print a state hash every n frames\n"
         "  --log-sections       print which overlays run code and which merged scene is shown, on change\n"
@@ -760,6 +762,7 @@ static bool ParseArgs(int argc, char** argv, Options& o)
         else if (a == "--jit") o.jit = true;
         else if (a == "--bench-compose") o.benchCompose = true;
         else if (a == "--no-auto-focus") o.autoFocus = false;
+        else if (a == "--shot-raw") o.rawShots = true;
         else if (a == "--state-save") o.stateSave = next();
         else if (a == "--state-at") o.stateSaveAt = strtoul(next().c_str(), nullptr, 10);
         else if (a == "--state-load") o.stateLoad = next();
@@ -1804,6 +1807,13 @@ int main(int argc, char** argv)
     if (rom.empty())
     {
         fprintf(stderr, "cannot read ROM: %s\n", opt.rom.c_str());
+        return 1;
+    }
+
+    // Gate only the newly validated profiles; existing English revisions keep their behaviour.
+    if (const char* problem = RegionalProfiles::Check(rom.data(),rom.size()))
+    {
+        fprintf(stderr,"[regional] %s ROM unchanged; no save was loaded.\n",problem);
         return 1;
     }
 
@@ -3355,9 +3365,11 @@ int main(int argc, char** argv)
             // row 117), which runs off the bottom of the screen and is never drawn further: it
             // is cut below its text and closed with the saved game's card's bottom edge.
             const int extra = 16;
-            Element list = Crop(0, 32, 15, 194, 193);        // x 32-225, rows 15-207
-            Element cards = Crop(1, 22, 14, 214, 166);       // x 22-235, rows 14-179
-            Element closing = Crop(1, 22, 109, 214, 6);      // rows 109-114: a card's bottom edge
+            const bool regionalMenu = RegionalProfiles::Find(gameCode.c_str()) != nullptr;
+            // Keep complete rows for the new profiles: German labels exceed the English crop.
+            Element list = Crop(0, regionalMenu ? 0 : 32, 15, regionalMenu ? 256 : 194, 193);
+            Element cards = Crop(1, regionalMenu ? 0 : 22, 14, regionalMenu ? 256 : 214, 166);
+            Element closing = Crop(1, regionalMenu ? 0 : 22, 109, regionalMenu ? 256 : 214, 6);
             list.drop = cards.drop = closing.drop = LAYER_BACKDROP;
             sc = CleanMenu("launch-menu", { list, cards }, viewWidth, 0x1c1c1c);
             const Element& c = sc.items.back();
@@ -6020,6 +6032,8 @@ int main(int argc, char** argv)
                 touchX = ev.tx;
                 touchY = ev.ty;
             }
+
+
             for (int i = 0; i < PAD_COUNT; i++)
                 if (ev.padButtons & (1u << i)) ps.btn[i] = true;
             if (ev.lx != 0) ps.lx = ev.lx;
@@ -7058,7 +7072,9 @@ int main(int argc, char** argv)
                 }
                 // (Given to the game, A would only bring up "Please touch a button" or "Not that
                 // button!".)
-                keys &= ~answer;
+                // The ball is already visible while Rowan's preceding dialogue still needs A.
+                // Keep A alongside the touch there; consuming it traps the introduction on that page.
+                keys = PtFuncs::IntroDialogueKeys(kind, keys, answer);
             }
             if (introTouch > 0)
             {
@@ -8052,6 +8068,16 @@ int main(int argc, char** argv)
             snprintf(name, sizeof(name), "/frame_%06u.png", frame);
             if (opt.composeW > 0 && opt.composeH > 0)
             {
+                if (opt.rawShots)
+                {
+                    std::vector<uint32_t> raw(256 * 384);
+                    memcpy(raw.data(), top, 256 * 192 * 4);
+                    memcpy(raw.data() + 256 * 192, bot, 256 * 192 * 4);
+                    char rawName[64];
+                    snprintf(rawName, sizeof(rawName), "/raw_%06u.png", frame);
+                    WritePNG(opt.shotDir + rawName, raw.data(), 256, 384);
+                }
+
                 if (merged)
                 {
                     takeWideImage();

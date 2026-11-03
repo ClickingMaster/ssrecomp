@@ -154,7 +154,8 @@ all)
     cp tools/platinum/CPUE.txt "$ROMFS/funcs/CPUE.txt"
     cp tools/platinum/ADAE.txt "$ROMFS/funcs/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
     python3 tools/shift_table.py --all "$ROMFS/funcs" # (the other languages: tools/versions)
-    cp tools/regions/{IREF,IRDF,CPUF,IRBF,IRAF}.txt "$ROMFS/funcs/"
+    cp tools/regions/*.txt "$ROMFS/funcs/"
+    python3 tools/regions/package_profiles.py --funcs "$ROMFS/funcs" --portable "$HERE/build-gen-tables/rc_portable.cpp"
     # The HOME Menu entries' program (HOME MENU ICONS in the list's settings: frontend/switch_forwarder.cpp).
     say "The HOME Menu icons' loader (tools/switch/forwarder)"
     build bash tools/switch/build_forwarder.sh "$HERE/$BUILD/forwarder-build" "$ROMFS/forwarder"

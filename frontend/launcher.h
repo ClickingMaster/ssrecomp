@@ -114,6 +114,12 @@ inline const KnownGame* Known(const std::string& code)
     };
     for (const KnownGame& g : games)
         if (code == g.code) return &g;
+    static const std::vector<KnownGame> regional = [] {
+        std::vector<KnownGame> result;
+        for (const auto& p : RegionalProfiles::profiles) result.push_back({p.code,p.name,p.save});
+        return result;
+    }();
+    for (const auto& g : regional) if (code == g.code) return &g;
     return nullptr;
 }
 inline int Order(const std::string& code)

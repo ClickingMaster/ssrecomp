@@ -67,6 +67,29 @@ def unique_match(reference, target, guess, isa, window=1024):
                 if tokens(target[off:off+length], isa) == wanted]
         if len(hits) == 1:
             return hits[0], length
+    # Japanese/Korean builds can move code beyond the local search window.
+    # Search the whole module, retaining the requirement for one unique match.
+    prefix_size = 2 if isa == 'thumb' else 4
+    raw_prefix = reference[:prefix_size]
+    normalised = tokens(reference[:4], isa)
+    unchanged = normalised and normalised[0] == int.from_bytes(raw_prefix, 'little')
+    if unchanged:
+        candidates = []
+        at = target.find(raw_prefix)
+        while at >= 0:
+            if at % step == 0:
+                candidates.append(at)
+            at = target.find(raw_prefix, at + 1)
+    else:
+        candidates = range(0, len(target), step)
+    for length in sorted({min(len(reference), n) // step * step for n in (96, 64, 32, 16)}, reverse=True):
+        if length < 12:
+            continue
+        wanted = tokens(reference[:length], isa)
+        hits = [off for off in candidates if off+length <= len(target)
+                and tokens(target[off:off+length], isa) == wanted]
+        if len(hits) == 1:
+            return hits[0], length
     return None
 
 
@@ -95,12 +118,104 @@ def unique_data_address(reference, target, address, size):
     if found:
         raise ValueError('Data table has multiple exact matches')
     wanted = tokens(block, 'arm')
-    found = [at for at in range(max(0, offset-1024)//4*4,
-                                min(len(new_data)-size, offset+1024)+1, 4)
-             if tokens(new_data[at:at+size], 'arm') == wanted]
+    import array
+    normalised = array.array('I', tokens(new_data, 'arm')).tobytes()
+    needle = array.array('I', wanted).tobytes()
+    found = []
+    at = normalised.find(needle)
+    while at >= 0:
+        if at % 4 == 0:
+            found.append(at)
+        at = normalised.find(needle, at+1)
     if len(found) != 1:
         raise ValueError('Data table does not have a unique match')
     return new_base+found[0]
+
+
+def pointer_slot_match(function, funcs, hits, source, target):
+    """Resolve an application-table slot only with two independently matched peers."""
+    address = function['addr'] | (function['isa'] == 'thumb')
+    anchors = {funcs[i]['addr'] | (funcs[i]['isa'] == 'thumb'):
+               dest | (funcs[i]['isa'] == 'thumb') for i, (dest, _) in hits.items()}
+    target_base, target_code = target[function['module']]
+    candidates = set()
+    for module, (base, data) in source.items():
+        if module not in target:
+            continue
+        new_base, new_data = target[module]
+        at = data.find(struct.pack('<I', address))
+        while at >= 0:
+            if at % 4 == 0:
+                for size in (16, 32, 64, 96):
+                    for before in range(0, size, 4):
+                        start = at-before
+                        if start < 0 or start+size > len(data):
+                            continue
+                        words = struct.unpack_from('<'+'I'*(size//4), data, start)
+                        peers = [(j*4, anchors[w]) for j,w in enumerate(words) if w in anchors]
+                        if len({v for _,v in peers}) < 2:
+                            continue
+                        offset, expected = peers[0]
+                        starts = []
+                        hit = new_data.find(struct.pack('<I', expected))
+                        wanted = tokens(data[start:start+size], 'arm')
+                        while hit >= 0:
+                            candidate = hit-offset
+                            if candidate >= 0 and candidate % 4 == 0 and candidate+size <= len(new_data):
+                                if all(struct.unpack_from('<I',new_data,candidate+off)[0] == value for off,value in peers):
+                                    if tokens(new_data[candidate:candidate+size],'arm') == wanted:
+                                        starts.append(candidate)
+                            hit = new_data.find(struct.pack('<I',expected),hit+1)
+                        if len(starts) != 1:
+                            continue
+                        matched = starts[0]
+                        pointer = struct.unpack_from('<I',new_data,matched+before)[0]
+                        dest = pointer & ~1
+                        if (pointer & 1) != (function['isa']=='thumb'):
+                            continue
+                        if target_base <= dest < target_base+len(target_code):
+                            candidates.add(dest)
+            at = data.find(struct.pack('<I', address), at+1)
+    if len(candidates) == 1:
+        return candidates.pop()
+    return None
+
+
+def literal_reference_match(function, modules, source, target):
+    """Recover a function pointer from a uniquely identical complete caller body."""
+    import bisect
+    pointer = function['addr'] | (function['isa'] == 'thumb')
+    candidates = set()
+    dest_base, dest_code = target[function['module']]
+    for module, (base, data) in source.items():
+        if module not in target or module not in modules:
+            continue
+        new_base,new_data = target[module]
+        funcs=modules[module]; starts=[f['addr'] for f in funcs]
+        at=data.find(struct.pack('<I',pointer))
+        while at>=0:
+            i=bisect.bisect_right(starts,base+at)-1
+            if at%4==0 and i>=0:
+                caller=funcs[i]; start=caller['addr']-base
+                end=funcs[i+1]['addr']-base if i+1<len(funcs) else len(data)
+                size=end-start; slot=at-start
+                if 16<=size<=4096 and start>=0 and end<=len(data) and slot+4<=size:
+                    body=data[start:end]; isa=caller['isa']; step=2 if isa=='thumb' else 4
+                    prefix=body[:step]
+                    normalised=tokens(body[:4],isa)
+                    if normalised and normalised[0]==int.from_bytes(prefix,'little'):
+                        positions=[]; hit=new_data.find(prefix); wanted=tokens(body,isa)
+                        while hit>=0:
+                            if hit%step==0 and hit+size<=len(new_data) and tokens(new_data[hit:hit+size],isa)==wanted:
+                                positions.append(hit)
+                            hit=new_data.find(prefix,hit+1)
+                        if len(positions)==1:
+                            new_pointer=struct.unpack_from('<I',new_data,positions[0]+slot)[0]
+                            address=new_pointer&~1
+                            if new_pointer&1 == (function['isa']=='thumb') and dest_base<=address<dest_base+len(dest_code):
+                                candidates.add(address)
+            at=data.find(struct.pack('<I',pointer),at+1)
+    return candidates.pop() if len(candidates)==1 else None
 
 
 def match(reference_path, target_path, table_path, frontend):
@@ -115,6 +230,7 @@ def match(reference_path, target_path, table_path, frontend):
     resolved, required, missing = [], [], []
     for module, funcs in modules.items():
         if module not in source or module not in target:
+            missing.extend(f for f in funcs if f['name'] in literals)
             continue
         source_base, old_data = source[module]
         target_base, new_data = target[module]
@@ -146,6 +262,14 @@ def match(reference_path, target_path, table_path, frontend):
                 continue
             if tokens(old_data[old_offset:old_offset+size], f['isa']) == tokens(new_data[new_offset:new_offset+size], f['isa']):
                 hits[i] = (f['addr']+delta, 'bounded-identical-body')
+        for i in sorted(wanted - hits.keys()):
+            found = pointer_slot_match(funcs[i], funcs, hits, source, target)
+            if found is not None:
+                hits[i] = (found, 'unique-pointer-slot-two-anchors')
+        for i in sorted(wanted - hits.keys()):
+            found = literal_reference_match(funcs[i], modules, source, target)
+            if found is not None:
+                hits[i] = (found, 'unique-complete-caller-pointer')
         for i in sorted(wanted):
             f = funcs[i]
             required.append(f['name'])

@@ -1,0 +1,490 @@
+{
+  "schema": 1,
+  "profiles": [
+    {
+      "code": "IRBS",
+      "base": "IRBO",
+      "name": "Pokemon Black (ES, Beta)",
+      "save": "black-es.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "ba75914b99e1558f217ed082fbac9e86f2021a30",
+      "kind": "functions",
+      "source": "tools/regions/IRBS.txt",
+      "catalogue_verified": false,
+      "wide_map": {
+        "table": 35468996,
+        "heap_setup": 34199680,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IRBJ",
+      "base": "IRBO",
+      "name": "Pokemon Black (JP, Beta)",
+      "save": "black-jp.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "4ce46933ab795fc8bfc94acb7a853206b0c20b60",
+      "kind": "functions",
+      "source": "tools/regions/IRBJ.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35468592,
+        "heap_setup": 34199484,
+        "count": 21,
+        "heap_user": 1675264
+      }
+    },
+    {
+      "code": "IRBK",
+      "base": "IRBO",
+      "name": "Pokemon Black (KO, Beta)",
+      "save": "black-ko.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "ca64de49a4429346ca578c2b21c16c8bcf1cf497",
+      "kind": "functions",
+      "source": "tools/regions/IRBK.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35470828,
+        "heap_setup": 34201420,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IRBD",
+      "base": "IRBO",
+      "name": "Pokemon Black (DE, Beta)",
+      "save": "black-de.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "f5688bd617be7e67a150732f42cfae6ae104b2cb",
+      "kind": "functions",
+      "source": "tools/regions/IRBD.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35468856,
+        "heap_setup": 34199600,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IRBI",
+      "base": "IRBO",
+      "name": "Pokemon Black (IT, Beta)",
+      "save": "black-it.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "699f8c6a8390b5e30236b6c386bc3c4bd7bdc44e",
+      "kind": "functions",
+      "source": "tools/regions/IRBI.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35468776,
+        "heap_setup": 34199600,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IREJ",
+      "base": "IREO",
+      "name": "Pokemon Black 2 (JP, Beta)",
+      "save": "black2-jp.sav",
+      "revision": 1,
+      "bytes": 536870912,
+      "sha1": "c55fe4412427e63ef28186af53ec114c7fdd9a0a",
+      "kind": "functions",
+      "source": "tools/regions/IREJ.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35428200,
+        "heap_setup": 34138952,
+        "count": 29,
+        "heap_user": 1718272
+      }
+    },
+    {
+      "code": "IREK",
+      "base": "IREO",
+      "name": "Pokemon Black 2 (KO, Beta)",
+      "save": "black2-ko.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "9815dd094eb86d46d2d20d2bb04b2ecfd73f8e35",
+      "kind": "functions",
+      "source": "tools/regions/IREK.txt",
+      "catalogue_verified": false,
+      "wide_map": {
+        "table": 35432496,
+        "heap_setup": 34141524,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IRED",
+      "base": "IREO",
+      "name": "Pokemon Black 2 (DE, Beta)",
+      "save": "black2-de.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "f43dd2e26f48163f11721bd1e3b2e6f9a73be636",
+      "kind": "functions",
+      "source": "tools/regions/IRED.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35430280,
+        "heap_setup": 34139624,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IREI",
+      "base": "IREO",
+      "name": "Pokemon Black 2 (IT, Beta)",
+      "save": "black2-it.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "68ec308db75d470f3c1499cc04117fe68fb4e942",
+      "kind": "functions",
+      "source": "tools/regions/IREI.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35430200,
+        "heap_setup": 34139624,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IRES",
+      "base": "IREO",
+      "name": "Pokemon Black 2 (ES, Beta)",
+      "save": "black2-es.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "e5d4e2460a64f4786ed69ae33a43f29adc56ff5e",
+      "kind": "functions",
+      "source": "tools/regions/IRES.txt",
+      "catalogue_verified": false,
+      "wide_map": {
+        "table": 35430368,
+        "heap_setup": 34139704,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IPKJ",
+      "base": "IPKE",
+      "name": "Pokemon HeartGold (JP, Beta)",
+      "save": "heartgold-jp.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "82451ee0ca9c3b768ba21367b92d8aa0e8defda7",
+      "kind": "portable",
+      "source": "tools/soulsilver/heartgold-jp.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IPKK",
+      "base": "IPKE",
+      "name": "Pokemon HeartGold (KO, Beta)",
+      "save": "heartgold-ko.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "52516d1690d01b59e03c7fe3b1259239f5daea38",
+      "kind": "portable",
+      "source": "tools/soulsilver/heartgold-ko.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IPKD",
+      "base": "IPKE",
+      "name": "Pokemon HeartGold (DE, Beta)",
+      "save": "heartgold-de.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "13b6853aa93121069df1d17446d3ecb36872aecf",
+      "kind": "portable",
+      "source": "tools/soulsilver/heartgold-de.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "CPUJ",
+      "base": "CPUE",
+      "name": "Pokemon Platinum (JP, Beta)",
+      "save": "platinum-jp.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "5b460ab10358fba74d14a704db0d9517172ee3b6",
+      "kind": "functions",
+      "source": "tools/regions/CPUJ.txt",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "CPUD",
+      "base": "CPUE",
+      "name": "Pokemon Platinum (DE, Beta)",
+      "save": "platinum-de.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "d40f19ac24d67c721a4ab25e1c013154443d75b4",
+      "kind": "functions",
+      "source": "tools/regions/CPUD.txt",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "CPUI",
+      "base": "CPUE",
+      "name": "Pokemon Platinum (IT, Beta)",
+      "save": "platinum-it.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "19148e7a38e731680fb2a045ed112b115be90fc2",
+      "kind": "functions",
+      "source": "tools/regions/CPUI.txt",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IPGJ",
+      "base": "IPGE",
+      "name": "Pokemon SoulSilver (JP, Beta)",
+      "save": "soulsilver-jp.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "facb67d1b6eece6e2b9d5c614427ac6f99b653d3",
+      "kind": "portable",
+      "source": "tools/soulsilver/soulsilver-jp.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IPGK",
+      "base": "IPGE",
+      "name": "Pokemon SoulSilver (KO, Beta)",
+      "save": "soulsilver-ko.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "1aa8c3e63f9848d8677c02f96db78d0bfa6aaa7f",
+      "kind": "portable",
+      "source": "tools/soulsilver/soulsilver-ko.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IPGD",
+      "base": "IPGE",
+      "name": "Pokemon SoulSilver (DE, Beta)",
+      "save": "soulsilver-de.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "576cdb7eec728c49aed85b9dd7e1e084ba1f08f9",
+      "kind": "portable",
+      "source": "tools/soulsilver/soulsilver-de.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IPGI",
+      "base": "IPGE",
+      "name": "Pokemon SoulSilver (IT, Beta)",
+      "save": "soulsilver-it.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "e137acf711e0b14c297abf0254e5b4a9263338e7",
+      "kind": "portable",
+      "source": "tools/soulsilver/soulsilver-it.json",
+      "catalogue_verified": true,
+      "wide_map": null
+    },
+    {
+      "code": "IRAJ",
+      "base": "IRAO",
+      "name": "Pokemon White (JP, Beta)",
+      "save": "white-jp.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "e392548c1a59e4cafd7ba7a502770369410b2358",
+      "kind": "functions",
+      "source": "tools/regions/IRAJ.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35468616,
+        "heap_setup": 34199508,
+        "count": 21,
+        "heap_user": 1675264
+      }
+    },
+    {
+      "code": "IRAK",
+      "base": "IRAO",
+      "name": "Pokemon White (KO, Beta)",
+      "save": "white-ko.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "560288596203f31d3f1de8fd2e205d0f4c65a9e5",
+      "kind": "functions",
+      "source": "tools/regions/IRAK.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35470820,
+        "heap_setup": 34201444,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IRAI",
+      "base": "IRAO",
+      "name": "Pokemon White (IT, Beta)",
+      "save": "white-it.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "2e33164d26236dd499f75d1de3123d85e822d502",
+      "kind": "functions",
+      "source": "tools/regions/IRAI.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35468800,
+        "heap_setup": 34199624,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IRAD",
+      "base": "IRAO",
+      "name": "Pokemon White (DE, Beta)",
+      "save": "white-de.sav",
+      "revision": 0,
+      "bytes": 268435456,
+      "sha1": "fb752b211351f8480e3e1949e11a1d7741f05f5a",
+      "kind": "functions",
+      "source": "tools/regions/IRAD.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35468880,
+        "heap_setup": 34199624,
+        "count": 21,
+        "heap_user": 1676544
+      }
+    },
+    {
+      "code": "IRDJ",
+      "base": "IRDO",
+      "name": "Pokemon White 2 (JP, Beta)",
+      "save": "white2-jp.sav",
+      "revision": 1,
+      "bytes": 536870912,
+      "sha1": "01666f87838c57dc0a65930a916982ad8941d8fb",
+      "kind": "functions",
+      "source": "tools/regions/IRDJ.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35428220,
+        "heap_setup": 34138996,
+        "count": 29,
+        "heap_user": 1718272
+      }
+    },
+    {
+      "code": "IRDK",
+      "base": "IRDO",
+      "name": "Pokemon White 2 (KO, Beta)",
+      "save": "white2-ko.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "3bbb5ff5c443c776b1e59ba51e8b2cd118fb776b",
+      "kind": "functions",
+      "source": "tools/regions/IRDK.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35432516,
+        "heap_setup": 34141568,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IRDS",
+      "base": "IRDO",
+      "name": "Pokemon White 2 (ES, Beta)",
+      "save": "white2-es.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "072749c9517f8d2a65f688b6f4ac5f30889fb559",
+      "kind": "functions",
+      "source": "tools/regions/IRDS.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35430388,
+        "heap_setup": 34139748,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IRDI",
+      "base": "IRDO",
+      "name": "Pokemon White 2 (IT, Beta)",
+      "save": "white2-it.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "b787bdd69fa79d270d08f334b188a61e3454405e",
+      "kind": "functions",
+      "source": "tools/regions/IRDI.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35430252,
+        "heap_setup": 34139668,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "IRDD",
+      "base": "IRDO",
+      "name": "Pokemon White 2 (DE, Beta)",
+      "save": "white2-de.sav",
+      "revision": 0,
+      "bytes": 536870912,
+      "sha1": "60665d23a12a0ad4fbff75a4d4f287a9cec73b40",
+      "kind": "functions",
+      "source": "tools/regions/IRDD.txt",
+      "catalogue_verified": true,
+      "wide_map": {
+        "table": 35430300,
+        "heap_setup": 34139668,
+        "count": 29,
+        "heap_user": 1719808
+      }
+    },
+    {
+      "code": "CPUK",
+      "base": "CPUE",
+      "name": "Pokemon Platinum (KO, Beta)",
+      "save": "platinum-ko.sav",
+      "revision": 0,
+      "bytes": 134217728,
+      "sha1": "f811d9c7ab5262f593012da794c2fa81dbcdbcc1",
+      "kind": "functions",
+      "source": "tools/regions/CPUK.txt",
+      "catalogue_verified": false,
+      "wide_map": null
+    }
+  ]
+}

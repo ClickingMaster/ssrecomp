@@ -29,6 +29,7 @@ class Bw1Layouts
 {
 public:
     bool on = false;
+    bool regionalMenu = false;
 
     // The battle's buttons on a wide view (BATTLE BUTTONS in the pause menu, when the shared code
     // has that row; ssrecomp.cfg key battle_buttons=strip|panel|corner):
@@ -61,6 +62,7 @@ public:
             fclose(f);
         }
         on = IsGame(code, "IRBO") || IsGame(code, "IRAO");
+        regionalMenu = RegionalProfiles::Find(code) != nullptr;
         if (!on) return;
         Fw = &fw;
         auto find = [&](const char* name) {
@@ -153,7 +155,8 @@ public:
                     }
             if (wideView && !listBelow)
             {
-                Element list = Crop(0, 32, 14, 194, 98);
+                // Regional menu labels can extend past the English crop on either side.
+                Element list = Crop(0, regionalMenu ? 0 : 32, 14, regionalMenu ? 256 : 194, 98);
                 list.drop = LAYER_BACKDROP;
                 sc = CleanMenu("launch-menu", { list }, viewWidth, 0x1c1c1c);
                 sc.redrawSkip[0] = 1 << 3;
@@ -161,7 +164,8 @@ public:
             }
             if (wideView)
             {
-                Element card = Crop(0, 24, 15, 206, 113), list = Crop(0, 32, 128, 192, 169);
+                Element card = Crop(0, regionalMenu ? 0 : 24, 15, regionalMenu ? 256 : 206, 113),
+                        list = Crop(0, regionalMenu ? 0 : 32, 128, regionalMenu ? 256 : 192, 169);
                 card.drop = list.drop = LAYER_BACKDROP;
                 sc = CleanMenu("launch-menu", { card, list }, viewWidth, 0x1c1c1c);
                 sc.extraRows[0] = 296 + 1 - 192;

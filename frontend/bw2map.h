@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "regional_profiles.h"
 
 #include "NDS.h"
 #include "funcwatch.h"
@@ -90,6 +91,13 @@ private:
         };
         for (const Version& v : versions)
             if (!strcmp(code, v.code)) return &v;
+        static const std::vector<Version> regional = [] {
+            std::vector<Version> result;
+            for (const auto& p : RegionalProfiles::profiles)
+                if (p.mapCount) result.push_back({p.code,p.mapTable,p.heapSetup,p.heapUser,p.mapCount});
+            return result;
+        }();
+        for (const auto& v : regional) if (!strcmp(code,v.code)) return &v;
         return nullptr;
     }
 
