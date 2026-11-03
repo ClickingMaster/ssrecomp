@@ -10,6 +10,12 @@
 #include <vector>
 #include <SDL.h>
 #include "ui_lang.h"
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace TouchLayout
 {
@@ -72,7 +78,23 @@ struct Profile
         out.flush();
         if (!out) { out.close(); std::remove(temp.c_str()); return false; }
         out.close();
-        if (!out || std::rename(temp.c_str(), path.c_str()) != 0) { std::remove(temp.c_str()); return false; }
+        if (!out) { std::remove(temp.c_str()); return false; }
+#ifdef _WIN32
+        // std::rename cannot replace an existing file on Windows. Replace only after the
+        // complete new layout has been written, retaining the previous file on failure.
+        auto wide = [](const std::string& value) {
+            const int count=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,value.data(),(int)value.size(),nullptr,0);
+            if(count<=0)return std::wstring();
+            std::wstring result(count,L'\0');
+            if(MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,value.data(),(int)value.size(),result.data(),count)!=count)return std::wstring();
+            return result;
+        };
+        const auto from=wide(temp),to=wide(path);
+        const bool replaced=!from.empty()&&!to.empty()&&MoveFileExW(from.c_str(),to.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
+#else
+        const bool replaced=std::rename(temp.c_str(),path.c_str())==0;
+#endif
+        if (!replaced) { std::remove(temp.c_str()); return false; }
         return true;
     }
     std::vector<Control> Apply(const std::vector<Control>& defaults, int w, int h) const

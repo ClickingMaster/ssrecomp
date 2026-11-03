@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- Windows: allow repeated saves of a custom touch layout while preserving the previous layout if replacement fails.
+
 - Add French, German, Japanese and Korean to the launcher and Fulldex menus, with automatic language detection, embedded fonts and translated controller/touch labels. Embedded GBA menus follow the selected language.
 
 - Complete Italian translations for newer menu pages, translate Spanish/Italian option values inside their arrows, and fit pause menus to narrow displays. Update regional ROM guidance. Adapted from AlessioGiacobbe’s PR #9.

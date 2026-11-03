@@ -20,6 +20,7 @@ int main(int, char**)
     assert(std::fabs(adjusted[1].x - 600) < 0.01f);
     assert(std::fabs(adjusted[1].rx / a.rx - 1.5f) < 0.01f);
     assert(profile.Save(path));
+    assert(profile.Save(path)); // Replacing an existing layout must work on Windows too.
     TouchLayout::Profile loaded; loaded.Load(path);
     auto roundtrip = loaded.Apply(defaults, 1280, 720);
     assert(std::fabs(roundtrip[1].x - 600) < 0.01f);
