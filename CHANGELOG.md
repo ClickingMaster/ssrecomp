@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- iPhone and iPad: adopt the modern app lifecycle to fix launch failures on iOS 27, and size the game window to the available display when folding, unfolding or resizing.
+
 - Android launcher defaults to landscape with rotation locked, follows device orientation with auto-rotate enabled, and uses larger settings text in both orientations with wrapped values.
 
 - Android DS/GBA FPS counters sit inward from screen edges to avoid rounded corners and camera cutouts.

@@ -1,0 +1,62 @@
+"""Host-only integration check; no Apple SDK or generated game inputs required.
+
+python tools/ios/check_scene_integration.py /path/to/pristine/SDL2-2.32.10
+Requires CMake, Ninja and Git on PATH. Does not compile or run UIKit.
+"""
+from pathlib import Path
+import plistlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def main():
+    source = Path(sys.argv[1]).resolve()
+    script = (ROOT / "tools/ios/build_all.sh").read_text(encoding="utf-8")
+    template = script.split('<<PLIST\n', 1)[1].split('\nPLIST', 1)[0]
+    for platform in ("iPhoneOS", "iPhoneSimulator"):
+        xml = template.replace("$PLATFORM", platform).replace("$MIN_IOS", "14.0")
+        xml = xml.replace("$ICONS", "").replace("$GBA_DOCS", "")
+        info = plistlib.loads(xml.encode())
+        manifest = info["UIApplicationSceneManifest"]
+        config, = manifest["UISceneConfigurations"]["UIWindowSceneSessionRoleApplication"]
+        assert config["UISceneDelegateClassName"] == "SDLUIKitSceneDelegate"
+        assert config["UISceneClassName"] == "UIWindowScene"
+        assert manifest["UIApplicationSupportsMultipleScenes"] is False
+        assert info["MinimumOSVersion"] == "14.0" and info["UIDeviceFamily"] == [1, 2]
+        assert not info.get("UIRequiresFullScreen", False)
+    # Keep the tarball fixture inside a Git checkout: git apply must not silently
+    # skip the files after discovering the enclosing repository.
+    with tempfile.TemporaryDirectory(prefix="build-ios-scene-", dir=ROOT) as tmp:
+        tmp = Path(tmp)
+        sdl = tmp / "sdl"
+        for name in ("SDL_uikitappdelegate.m", "SDL_uikitevents.m", "SDL_uikitvideo.m", "SDL_uikitwindow.m"):
+            dest = sdl / "src/video/uikit" / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / "src/video/uikit" / name, dest)
+        (sdl / "CMakeLists.txt").write_text("add_library(scene_fixture INTERFACE)\n")
+        harness = tmp / "harness"
+        harness.mkdir()
+        (harness / "CMakeLists.txt").write_text(
+            'cmake_minimum_required(VERSION 3.21)\nproject(ScenePatchCheck NONE)\n'
+            'set(CMAKE_SYSTEM_NAME iOS)\n'
+            f'set(FETCHCONTENT_SOURCE_DIR_SSR_SDL2 "{sdl.as_posix()}")\n'
+            f'include("{(ROOT / "cmake/MacDependencies.cmake").as_posix()}")\n')
+        command = ["cmake", "-G", "Ninja", "-S", str(harness), "-B", str(tmp / "build")]
+        subprocess.run(command, check=True)
+        delegate = sdl / "src/video/uikit/SDL_uikitappdelegate.m"
+        assert "@implementation SDLUIKitSceneDelegate" in delegate.read_text()
+        first = delegate.read_bytes()
+        subprocess.run(command, check=True)
+        assert delegate.read_bytes() == first, "cached configure changed the patched source"
+        delegate.write_text("/* incompatible cached SDL source */\n")
+        result = subprocess.run(command, capture_output=True, text=True)
+        assert result.returncode != 0 and "SDL2 scene patch does not match" in result.stderr
+    print("PASS: device/simulator manifests, fresh and cached patching, incompatible-source rejection")
+
+
+if __name__ == "__main__":
+    main()
