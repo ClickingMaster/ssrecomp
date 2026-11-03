@@ -1,6 +1,6 @@
 # Interface languages
 
-The launcher and Fulldex menus support English, Spanish, Italian, French, German, Japanese and Korean. AUTO follows a supported system language, otherwise English. This setting does not translate or modify a ROM. Embedded GBA menus inherit the launcher language.
+The launcher and Fulldex menus support English, Spanish, Italian, French, German, Japanese and Korean. AUTO follows a supported system language, otherwise English. This setting does not translate or modify a ROM. Embedded GBA menus inherit the launcher language. GBA game translations, regional compatibility and widescreen patches are unchanged.
 
 `translations.json` is the canonical UTF-8 catalogue. Existing Spanish and Italian wording, including AlessioGiacobbe’s PR9 improvements, was retained. Additional translations began as machine drafts, with common menu terminology and dynamic actions reviewed. Native-speaker wording feedback is welcome. Every non-English catalogue has the same 598 keys.
 

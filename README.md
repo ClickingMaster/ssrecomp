@@ -54,14 +54,16 @@ language, revision or game, and complete playthroughs have not been verified.
 
 | Language | Games with added profiles |
 |---|---|
-| French (revision 0) | Black, White, Black 2, White 2, SoulSilver, HeartGold, Platinum |
-| Spanish | White, Platinum, SoulSilver, HeartGold |
-| Italian | HeartGold |
+| French, German, Italian, Spanish, Japanese and Korean | Black, White, Black 2, White 2, SoulSilver, HeartGold, Platinum |
 | Experimental | English Diamond/Pearl and Spanish Diamond |
+
+The supplied collection contains 42 exact ROM versions. New profiles validate their fingerprint before loading a save. The earlier 41-ROM menu/settings checks passed; newly supplied Korean Platinum has startup/menu checks so far. Broader battle, adapted-screen and full-playthrough testing continues.
 
 Regional versions use separate save names, such as `heartgold-fr.sav`, `heartgold-es.sav`
 and `heartgold-it.sav`; keep a backup when bringing an existing save across. GBA regional
-compatibility is unchanged. DISPLAY > LANGUAGE offers AUTO, English, Spanish, Italian, French, German, Japanese and Korean menus. AUTO follows a supported system language. The interface language is independent of the ROM language.
+compatibility is unchanged: this update adds no GBA game translations, regional compatibility or widescreen patches. GBA game text comes from the ROM, and widescreen still requires an existing matching patch.
+
+DISPLAY > LANGUAGE offers AUTO, English, Spanish, Italian, French, German, Japanese and Korean menus. AUTO follows a supported system language. The interface language is independent of the ROM language.
 
 Thanks to the contributors of [#41](../../pull/41), [#18](../../pull/18) and [#9](../../pull/9).
 See [regional support and controls](docs/REGIONAL-AND-TOUCH-CONTROLS.md) for details.
@@ -484,9 +486,7 @@ Please tell us how it runs on yours, with your model (see [Reporting a bug](#rep
 |---|---|
 | ![HeartGold: Totodile against a wild Pidgey on Route 29, with FIGHT, BAG, RUN, POKÉMON and the party beside the battle](docs/screenshots/heartgold-totodile-battle.jpg) | ![SoulSilver: Lugia following you along Route 7](docs/screenshots/soulsilver-lugia-following.jpg) |
 
-- **ROMs:** the English versions, US or Europe (the European English copies
-  are the same game as the US ones), Spanish and French revision 0; HeartGold
-  also supports Italian. Other languages start without the one-screen layouts.
+- **ROMs:** supported English US/European versions and the regional beta profiles listed above. Support is version-specific; unrecognised dumps are not enabled automatically.
 - **Saves:** `soulsilver.sav` and `heartgold.sav` (the same format, so either
   game reads the other's).
 - **No version exclusives:** OTHER VERSION POKEMON in the pause menu (off to
