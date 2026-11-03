@@ -155,3 +155,28 @@ Host validation:
 python3 -m pip install Pillow
 python3 tools/ios/test_simulator_start.py
 ```
+
+### Multi-display CI correction
+
+Run 41599618165 compiled the device, ARM64 simulator and Intel simulator apps.
+The ARM64 smoke step failed in simctl screenshot with exit 22 because the Duo
+reported two display IDs and required --display. This was a capture failure,
+not proof of an application rendering failure. The Intel console reached
+starting-SDL-main but no Documents/game.log was collected; the cause of that
+missing log remains unconfirmed.
+
+The smoke step now waits up to 120 seconds for a submitted frame instead of a
+fixed 25 seconds, captures early console output even if game.log is missing,
+and tests both iPhone and iPad even if the first fails. Cleanup runs on failure.
+Screenshot capture parses simctl's reported display IDs and captures each one.
+The validator requires at least one screenshot matching the actual launcher
+drawable and showing nonblank content; inactive displays remain in artifacts
+for review. Ordinary single-display captures use the default screenshot command.
+Unrelated capture errors still fail. No frame or absent/black output still fails;
+the correction does not turn an unresolved application launch into a success.
+
+Run the additional host regressions with:
+
+```sh
+python3 tools/ios/test_simulator_capture.py
+```

@@ -45,7 +45,9 @@ jobs:
           xcrun --sdk iphonesimulator --show-sdk-version
           xcrun simctl list runtimes
       - name: Check simulator failure detection
-        run: python tools/ios/test_simulator_start.py
+        run: |
+          python tools/ios/test_simulator_start.py
+          python tools/ios/test_simulator_capture.py
       - name: The inputs (tables of addresses, pictures, icon)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +87,7 @@ jobs:
             build-ios-dist/SHA256SUMS.txt
           if-no-files-found: error
       - name: A first start in the iOS Simulator
-        timeout-minutes: 10
+        timeout-minutes: 15
         if: matrix.target == 'simulator'
         env:
           IOS_TEST_MIN_MAJOR: ${{ matrix.os == 'xcode-27' && '27' || '0' }}
@@ -94,7 +96,7 @@ jobs:
           mkdir -p sim
           xcrun simctl list devices available -j > sim/available-devices.json
           # An iPhone and an iPad. The list should come up upright on both.
-          start_one() {
+          start_one() (
             local kind="$1"
             local udid
             udid="$(xcrun simctl list devices available -j | python3 -c '
@@ -112,27 +114,53 @@ jobs:
           _, device = max(found, key=lambda item: ("Duo" in item[1]["name"], item[0], item[1]["name"]))
           print("Testing " + device["name"], file=sys.stderr)
           print(device["udid"])
-          ' "$kind")"
-            xcrun simctl boot "$udid"
-            xcrun simctl bootstatus "$udid" -b
-            xcrun simctl install "$udid" "build-ios-dist/Pokemon Fulldex.app"
-            xcrun simctl launch --terminate-running-process --console "$udid" io.github.mamesj.pokemonds > "sim/${kind}-console.log" 2>&1 &
-            local console_pid=$!
-            sleep 25
-            xcrun simctl io "$udid" screenshot "sim/${kind}-first-start.png"
+          ' "$kind")" || exit 1
+            local console_pid=""
+            cleanup() {
+              if [ -n "$console_pid" ]; then
+                kill "$console_pid" 2>/dev/null || true
+                wait "$console_pid" || true
+              fi
+              xcrun simctl shutdown "$udid" || true
+            }
+            trap cleanup EXIT
+            xcrun simctl boot "$udid" || exit 1
+            xcrun simctl bootstatus "$udid" -b || exit 1
+            xcrun simctl install "$udid" "build-ios-dist/Pokemon Fulldex.app" || exit 1
             local data
-            data="$(xcrun simctl get_app_container "$udid" io.github.mamesj.pokemonds data)"
+            data="$(xcrun simctl get_app_container "$udid" io.github.mamesj.pokemonds data)" || exit 1
+            xcrun simctl launch --terminate-running-process --console "$udid" io.github.mamesj.pokemonds > "sim/${kind}-console.log" 2>&1 &
+            console_pid=$!
+            # Booted simulators can still be slow to launch. Wait for evidence
+            # of a submitted frame, while retaining a bounded failure timeout.
+            for attempt in $(seq 1 60); do
+              if [ -f "$data/Documents/game.log" ] && grep -q '\[launcher\] frame presented' "$data/Documents/game.log"; then
+                break
+              fi
+              if ! kill -0 "$console_pid" 2>/dev/null; then break; fi
+              sleep 2
+            done
             ls -laR "$data/Documents" > "sim/${kind}-documents.txt" || true
             cp "$data/Documents/game.log" "sim/${kind}-game.log" || true
-            xcrun simctl spawn "$udid" log show --last 3m --style compact --predicate 'process == "pokemon-ds-wide"' > "sim/${kind}-system.log" || true
-            cat "sim/${kind}-game.log" || true
-            python3 tools/ios/check_simulator_start.py "sim/${kind}-game.log" "sim/${kind}-first-start.png"
-            xcrun simctl shutdown "$udid" || true
-            kill "$console_pid" 2>/dev/null || true
-            wait "$console_pid" || true
-          }
-          start_one iPhone
-          start_one iPad
+            cat "sim/${kind}-console.log" > "sim/${kind}-combined.log"
+            if [ -f "sim/${kind}-game.log" ]; then
+              cat "sim/${kind}-game.log" >> "sim/${kind}-combined.log"
+            else
+              echo "No Documents/game.log was created; checking captured console output."
+            fi
+            cat "sim/${kind}-combined.log"
+            xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'process == "pokemon-ds-wide"' > "sim/${kind}-system.log" || true
+            local result=0
+            python3 tools/ios/capture_simulator_displays.py "$udid" "sim/${kind}" || result=1
+            if [ "$result" -eq 0 ]; then
+              python3 tools/ios/check_simulator_start.py "sim/${kind}-combined.log" sim/"${kind}"-display-*.png || result=1
+            fi
+            exit "$result"
+          )
+          failed=0
+          start_one iPhone || failed=1
+          start_one iPad || failed=1
+          exit "$failed"
       - uses: actions/upload-artifact@v4
         if: always() && matrix.target == 'simulator'
         with:

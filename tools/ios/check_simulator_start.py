@@ -43,8 +43,19 @@ def check_start(log, screenshot):
     return f"PASS: window {window}, renderer {frames[-1][1]}, drawable {pixels[0]}x{pixels[1]}, nonblank full-screen screenshot"
 
 
+def check_screens(log, screenshots):
+    errors = []
+    for screenshot in screenshots:
+        try:
+            return f"{screenshot}: {check_start(log, screenshot)}"
+        except (ValueError, OSError) as error:
+            errors.append(f"{screenshot}: {error}")
+    raise ValueError("No captured display shows the launcher's full drawable:\n" + "\n".join(errors))
+
+
 if __name__ == "__main__":
     try:
-        print(check_start(Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace"), sys.argv[2]))
-    except ValueError as error:
+        log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+        print(check_screens(log, sys.argv[2:]))
+    except (ValueError, OSError) as error:
         raise SystemExit(str(error))
