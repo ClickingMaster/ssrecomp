@@ -26,13 +26,16 @@ int main()
             }
             const MergedView view = MergedMakeView(width, 768);
             const Scene sc = BagScene(view.width, screens);
-            assert(sc.items.size() == 2);
-            const Element& list = sc.items[0];
-            const Element& card = sc.items[1];
-            assert(card.sy + card.sh == 192); // No move stats cropped out.
-            assert(card.dy + card.sh * card.scale <= 164.01f); // Pocket controls remain clear.
-            assert(card.dx + card.sw * card.scale <= list.dx + 116);
-            if (message) assert(card.dy >= 44);
+            // An item chosen: both screens side by side, as on the DS, over the Bag's blue.
+            assert(sc.items.size() == 3);
+            const Element& top = sc.items[1];
+            const Element& touch = sc.items[2];
+            assert(top.screen == 0 && touch.screen == 1);
+            assert(top.sw == 256 && top.sh == 192 && touch.sw == 256 && touch.sh == 192);
+            assert(top.scale == touch.scale && top.scale <= 1);
+            assert(top.dx + 256 * top.scale <= touch.dx + 0.01f); // No overlap.
+            assert(top.dx >= 128 - view.width / 2 - 0.01f); // Inside the window.
+            assert(touch.dx + 256 * touch.scale <= 128 + view.width / 2 + 0.01f);
 
             std::vector<uint32_t> cpu;
             MergedCompose(sc, screens, width, 768, cpu, false, nullptr);
@@ -46,10 +49,9 @@ int main()
                 SDL_RenderPresent(renderer);
                 if (message)
                 {
-                    // The first word is in the area the old item card covered. Both composition
-                    // paths must preserve it rather than drawing the description over it.
-                    const int x = (int)(view.originX + (list.dx + 16) * view.unit);
-                    const int y = (int)(view.originY + 12 * view.unit);
+                    // The touch screen's message is shown whole by both composition paths.
+                    const int x = (int)(view.originX + (touch.dx + 30 * touch.scale) * view.unit);
+                    const int y = (int)(view.originY + (touch.dy + 12 * touch.scale) * view.unit);
                     assert((cpu[y * width + x] & 0xFFFFFF) == (ink & 0xFFFFFF));
                     const auto* row = reinterpret_cast<const uint32_t*>(
                         static_cast<const uint8_t*>(surface->pixels) + y * surface->pitch);
@@ -64,18 +66,26 @@ int main()
     assert(BagScene(341.33f, screens).items.size() == 1);
     assert(BagScene(341.33f, nullptr).items.size() == 1);
 
-    // Battle choices must retain the full question and every button, including when
-    // the cursor reaches the lower part of the touch screen.
-    for (float width : { 256.0f, 341.33f, 512.0f })
+    // Battle questions: the question at full size, both answers in the message bar,
+    // right of the text and inside the window.
+    for (float width : { 256.0f, 341.33f, 455.11f, 512.0f })
     {
         const Scene question = BattleChoiceScene(width);
-        assert(question.items.size() == 2);
+        assert(question.items.size() == 3);
         const Element& text = question.items[0];
-        const Element& buttons = question.items[1];
         assert(text.screen == 0 && text.sy == 0 && text.sh == 192 && text.scale == 1);
-        assert(buttons.screen == 1 && buttons.sy == 0 && buttons.sh == 192);
-        assert(buttons.dy + buttons.sh * buttons.scale < 144); // Clear of the question.
+        float last = 0;
+        for (int i = 1; i <= 2; i++)
+        {
+            const Element& b = question.items[i];
+            assert(b.screen == 1 && b.sw == 252 && b.sh == 47);
+            assert(b.dy >= 147 && b.dy + b.sh * b.scale <= 190); // In the bar.
+            assert(b.dy >= last);                                // Stacked, no overlap.
+            assert(b.dx >= 168);                                 // Clear of the question.
+            assert(b.dx + b.sw * b.scale <= 128 + width / 2);    // Inside the window.
+            last = b.dy + b.sh * b.scale;
+        }
     }
     SDL_Quit();
-    puts("Gen 5 layouts: Bag text, battle choices and compositors passed.");
+    puts("Gen 5 layouts: side-by-side Bag, battle questions and compositors passed.");
 }

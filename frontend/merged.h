@@ -462,20 +462,30 @@ inline Element Crop(int screen, int sx, int sy, int sw, int sh)
     return { screen, sx, sy, sw, sh, 0, 0, 1.0f, 0, 255, false };
 }
 
-// A battle's question stays at full size. Its touch-screen choices stand above the
-// message box, so neither the text nor the buttons disappear behind another piece.
+// A battle's question ("Use next Pokemon?") stays at full size on the top screen. The two
+// answers from the touch screen sit at the right end of the message bar, under the text,
+// so nothing covers the battle or the question.
 inline Scene BattleChoiceScene(float viewWidth)
 {
     Scene sc;
     sc.name = "battle-choice";
     sc.wide = viewWidth >= 300;
     sc.smartEdges = true;
-    Element choices = FullScreen(1);
-    choices.scale = 0.55f;
-    choices.dx = 128 + viewWidth / 2 - choices.sw * choices.scale - 4;
-    choices.dy = 4;
-    choices.border = true;
-    sc.items = { FullScreen(0), choices };
+    sc.items = { FullScreen(0) };
+    const float right = 128 + viewWidth / 2 - 4;    // the bar's right end
+    const float room = right - 170;                 // the question's text ends near x 166
+    const float k = std::max(0.3f, std::min(0.42f, room / 252));
+    const float h = 47 * k, gap = 2;
+    float y = 148 + (41 - (2 * h + gap)) / 2;       // the bar: rows 147 to 189
+    for (int top : { 33, 80 })                      // SWITCH POKEMON, then KEEP BATTLING
+    {
+        Element b = Crop(1, 2, top, 252, 47); // with the red cursor brackets
+        b.scale = k;
+        b.dx = right - 252 * k;
+        b.dy = y;
+        sc.items.push_back(b);
+        y += h + gap;
+    }
     return sc;
 }
 
