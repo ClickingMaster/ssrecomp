@@ -1,32 +1,52 @@
 name: Bug report
-description: Something doesn't work on the Switch (starting, the picture, battles, menus, saving...).
+description: Something doesn't work (starting, the picture, battles, menus, saving, sound, controls...) on any platform.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! The `game.log` file is the most useful part: without it most problems can't be tracked down.
-        **Never attach or link your ROM.**
+        Thanks for reporting! Three things make a problem much quicker to fix: **your `game.log`**, **your save** (zipped), and **a photo or short video**.
+        **Never attach or link a ROM.** Saves and logs are fine: they hold no game data.
+
   - type: dropdown
-    id: download
+    id: platform
     attributes:
-      label: Which download?
+      label: Platform
       options:
-        - All six games in one (pokemon-ds-wide)
-        - Black 2 and White 2
-        - Black and White
-        - SoulSilver and HeartGold
-        - I built it myself
+        - Windows PC
+        - Windows handheld (ROG Ally, Legion Go, MSI Claw...)
+        - Linux PC (the .tar.gz download)
+        - Linux AppImage (Gear Lever or similar)
+        - Steam Deck
+        - Mac (Apple silicon, M1 or newer)
+        - Mac (Intel)
+        - Android phone or tablet
+        - Android handheld (Retroid, AYN Odin, Anbernic...)
+        - iPhone
+        - iPad
+        - Nintendo Switch
+        - Other (say which in Device, below)
     validations:
       required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Your exact device or model. On a Switch, also how you start it (Homebrew Menu holding R, a HOME Menu forwarder, the album) and any sys-clk settings.
+      placeholder: "Pixel 9, AYN Thor, Retroid Pocket 5, ROG Ally, MacBook Air M2, Switch OLED via a forwarder..."
+    validations:
+      required: true
+
   - type: input
     id: release
     attributes:
       label: Release
-      description: The release you downloaded, from its page on GitHub.
-      placeholder: all-games-v2
+      description: The release you are on, from its page on GitHub or the game list's update line.
+      placeholder: "pc-v1, android-v1, ios-v1, November 3 update..."
     validations:
       required: true
+
   - type: dropdown
     id: game
     attributes:
@@ -38,88 +58,121 @@ body:
         - White 2
         - HeartGold
         - SoulSilver
+        - Platinum
+        - Diamond or Pearl (experimental)
+        - Emerald (GBA)
+        - FireRed or LeafGreen (GBA)
+        - Ultra Violet (GBA)
+        - The game list itself
     validations:
       required: true
+
   - type: dropdown
-    id: rom
+    id: language
     attributes:
-      label: Your ROM's version
-      description: "Black, White, Black 2 and White 2 need an English copy (US or Europe); SoulSilver and HeartGold the English US copy. A white or black screen at the start usually means another version or a changed ROM."
+      label: Your ROM's language
+      description: "The language and region of the game itself (not the menus). Supported: English (US and Europe) for every game; French, German, Italian, Spanish, Japanese and Korean in beta for the seven main DS games."
       options:
-        - English, US
-        - English, Europe
+        - English (US)
+        - English (Europe)
+        - French
+        - German
+        - Italian
+        - Spanish
+        - Japanese
+        - Korean
         - Another language
         - Not sure
     validations:
       required: true
+
   - type: dropdown
-    id: switch
+    id: romtype
     attributes:
-      label: Switch
+      label: Is your ROM unchanged?
+      description: Hacks move the game's code and graphics around, so many problems only happen in them. Please check with an unchanged ROM too if you can.
       options:
-        - Switch (original)
-        - Switch OLED
-        - Switch Lite
-        - Other
+        - My own unchanged copy
+        - A ROM hack, patch, translation or randomizer (name it below)
+        - Not sure
     validations:
       required: true
+
   - type: dropdown
-    id: start
+    id: layout
     attributes:
-      label: How do you start it?
+      label: Screen layout
+      description: Pause menu > DISPLAY > SCREEN LAYOUT.
       options:
-        - Homebrew Menu, holding R on a game
-        - A forwarder on the HOME Menu (sphaira or similar)
-        - From the album
-        - Other
+        - MERGED (the one widescreen picture, the default)
+        - HYBRID
+        - SIDE
+        - VERTICAL
+        - TOP or BOTTOM (one screen)
+        - Not sure
     validations:
       required: true
-  - type: input
-    id: clocks
-    attributes:
-      label: sys-clk settings (if you use it)
-      placeholder: CPU 1785 / GPU 460 / memory 1600, or none
+
   - type: dropdown
     id: where
     attributes:
       label: Where does it go wrong?
       options:
-        - Starting (a white or black screen, an error, back to the menu)
-        - The game list (all-games download)
+        - Starting (a white or black screen, an error, back to the list)
+        - The game list
         - Walking around (the widescreen world)
         - Battles
         - Menus, the bag, text boxes
+        - Minigames (Pokeathlon, Voltorb Flip, contests...)
         - Saving or loading
         - Sound
-        - Controls
-        - Speed (slow or stuttering)
+        - Controls or touch
+        - Speed (slow, stuttering, or too fast)
+        - Something else
     validations:
       required: true
+
   - type: textarea
     id: what
     attributes:
       label: What happens, and what did you expect?
-      description: A photo or a short video of the screen helps a lot (the Switch's screenshot button works too).
+      description: A photo or a short video of the screen helps a lot. Drag it into this box.
     validations:
       required: true
+
   - type: textarea
     id: steps
     attributes:
       label: Steps to make it happen
-      description: Where in the game you are and what you do, so it can be tried here.
+      description: Where in the game you are and what you do, so it can be tried here (your save makes this exact).
       placeholder: |
-        1. Continue my save in Castelia City
-        2. Open the Bag
+        1. Continue my save in Goldenrod City
+        2. Talk to the Poke Mart clerk
         3. ...
+
   - type: textarea
     id: log
     attributes:
       label: game.log
       description: |
-        Drag the `game.log` file into this box (or paste what is in it). It is in the game's folder on the SD card: `/switch/pokemon-ds-wide/` for the all-games download, otherwise the game's own folder (e.g. `/switch/pokemon-black2-wide/`). It is written again each time the game starts, so copy it straight after the problem.
-        To get it onto a computer: put the SD card in a card reader; or, without taking it out, Hekate's **Tools > USB Tools > SD Card** (or DBI's MTP mode) shows the card on the computer over USB; or an FTP app such as ftpd over Wi-Fi.
+        Drag `game.log` into this box (or paste what is in it). It is rewritten each time the program starts, so copy it straight after the problem (the one before is kept as `game-previous.log`).
+        - **Windows, Linux (.tar.gz), Steam Deck:** the folder you unpacked the download into, beside the program.
+        - **Linux AppImage:** `~/.local/share/pokemon-ds-wide/`
+        - **Mac:** `~/Library/Application Support/Pokemon DS Widescreen/` (in Finder: Go > Go to Folder).
+        - **Android:** `Android/data/io.github.mamesj.pokemonds/files/` (connect the phone to a computer over USB, or use a file manager that can open Android/data).
+        - **iPhone and iPad:** Files app > On My iPhone (or iPad) > Pokémon Fulldex.
+        - **Switch:** `/switch/pokemon-ds-wide/` on the SD card. To reach it: a card reader; Hekate's Tools > USB Tools > SD Card (or DBI's MTP mode) over USB; or an FTP app such as ftpd.
     validations:
       required: true
+
+  - type: textarea
+    id: save
+    attributes:
+      label: Your save (zipped)
+      description: |
+        GitHub doesn't take `.sav` files directly: **put the save in a .zip and drag the .zip here.** It lets us load your game exactly where the problem is. Saves are in the `saves` folder in the same place as `game.log` above (on the Switch: in `/switch/pokemon-ds-wide/` beside the ROMs). Each game has its own name: `black2.sav`, `white2.sav`, `black.sav`, `white.sav`, `soulsilver.sav`, `heartgold.sav`, `platinum.sav`, and for the GBA games `emerald.sav` and so on (other languages add their code, e.g. `heartgold-fr.sav`).
+        Optional, but often the fastest way to a fix.
+
   - type: checkboxes
     id: checks
     attributes:
@@ -127,5 +180,5 @@ body:
       options:
         - label: I searched the existing issues and this hasn't been reported yet.
           required: true
-        - label: My ROM is my own unchanged copy (no patches, translations, randomizers or trimming).
+        - label: I haven't attached or linked a ROM.
           required: true
