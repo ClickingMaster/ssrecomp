@@ -24,8 +24,6 @@
 *.sbin
 *.nef
 # Per-user settings and test output
-pull-request-description.md
-/diagnostics/
 ssrecomp.cfg
 /build.log
 /game.log
