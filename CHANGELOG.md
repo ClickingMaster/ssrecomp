@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
+  and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
+  diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.
+
 - Windows: allow repeated saves of a custom touch layout while preserving the previous layout if replacement fails.
 
 - Add French, German, Japanese and Korean to the launcher and Fulldex menus, with automatic language detection, embedded fonts and translated controller/touch labels. Embedded GBA menus follow the selected language.

@@ -485,6 +485,19 @@
       "source": "tools/regions/CPUK.txt",
       "catalogue_verified": false,
       "wide_map": null
+    },
+    {
+      "code": "APAK",
+      "base": "APAE",
+      "name": "Pokemon Pearl (KO, Experimental)",
+      "save": "pearl-ko.sav",
+      "revision": 0,
+      "bytes": 67108864,
+      "sha1": "d1b07c0aec0da5ba865ec1b4bc39a2be4c9fb8fc",
+      "kind": "functions",
+      "source": "tools/regions/APAK.txt",
+      "catalogue_verified": true,
+      "wide_map": null
     }
   ]
 }

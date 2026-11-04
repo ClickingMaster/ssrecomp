@@ -37,6 +37,7 @@ inline constexpr Profile profiles[] = {
     {"IRDI", "IRDO", "Pokemon White 2 (IT, Beta)", "white2-it.sav", "b787bdd69fa79d270d08f334b188a61e3454405e", 0, 536870912u, true, 0x021c9f6cu, 0x0208ee14u, 0x1a3e00u, 29},
     {"IRDD", "IRDO", "Pokemon White 2 (DE, Beta)", "white2-de.sav", "60665d23a12a0ad4fbff75a4d4f287a9cec73b40", 0, 536870912u, true, 0x021c9f9cu, 0x0208ee14u, 0x1a3e00u, 29},
     {"CPUK", "CPUE", "Pokemon Platinum (KO, Beta)", "platinum-ko.sav", "f811d9c7ab5262f593012da794c2fa81dbcdbcc1", 0, 134217728u, true, 0x00000000u, 0x00000000u, 0x0u, 0},
+    {"APAK", "APAE", "Pokemon Pearl (KO, Experimental)", "pearl-ko.sav", "d1b07c0aec0da5ba865ec1b4bc39a2be4c9fb8fc", 0, 67108864u, true, 0x00000000u, 0x00000000u, 0x0u, 0},
 };
 inline const Profile* Find(const char* code) {
     for (const auto& p : profiles) if (std::strcmp(code,p.code)==0) return &p;

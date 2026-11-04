@@ -109,6 +109,11 @@ inline const KnownGame* Known(const std::string& code)
         { "IPGS", "Pokemon SoulSilver (ES)", "soulsilver-es.sav" },
         { "IPKS", "Pokemon HeartGold (ES)", "heartgold-es.sav" },
         { "ADAS", "Pokemon Diamond (ES, Experimental)", "diamond-es.sav" },
+        { "APAF", "Pokemon Pearl (FR, Experimental)", "pearl-fr.sav" },
+        { "APAS", "Pokemon Pearl (ES, Experimental)", "pearl-es.sav" },
+        { "APAD", "Pokemon Pearl (DE, Experimental)", "pearl-de.sav" },
+        { "ADAD", "Pokemon Diamond (DE, Experimental)", "diamond-de.sav" },
+        { "ADAI", "Pokemon Diamond (IT, Experimental)", "diamond-it.sav" },
         { "IPKI", "Pokemon HeartGold (IT)", "heartgold-it.sav" },
         { "CPUF", "Pokemon Platinum (FR)", "platinum-fr.sav" },
     };

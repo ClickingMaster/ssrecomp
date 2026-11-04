@@ -18,7 +18,7 @@ Translated pause menus expand to fit their labels. GBA's own menus are unchanged
 | Black, White, Black 2, White 2, SoulSilver, HeartGold, Platinum | French revision 0 (#18) |
 | White, Platinum, SoulSilver, HeartGold | Spanish (#41) |
 | HeartGold | Italian (#9) |
-| Diamond and Pearl | Experimental English; Diamond also Spanish (#41) |
+| Diamond and Pearl | Experimental English; Diamond also Spanish (#41), German and Italian; Pearl also French, Spanish, German and Korean |
 
 Each language has a separate save filename, such as heartgold.sav,
 heartgold-fr.sav, heartgold-es.sav and heartgold-it.sav. Unsupported language codes

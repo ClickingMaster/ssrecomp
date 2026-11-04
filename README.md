@@ -55,7 +55,7 @@ language, revision or game, and complete playthroughs have not been verified.
 | Language | Games with added profiles |
 |---|---|
 | French, German, Italian, Spanish, Japanese and Korean | Black, White, Black 2, White 2, SoulSilver, HeartGold, Platinum |
-| Experimental | English Diamond/Pearl and Spanish Diamond |
+| Experimental | Diamond: English, Spanish, German and Italian. Pearl: English, French, Spanish, German and Korean |
 
 The supplied collection contains 42 exact ROM versions. New profiles validate their fingerprint before loading a save. The earlier 41-ROM menu/settings checks passed; newly supplied Korean Platinum has startup/menu checks so far. Broader battle, adapted-screen and full-playthrough testing continues.
 
@@ -575,7 +575,8 @@ OLED in handheld mode; a PC has room to spare, and draws the same picture up to
 
 - English versions (US or Europe) for the seven established DS games; French
   revision 0 for all seven; Spanish White, Platinum, SoulSilver and HeartGold;
-  Italian HeartGold. Diamond/Pearl support is experimental. See
+  Italian HeartGold. Diamond (English, Spanish, German, Italian) and Pearl (English,
+  French, Spanish, German, Korean) are experimental. See
   [regional profiles and touch controls](docs/REGIONAL-AND-TOUCH-CONTROLS.md).
 - Platinum: the Pokétch (the watch on the touch screen) isn't shown during
   normal play; its apps are one press of the screen-swap button away.

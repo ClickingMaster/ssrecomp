@@ -13,7 +13,8 @@ inline std::string BaseGameCode(const std::string& code)
         { "IRAS", "IRAO" }, { "CPUS", "CPUE" }, { "IPGS", "IPGE" }, { "IPKS", "IPKE" },
         { "ADAS", "ADAE" }, { "IRBF", "IRBO" }, { "IRAF", "IRAO" }, { "IREF", "IREO" },
         { "IRDF", "IRDO" }, { "IPGF", "IPGE" }, { "IPKF", "IPKE" }, { "CPUF", "CPUE" },
-        { "IPKI", "IPKE" }
+        { "IPKI", "IPKE" },
+        { "APAF", "APAE" }, { "APAS", "APAE" }, { "APAD", "APAE" }, { "ADAD", "ADAE" }, { "ADAI", "ADAE" }
     };
     for (const auto& alias : aliases) if (code == alias[0]) return alias[1];
     if (const auto* p = RegionalProfiles::Find(code.c_str())) return p->base;

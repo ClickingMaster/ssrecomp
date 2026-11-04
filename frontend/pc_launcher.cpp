@@ -265,7 +265,7 @@ void SetRomFolder(Folders& fo)
 // the emulator, which reads them by file name.
 void ExtractFuncs(const Folders& fo)
 {
-    std::vector<const char*> codes = { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "ADAE", "IRAS", "CPUS", "ADAS", "APAE", "IREF", "IRDF", "CPUF", "IRBF", "IRAF" };
+    std::vector<const char*> codes = { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "ADAE", "IRAS", "CPUS", "ADAS", "APAE", "APAF", "APAS", "APAD", "ADAD", "ADAI", "IREF", "IRDF", "CPUF", "IRBF", "IRAF" };
     for (const auto& p : RegionalProfiles::profiles) if (p.functions) codes.push_back(p.code);
     for (const char* code : codes)
     {
