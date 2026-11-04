@@ -18,6 +18,7 @@
 021cea30 t ov167 ? BtlvCore_WaitCommandSelect
 021ceb40 t ov167 ? BtlvCore_WaitMoveSelect
 021ceb74 t ov167 ? BtlvCore_WaitTargetSelect
+021d0228 t ov167 ? BtlvCore_PollYesNo
 021d0388 t ov167 ? BtlvCore_WaitLevelUpWin
 021d03a8 t ov167 ? BtlvCore_WaitLevelUpStats
 021d03c8 t ov167 ? BtlvCore_WaitCloseLevelUpWin

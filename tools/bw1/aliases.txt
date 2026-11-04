@@ -49,6 +49,7 @@ ConfirmDialog_Update         BMP_MENU_ProcessYesNo                main   0201feb
 BPlistMain_Task              B_PLIST_MAIN_Task                    ov198  0220f478  align0.98
 BBagMain_Task                B_BAG_MAIN_Main                      ov197  0220c914  align0.98
 BChoiceMain_Task             BTLV_CORE_PollYesNoMenu              ov093  021eac54  role
+BtlvCore_PollYesNo           BTLV_CORE_PollYesNoMenu              ov093  021eac54  role
 BtlvInput_YesNoTask          BTLV_INPUT_MessageScreenOpenTask     ov094  02203d40  align0.94
 BtlMain_SetupAloneSingle     BTL_MAIN_TaskSetupSingle             ov093  021b6aac  exact
 BtlMain_SetupAloneDouble     BTL_MAIN_TaskSetupDouble             ov093  021b6c5c  exact
