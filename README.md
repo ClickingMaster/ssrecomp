@@ -536,6 +536,23 @@ Please tell us how it runs on yours, with your model (see [Reporting a bug](#rep
   menu at the right edge of the view, and the Bag, party, Pokédex, map and
   other menus laid out for one screen.
 
+### Pokémon Diamond and Pearl
+
+| | |
+|---|---|
+| ![Diamond: Giratina against Elite Four Aaron's Dustox, with its moves beside the battle](docs/screenshots/diamond-giratina-battle.jpg) | ![Diamond: the Pokémon League, in widescreen](docs/screenshots/diamond-pokemon-league.jpg) |
+
+- **ROM:** Diamond (`ADAE`) or Pearl (`APAE`), US or Europe; Diamond also in
+  Spanish (`ADAS`), German (`ADAD`) and Italian (`ADAI`); Pearl also in French
+  (`APAF`), Spanish (`APAS`), German (`APAD`) and Korean (`APAK`). Japanese
+  Diamond and Pearl are not supported yet.
+- **Save:** `diamond.sav` or `pearl.sav` (other languages have their own, such as
+  `pearl-fr.sav`).
+- **What you get:** Platinum's widescreen layouts on Sinnoh's first adventure:
+  battles with their buttons and moves beside the action, and the Bag, party,
+  Pokédex, Trainer Card and other menus laid out for one screen. Still
+  experimental.
+
 ---
 
 ### The GBA games
