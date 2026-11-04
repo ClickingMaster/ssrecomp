@@ -479,9 +479,8 @@ inline Scene BattleChoiceScene(float viewWidth)
     return sc;
 }
 
-// Black and Black 2's Bag: the item card covers only the unused left part of the touch
-// screen. Its message box spans that whole screen, so the card must sit below it while
-// an item is selected or used. Keep the pocket controls at the bottom clear as well.
+// Black and Black 2's Bag: the touch screen alone while browsing the pockets; once an item is
+// chosen (its card on the top screen), both screens side by side.
 inline Scene BagScene(float viewWidth, const ScreenImage* screens)
 {
     const float viewLeft = 128 - viewWidth / 2, viewRight = 128 + viewWidth / 2;
@@ -499,21 +498,21 @@ inline Scene BagScene(float viewWidth, const ScreenImage* screens)
     sc.items = { list };
     if (text >= 12)
     {
-        list.dx = viewRight - 256;
-        const auto white = [&](int x, int y) {
-            if (!screens || !screens[1].pixels) return false;
-            const uint32_t c = screens[1].pixels[y * 256 + x];
-            return ((c >> 16) & 0xFF) > 230 && ((c >> 8) & 0xFF) > 230 && (c & 0xFF) > 230;
-        };
-        const bool message = white(5, 24) && white(250, 24);
-        // Include the move's type, category, power, accuracy and PP below the description.
-        Element card = Crop(0, 8, 28, 240, 164);
-        card.dy = message ? 48.0f : 4.0f;
-        const float left = viewRight - 256 + 116 - viewLeft;
-        card.scale = std::min({ 0.85f, (left - 6) / card.sw, (164 - card.dy) / card.sh });
-        card.dx = viewLeft + 3;
-        card.border = true;
-        sc.items = { list, card };
+        // An item chosen: both screens side by side, as the DS shows them (the card on the
+        // top screen, the message and the choices on the touch screen), so that neither covers
+        // the other; the rest of the view in the card's own blue.
+        const float k = std::min(1.0f, viewWidth / 512);
+        Element top = Crop(0, 0, 0, 256, 192), touch = Crop(1, 0, 0, 256, 192);
+        top.scale = touch.scale = k;
+        top.dx = 128 - 256 * k;
+        touch.dx = 128;
+        top.dy = touch.dy = 96 - 96 * k;
+        top.crisp = touch.crisp = k == 1.0f;
+        sc.name = "bag";
+        sc.items = { top, touch };
+        const uint32_t blue = screens && screens[0].pixels ? screens[0].pixels[100 * 256 + 4] & 0xFFFFFF : 0x103070;
+        sc.items.insert(sc.items.begin(), FillRect(viewLeft - 1, -1, (int)std::ceil(viewWidth) + 3, 194, blue));
+        return sc;
     }
     sc.bgScreen = 1;
     sc.bgX = 2;
