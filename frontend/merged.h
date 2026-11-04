@@ -247,14 +247,30 @@ struct MergedView
     float width;      // width of the whole view in base pixels (256 when the output is 4:3 or narrower)
 };
 
+// ASPECT RATIO: the widest the view may be, width / height (0: the output's own shape). A
+// narrower one stands in the middle of the output, black bars beside it (MergedBlackBars).
+inline float g_mergedAspect = 0;
+
+// The output columns the view covers, after ASPECT RATIO: x0 to x1.
+inline void MergedViewColumns(int outW, int outH, int& x0, int& x1)
+{
+    int w = outW;
+    if (g_mergedAspect > 0 && outH > 0 && outW > outH * g_mergedAspect) w = (int)(outH * g_mergedAspect + 0.5f);
+    x0 = (outW - w) / 2;
+    x1 = x0 + w;
+}
+
 inline MergedView MergedMakeView(int outW, int outH)
 {
+    int x0, x1;
+    MergedViewColumns(outW, outH, x0, x1);
+    const int viewW = x1 - x0;
     MergedView v;
     v.unit = outH / 192.0f;
-    if (outW / 256.0f < v.unit) v.unit = outW / 256.0f;
+    if (viewW / 256.0f < v.unit) v.unit = viewW / 256.0f;
     v.originX = (outW - 256 * v.unit) / 2;
     v.originY = (outH - 192 * v.unit) / 2;
-    v.width = outW / v.unit;
+    v.width = viewW / v.unit;
     return v;
 }
 
@@ -694,6 +710,16 @@ inline const uint32_t* MergedFillWideHoles(const WideImage& wide, int screenX0, 
         holes = (screenX0 > 0 && !(row[0] >> 24)) || (screenX1 < w && !(row[w - 1] >> 24));
     }
     if (!holes) return wide.pixels;
+    // Not where a room ends: indoors, a floor that ends inside the DS's own view has nothing
+    // under it down to the bottom of the picture, while outdoors the ground always reaches the
+    // bottom (the camera looks down at it). There the gap beside a wall is the room's real end,
+    // and going on in the wall's last colour drew it out into stripes (GitHub #60).
+    for (int x = screenX0; x < screenX1; x += 4)
+    {
+        if (wide.pixels[(size_t)(h - 1) * w + x] >> 24) continue;
+        for (int y = h - 2; y >= 0; y--)
+            if (wide.pixels[(size_t)y * w + x] >> 24) return wide.pixels;
+    }
     px.assign(wide.pixels, wide.pixels + (size_t)w * h);
     for (int y = 0; y < h; y++)
     {
@@ -754,6 +780,20 @@ inline void MergedNarrowBars(const ScreenImage& s, uint32_t left[192], uint32_t 
             }
             out[y] = 0xFF000000 | (r / n * keep >> 8) << 16 | (g / n * keep >> 8) << 8 | (b / n * keep >> 8);
         }
+    }
+}
+
+// Black where ASPECT RATIO leaves the output beside the view.
+inline void MergedBlackBars(std::vector<uint32_t>& out, int outW, int outH)
+{
+    int x0, x1;
+    MergedViewColumns(outW, outH, x0, x1);
+    if (x0 <= 0 && x1 >= outW) return;
+    for (int y = 0; y < outH; y++)
+    {
+        uint32_t* row = &out[(size_t)y * outW];
+        std::fill(row, row + x0, 0xFF000000u);
+        std::fill(row + x1, row + outW, 0xFF000000u);
     }
 }
 

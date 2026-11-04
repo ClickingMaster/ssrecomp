@@ -1043,6 +1043,23 @@ static std::unique_ptr<NDS> MakeConsole(const std::vector<uint8_t>& rom, const s
         args.JIT = jit;
     }
     else args.JIT = std::nullopt;
+    // The firmware kept from before (firmware.bin, see Host::FirmwarePath), when it is one: the
+    // same size as the firmware made fresh otherwise.
+    if (!Host::FirmwarePath.empty())
+        if (FILE* f = fopen(Host::FirmwarePath.c_str(), "rb"))
+        {
+            std::vector<u8> fw;
+            u8 buf[65536];
+            size_t n;
+            while ((n = fread(buf, 1, sizeof buf, f)) > 0) fw.insert(fw.end(), buf, buf + n);
+            fclose(f);
+            if (fw.size() == Firmware(0).Length())
+            {
+                args.Firmware = Firmware(fw.data(), (u32)fw.size());
+                fprintf(stderr, "[firmware] %s\n", Host::FirmwarePath.c_str());
+            }
+            else fprintf(stderr, "[firmware] %s: %zu bytes, not firmware: a new one\n", Host::FirmwarePath.c_str(), fw.size());
+        }
     auto nds = std::make_unique<NDS>(std::move(args));
 #ifdef JIT_ENABLED
     UseFastMem = UseJit && nds->JIT.FastMemoryEnabled();
@@ -1131,6 +1148,7 @@ struct AutoFocus
     bool manualFlip = false;
     int pending = 0;           // frames the opposite decision has been stable
     std::vector<const RcApp*> bottomApps;
+    std::vector<const RcApp*> athlonApps;
 
     void Init()
     {
@@ -1144,6 +1162,32 @@ struct AutoFocus
         for (unsigned i = 0; i < rc_num_apps; i++)
             for (const char* n : names)
                 if (!strcmp(rc_apps[i].name, n)) bottomApps.push_back(&rc_apps[i]);
+        // The Pokeathlon: choosing the Pokemon and the events are played on the touch screen,
+        // but the announcer talks in a box on the top screen and each event's title card is
+        // on the top screen alone (see AthlonBottom).
+        for (unsigned i = 0; i < rc_num_apps; i++)
+            if (!strcmp(rc_apps[i].name, "PokeathlonCourse") || !strcmp(rc_apps[i].name, "PokeathlonUnkApp"))
+                athlonApps.push_back(&rc_apps[i]);
+    }
+
+    // A HeartGold/SoulSilver text box on the top screen: white across its middle rows and the
+    // dark end with the arrow at the right. (The Pokemon chooser's medal panel is white in
+    // the same place but runs to the edge.)
+    static bool TopTextBox(const u32* top)
+    {
+        auto light = [](u32 c) { return ((c >> 16) & 0xFF) >= 0xD8 && ((c >> 8) & 0xFF) >= 0xD8 && (c & 0xFF) >= 0xD8; };
+        auto dark = [](u32 c) { return ((c >> 16) & 0xFF) < 0x70 && ((c >> 8) & 0xFF) < 0x70 && (c & 0xFF) < 0x70; };
+        int n = 0;
+        for (int y : { 160, 168, 176 })
+            for (int x = 16; x < 228; x++) n += light(top[y * 256 + x]);
+        return n >= 3 * 212 * 6 / 10 && dark(top[168 * 256 + 244]) && dark(top[168 * 256 + 248]);
+    }
+
+    // The Pokeathlon on the touch screen, except while the announcer talks or the touch
+    // screen is empty (an event's title card).
+    bool AthlonBottom(bool active, const u32* top, const u32* bot) const
+    {
+        return active && top && bot && !Blank(bot) && !TopTextBox(top);
     }
 
     static bool Blank(const u32* fb)
@@ -1523,6 +1567,12 @@ struct Settings
     bool ffLowRes = true;
     // VOLUME: the game's sound and music, 0 (off) to 100 in tens.
     int volume = 100;
+    // ASPECT RATIO: 0 AUTO (the screen's own shape), 1 16:9, 2 16:10, 3 3:2, 4 4:3.
+    int aspect = 0;
+    // The ultrawide notice (below, where the view is worked out) has been shown once.
+    bool ultraNoticeSeen = false;
+    // FAST FORWARD SOUND: off plays silence while fast forwarding (GitHub #45).
+    bool ffMute = false;
     std::string listColour, listBackground, listLang; // (GAME LIST: COLOUR, BACKGROUND; LANGUAGE)
     bool cpuBoost = true; // Switch only: the processor's boost mode (see SwitchPlatform)
     bool jit = true;      // Switch, games that are not recompiled: melonDS's JIT (read at start-up)
@@ -1593,6 +1643,9 @@ struct Settings
             else if (k == "pad_touch") padTouch = v == "1";
             else if (k == "show_fps") showFps = v == "1";
             else if (k == "volume") volume = std::clamp(atoi(v.c_str()) / 10 * 10, 0, 100);
+            else if (k == "ultrawide_notice") ultraNoticeSeen = v == "1";
+            else if (k == "aspect") aspect = v == "16:9" ? 1 : v == "16:10" ? 2 : v == "3:2" ? 3 : v == "4:3" ? 4 : 0;
+            else if (k == "ff_mute") ffMute = v == "1";
             // (The game list's look, GAME LIST: kept here so saving does not drop them; COLOUR is the
             // pause menu's colour too.)
             else if (k == "list_colour") { listColour = v; Menu::Accent = AccentNamed(v); }
@@ -1646,6 +1699,9 @@ struct Settings
         f << "show_fps=" << (showFps ? 1 : 0) << "\n";
         f << "ff_low_res=" << (ffLowRes ? 1 : 0) << "\n";
         f << "volume=" << volume << "\n";
+        f << "ultrawide_notice=" << (ultraNoticeSeen ? 1 : 0) << "\n";
+        f << "aspect=" << (aspect == 1 ? "16:9" : aspect == 2 ? "16:10" : aspect == 3 ? "3:2" : aspect == 4 ? "4:3" : "auto") << "\n";
+        f << "ff_mute=" << (ffMute ? 1 : 0) << "\n";
         if (!listColour.empty()) f << "list_colour=" << listColour << "\n";
         if (!listBackground.empty()) f << "list_background=" << listBackground << "\n";
         if (!listLang.empty()) f << "list_lang=" << listLang << "\n";
@@ -1826,6 +1882,16 @@ int main(int argc, char** argv)
         std::string line;
         while (std::getline(f, line))
             if (line == "ra=1" || line == "ra=1\r") AchievementsOn = true;
+    }
+    // The DS firmware (the console's own settings: the Nintendo Wi-Fi Connection setup, its DNS
+    // among them) in firmware.bin beside the saves, one for all the games as on a DS. Before,
+    // every start made fresh firmware and those settings were lost (GitHub #39). Not in tests,
+    // unless SSR_FIRMWARE names a file.
+    if (const char* e = getenv("SSR_FIRMWARE")) Host::FirmwarePath = e;
+    else if (!opt.noSave && !opt.headless)
+    {
+        const size_t fwSlash = opt.save.find_last_of("/\\");
+        Host::FirmwarePath = (fwSlash == std::string::npos ? std::string(".") : opt.save.substr(0, fwSlash)) + "/firmware.bin";
     }
     auto nds = MakeConsole(rom, sav, opt.headless);
     if (!nds) return 1;
@@ -2518,6 +2584,7 @@ int main(int argc, char** argv)
     // Whether an application driven from the bottom screen is starting, running or ending
     // (worked out each frame before the scene is chosen).
     bool appBottomNow = false;
+    bool athlonNow = false;   // a Pokeathlon course or its Pokemon chooser is running
     // The command strip's own cursor: d-pad presses seen by the frontend this frame, and the
     // selection they have moved it to (reset whenever the ROM's published selection changes).
     std::string stripNav; int stripSel = 0, stripPubSel = -1, stripPubMenu = 0;
@@ -2678,7 +2745,7 @@ int main(int argc, char** argv)
         auto put = [&](int sx, int sy, int sw, int sh, float x, float y, float scale) {
             sc.items.push_back({ 1, sx, sy, sw, sh, x, y, scale, 0, 255, false });
         };
-        if (viewWidth >= 300 && (cmd || moves || frame < battleStripUntil))
+        if (cmd || moves || frame < battleStripUntil)
         {
             // (Neither: the panel without buttons, while the next ones slide in.)
             sc.name = cmd ? "battle-cmd" : moves ? "battle-moves" : "battle-strip";
@@ -2694,12 +2761,20 @@ int main(int argc, char** argv)
             // (Another language's message is longer: "¿Qué debería hacer CHIMCHAR?" ends near x 232, so
             // its box takes up to 60% of the view and the buttons the rest.)
             const bool translated = BaseGameCode(gameCode) != gameCode;
-            const int edgeW = 10, half = (int)(viewWidth / 2) - edgeW;
-            const int boxW = std::min(246, translated ? std::max(half, std::min(240, (int)(viewWidth * 0.6f) - edgeW)) : half);
-            sc.items.push_back({ 0, 0, 144, boxW, 48, viewL, bandY, 1.0f, 0, 255, false });
-            Element boxEdge = { 0, 0, 144, edgeW, 48, viewL + boxW, bandY, 1.0f, 0, 255, false };
-            boxEdge.flipX = true;
-            sc.items.push_back(boxEdge);
+            // A narrow view (4:3, 3:2: under 300 wide) has no room for the message beside the
+            // buttons: the buttons take the whole band, the message (the question they answer)
+            // left out. Both Pokemon and both HP boxes stay in sight, which the touch screen's
+            // panel over the lower left covered there (GitHub #54, #67).
+            const bool narrow = viewWidth < 300;
+            const int edgeW = narrow ? 0 : 10, half = (int)(viewWidth / 2) - edgeW;
+            const int boxW = narrow ? 0 : std::min(246, translated ? std::max(half, std::min(240, (int)(viewWidth * 0.6f) - edgeW)) : half);
+            if (!narrow)
+            {
+                sc.items.push_back({ 0, 0, 144, boxW, 48, viewL, bandY, 1.0f, 0, 255, false });
+                Element boxEdge = { 0, 0, 144, edgeW, 48, viewL + boxW, bandY, 1.0f, 0, 255, false };
+                boxEdge.flipX = true;
+                sc.items.push_back(boxEdge);
+            }
             const float panelX = viewL + boxW + edgeW, panelY = bandY, panelR = viewR, panelB = bandY + bandH;
             // (The margins leave room for the outlines, which are drawn outside each button: the
             // chosen one's red outline stays inside the half, clear of the scene above.)
@@ -2743,21 +2818,34 @@ int main(int argc, char** argv)
                 // cover showed as a dark dot on the red FIGHT button, just left of its icon.
                 // The same columns in Platinum, SoulSilver and HeartGold. One flat colour fills
                 // the button instead; the ends and the label are drawn over it.
-                uint32_t flat = 0;
-                int bestN = 0;
-                for (int y = c.sy; y < c.sy + c.sh; y++)
+                // (Worked out row by row: the buttons are lighter at the top and darker in a
+                // band at the bottom, which the ends and the label keep, so one colour for all
+                // of it left dark streaks beside them. Rows of the same colour are one fill.)
+                auto rowColour = [&](int y) {
+                    uint32_t flat = 0;
+                    int bestN = 0;
                     for (int x = c.tileX; x < c.tileX + c.tileW; x++)
                     {
                         const uint32_t col = b[y * 256 + x] & 0xFFFFFF;
                         int n = 0;
-                        for (int y2 = c.sy; y2 < c.sy + c.sh; y2++)
-                            for (int x2 = c.tileX; x2 < c.tileX + c.tileW; x2++)
-                                if ((b[y2 * 256 + x2] & 0xFFFFFF) == col) n++;
+                        for (int x2 = c.tileX; x2 < c.tileX + c.tileW; x2++)
+                            if ((b[y * 256 + x2] & 0xFFFFFF) == col) n++;
                         if (n > bestN) { bestN = n; flat = col; }
                     }
-                Element body = FillRect(dx, dy, 1000, (int)std::lround(1000 * rowH / dw), flat);
-                body.scale = dw / 1000;
-                sc.items.push_back(body);
+                    return flat;
+                };
+                for (int y0 = c.sy; y0 < c.sy + c.sh;)
+                {
+                    const uint32_t col = rowColour(y0);
+                    int y1 = y0 + 1;
+                    while (y1 < c.sy + c.sh && rowColour(y1) == col) y1++;
+                    const float top = (y0 - c.sy) * scl;
+                    const float bottom = y1 < c.sy + c.sh ? (y1 - c.sy) * scl + 0.5f : rowH;
+                    Element body = FillRect(dx, dy + top, 1000, (int)std::lround(1000 * (bottom - top) / dw), col);
+                    body.scale = dw / 1000;
+                    sc.items.push_back(body);
+                    y0 = y1;
+                }
                 piece(c.sx, c.lx0 - c.sx, dx);
                 piece(c.lx1, c.sx + c.sw - c.lx1, dx + dw - (c.sx + c.sw - c.lx1) * scl);
                 piece(c.lx0, c.lx1 - c.lx0, dx + (dw - (c.lx1 - c.lx0) * scl) / 2);
@@ -2869,6 +2957,10 @@ int main(int argc, char** argv)
             sc.items = { FullScreen(screen) };
         };
         const bool wideView = viewWidth >= 300;
+        // The world is widened on any view wider than the DS's own (3:2 screens showed it 4:3
+        // with black bars beside it); wideView still decides where menus and buttons go, which
+        // needs the room.
+        const bool worldWide = viewWidth > 256.5f;
         // A panel of touch-screen controls in the lower right corner of the view, below the
         // player's HP box (whose numbers end at y 132), over the empty right part of the
         // message box, keeping the game's own arrangement so that the D-pad moves the
@@ -2984,7 +3076,7 @@ int main(int argc, char** argv)
             {
                 // The briefcase on the grass, in 3D: widened like the world.
                 only("starter", 0);
-                sc.wide = wideView;
+                sc.wide = worldWide;
             }
             else return false;
             return true;
@@ -3001,6 +3093,12 @@ int main(int argc, char** argv)
             // The player asked for the other screen (right stick click, F1): an escape hatch
             // for whatever a layout leaves out.
             only("manual", focus.wantBottom ? 0 : 1);
+        else if ((pt.on && funcWatch.Ran(pt.naming, 2)) || funcWatch.Ran(bw2.nameEntry, 2))
+            // The keyboard, below the question it answers. Ahead of the battles: naming a
+            // Pokemon just caught opens the keyboard while the battle still runs underneath,
+            // and the battle's layout then hid the keyboard, leaving nothing to answer with
+            // (GitHub #63).
+            sc = Stack("naming", { Crop(0, 0, 144, 256, 48), Crop(1, 0, 0, 256, 192) }, false, viewWidth);
         else if (pt.on && funcWatch.Ran(pt.battle, 2))
         {
             // Platinum: a battle. Its Bag and party are touch-screen pages; its commands and
@@ -3029,7 +3127,7 @@ int main(int argc, char** argv)
             // world widened; the Poketch on the touch screen is left out (the right stick
             // click shows it).
             only("top", 0);
-            sc.wide = wideView;
+            sc.wide = worldWide;
             sc.weatherObj = pt.Weather(funcWatch, 4); // rain, snow, ...: repeated to the view's edges
             if (wideView && funcWatch.Ran(pt.startMenu, 2))
             {
@@ -3063,7 +3161,7 @@ int main(int argc, char** argv)
             // The battle is drawn in 3D on the top screen, so the widescreen renderer shows
             // more of the arena; the messages are 2D and stay where they are.
             only("battle", 0);
-            sc.wide = wideView;
+            sc.wide = worldWide;
             // A single battle on a wide view: the HP boxes keep the game's own places but against
             // the view's edges, as the game has them against the screen's: the enemy's in the
             // upper left, the player's in the lower right, above the touch-screen panel. Where
@@ -3227,9 +3325,9 @@ int main(int argc, char** argv)
             // else for more than a second: the layout stays, rather than the two screens side
             // by side popping up for that time, as they did.)
             only("save", 0);
-            sc.wide = wideView;
+            sc.wide = worldWide;
             sc.weatherObj = weatherParticles();
-            sc.items[0].drop = LAYER_BG1; // the strip pointing at the other screen (as in the X menu)
+            if (worldWide) sc.items[0].drop = LAYER_BG1; // the strip pointing at the other screen (as in the X menu)
             SaveScreenPieces(sc, wideView, viewRight, screens);
         }
         else if (funcWatch.Ran(bw2.fieldMenu, 8)) // (it skips a few frames while the menu opens)
@@ -3238,11 +3336,12 @@ int main(int argc, char** argv)
             // own grid of two columns, so that the D-pad moves the highlight where it looks
             // like it should.
             only("start-menu", 0);
-            sc.wide = wideView;
+            sc.wide = worldWide;
             sc.weatherObj = weatherParticles();
             // The strip along the bottom of the top screen (BG1, with an arrow down) only says
-            // to look at the other screen; without it the overworld shows there instead.
-            sc.items[0].drop = LAYER_BG1;
+            // to look at the other screen; without it the overworld shows there instead (only where
+            // the world is widened: a 4:3 view has nothing under it, and showed a black band).
+            if (worldWide) sc.items[0].drop = LAYER_BG1;
             // The touch screen holds up to six buttons, two to a row, in a fixed grid: 126 x 44
             // pixels each, rows 48 apart from y = 22. A slot is used when its button's left
             // edge (a light frame) is there; the menu fills the slots row by row.
@@ -3283,7 +3382,7 @@ int main(int argc, char** argv)
         else if (funcWatch.Ran(bw2.field, 16))
         {
             only("top", 0);
-            sc.wide = wideView;
+            sc.wide = worldWide;
             sc.weatherObj = weatherParticles();
         }
         else if (funcWatch.Ran(bw2.bag, 2))
@@ -3536,7 +3635,7 @@ int main(int argc, char** argv)
             else
             {
                 if (sectionActive("field")) singleFieldFrame = rc_current_frame();
-                sc.wide = viewWidth >= 300 && (fieldActive() || (singleFieldFrame && rc_current_frame() - singleFieldFrame < 20));
+                sc.wide = viewWidth > 256.5f && (fieldActive() || (singleFieldFrame && rc_current_frame() - singleFieldFrame < 20));
                 if (sc.wide && screens) sc.weatherObj = MergedParticleWeather(screens[0]);
             }
             return sc;
@@ -4120,8 +4219,20 @@ int main(int argc, char** argv)
         }
         else if (appActive("GearMap") || appActive("TownMap"))
         {
-            // The location's name and description from the other screen beside the map.
-            sc = SideBySide("map", Crop(0, 0, 64, 256, 128), Crop(1, 0, 0, 256, 192), viewWidth);
+        {
+            // The game's panel runs from the top screen (region, place, description) on into
+            // the bottom one (the map and the prompt): the info above the map, as one panel,
+            // fits any width (side by side, neither filled the height at 16:9). Fly's map
+            // leaves out the marking bars (only the Pokegear map edits them; they are empty
+            // here unless the player made notes, and cost a third of the size).
+            const int infoRows = appActive("TownMap") ? 82 : 128;
+            sc = Stack("map", { Crop(0, 0, 64, 256, infoRows), Crop(1, 0, 3, 256, 189) }, false, viewWidth);
+            // The panel's own blue at the sides (taken from its left edge, so it follows fades)
+            // instead of the grey around other scenes.
+            if (screens[1].pixels)
+                sc.items.insert(sc.items.begin(), FillRect(128 - viewWidth / 2 - 1, -1, (int)std::ceil(viewWidth) + 3, 194,
+                                                           screens[1].pixels[100 * 256 + 4] & 0xFFFFFF));
+        }
             sc.bgScreen = 0;
             sc.bgX = 128;
             sc.bgY = 58;
@@ -4321,6 +4432,13 @@ int main(int argc, char** argv)
                 sc.items.push_back(el);
             }
         }
+        else if (athlonNow)
+        {
+            // The Pokeathlon: both screens side by side, as the SIDE layout shows them (the
+            // announcer and the scores are on the top screen while the events are played on
+            // the touch screen; one of them alone always hid something).
+            sc = Stack("pokeathlon", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+        }
         else if (menuReturn > 0)
             startMenu();
         else if (probeActive(probeStartMenuWait) && !appBottomNow)
@@ -4376,7 +4494,7 @@ int main(int argc, char** argv)
             }
         }
         // The overworld is drawn across the whole wide view by the widescreen 3D renderer.
-        sc.wide = viewWidth >= 300 && (fieldActive() || menuReturn > 0) && !sc.items.empty() && sc.items[0].screen == 0 &&
+        sc.wide = viewWidth > 256.5f && (fieldActive() || menuReturn > 0) && !sc.items.empty() && sc.items[0].screen == 0 &&
             sc.items[0].sw == 256 && sc.items[0].sh == 192 && sc.items[0].dx == 0 && sc.items[0].scale == 1.0f;
         // Snow, rain and sand are sprites. Repeat them beside the screen, as Platinum and the
         // Black games do from their weather functions (see Scene::weatherObj).
@@ -4531,7 +4649,7 @@ int main(int argc, char** argv)
         M_WIDELINES, M_AUTODETAIL, M_WIDEGPU, M_GPU3D, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_EMULATION,
         M_CONTROLS, M_TOUCHLAYOUT, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
         M_DISPLAY, M_LANGUAGE, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
-        M_VOLUME, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
+        M_VOLUME, M_FFMUTE, M_ASPECT, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
         M_CSEARCH, M_SEARCH_LETTER, M_SEARCH_DELETE, M_SEARCH_SPACE, M_SEARCH_CLEAR, M_SEARCH_DONE,
         M_CDETAIL_TOGGLE, M_CINFO, M_BACKUPS, M_RESTORE_CONFIRM, M_LOAD_CONFIRM,
@@ -4645,6 +4763,10 @@ int main(int argc, char** argv)
         else if (menuPage == PAGE_DISPLAY)
         {
             add(M_LANGUAGE, "LANGUAGE", UiLang::ChoiceName());
+            {
+                static const char* const aspects[] = { "AUTO", "16:9", "16:10", "3:2", "4:3" };
+                add(M_ASPECT, "ASPECT RATIO", aspects[std::clamp(cfg.aspect, 0, 4)]);
+            }
 #ifndef __SWITCH__
             // (The Switch always shows the one wide screen these layouts are built around.)
             add(M_LAYOUT, "SCREEN LAYOUT", LayoutName(layout.mode));
@@ -4666,6 +4788,7 @@ int main(int argc, char** argv)
         {
             add(M_VOLUME, "VOLUME", cfg.volume == 0 ? std::string("OFF") : std::to_string(cfg.volume) + "%");
             menu.items.back().slider = cfg.volume / 10;
+            add(M_FFMUTE, "FAST FORWARD SOUND", cfg.ffMute ? "OFF" : "ON");
             add(M_BACK, "BACK", "");
         }
         else if (menuPage == PAGE_GRAPHICS)
@@ -4989,8 +5112,10 @@ int main(int argc, char** argv)
     int ffAudioAt = 0;
     double ffAudioFrac = 0;
     bool ffInBattle = false;
+    bool audioWasFastForward = false;
     bool running = true;
     bool mouseDown = false;
+    int mouseTapHold = 0;      // frames a click lasts at least (see SDL_MOUSEBUTTONDOWN)
     int mouseX = 0, mouseY = 0;
     // On-screen controls (touch screens): shown while no controller is connected.
     TouchPad touchPad;
@@ -5230,6 +5355,15 @@ int main(int argc, char** argv)
             {
                 if (!gpuCompose) gpuCompose = new GpuCompositor(renderer);
                 gpuCompose->Draw(j.scene, j.screens, j.outW, j.outH, cfg.smooth, &j.wide);
+                // (ASPECT RATIO: black beside the view.)
+                int ax0, ax1;
+                MergedViewColumns(j.outW, j.outH, ax0, ax1);
+                if (ax0 > 0 || ax1 < j.outW)
+                {
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                    const SDL_Rect bars[2] = { { 0, 0, ax0, j.outH }, { ax1, 0, j.outW - ax1, j.outH } };
+                    SDL_RenderFillRects(renderer, bars, 2);
+                }
                 perfMark(3);
             }
             else
@@ -5241,6 +5375,7 @@ int main(int argc, char** argv)
                     ch = 768;
                 }
                 MergedCompose(j.scene, j.screens, cw, ch, mergedImage, cfg.smooth, &j.wide);
+                MergedBlackBars(mergedImage, cw, ch);
                 perfMark(3);
                 if (!mergedTex || mergedTexW != cw || mergedTexH != ch)
                 {
@@ -5808,7 +5943,10 @@ int main(int argc, char** argv)
                     cfg.windowH = ev.window.data2;
                 }
 #endif
-                else if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) mouseDown = true;
+                // A quick click can go down and up between two frames, and the game, which reads the
+                // touch screen once a frame, never saw it (the Pokeathlon's START did nothing): a
+                // click lasts at least 4 frames.
+                else if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) { mouseDown = true; mouseTapHold = 4; }
                 else if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) mouseDown = false;
                 // (Every joystick is announced by SDL_JOYDEVICEADDED, game controllers also
                 // by SDL_CONTROLLERDEVICEADDED; Open takes each once.)
@@ -6104,12 +6242,29 @@ int main(int argc, char** argv)
         heldNow.down = ps.btn[PAD_DOWN] || ps.ly > 0.5f;
         heldNow.left = ps.btn[PAD_LEFT] || ps.lx < -0.5f;
         heldNow.right = ps.btn[PAD_RIGHT] || ps.lx > 0.5f;
+        {
+            // (The keyboard's arrows too, for the repeat below: their key presses come as events.)
+            const Uint8* ks = SDL_GetKeyboardState(nullptr);
+            if (ks) { heldNow.up |= ks[SDL_SCANCODE_UP] != 0; heldNow.down |= ks[SDL_SCANCODE_DOWN] != 0; }
+        }
         if (menu.open)
         {
             nav.up |= heldNow.up && !heldNav.up;
             nav.down |= heldNow.down && !heldNav.down;
             nav.left |= heldNow.left && !heldNav.left;
             nav.right |= heldNow.right && !heldNav.right;
+            // Up or down held goes on by itself after a moment (24 frames, then every 4), so a long
+            // list (a cheat database, the achievements) scrolls without pressing again and again
+            // (GitHub #16). Left and right do not: they change values.
+            static int navHold = 0;
+            const bool holdUp = heldNow.up && !heldNow.down, holdDown = heldNow.down && !heldNow.up;
+            if ((holdUp && heldNav.up) || (holdDown && heldNav.down)) navHold++;
+            else navHold = 0;
+            if (navHold >= 24 && (navHold - 24) % 4 == 0)
+            {
+                if (holdUp) nav.up = true;
+                else nav.down = true;
+            }
             nav.accept |= pressed(cfg.byLabel ? PAD_A : PAD_B);
             nav.back |= pressed(cfg.byLabel ? PAD_B : PAD_A);
         }
@@ -6365,6 +6520,9 @@ int main(int argc, char** argv)
                 focus.manualFlip = false;
                 break;
 #endif
+            case M_ASPECT:
+                cfg.aspect = (cfg.aspect + (dir < 0 ? 4 : 1)) % 5;
+                break;
             case M_BATTLEBUTTONS:
                 if (pt.on) break; // (Platinum's buttons stand beside the message box, as SoulSilver's.)
                 if (funcWatchOn && bw1.on) cfg.battleButtons = (cfg.battleButtons + (dir < 0 ? 2 : 1)) % 3;
@@ -6487,6 +6645,9 @@ int main(int argc, char** argv)
                 else cfg.volume = (cfg.volume + (dir < 0 ? 100 : 10)) % 110;
                 sliderTap = -1;
                 break;
+            case M_FFMUTE:
+                cfg.ffMute = !cfg.ffMute;
+                break;
 #if !defined(__SWITCH__) && !defined(SSR_PHONE)
             case M_FFLOWRES:
                 cfg.ffLowRes = !cfg.ffLowRes;
@@ -6549,9 +6710,13 @@ int main(int argc, char** argv)
             // party screens must not move it afterwards, and its next showing starts from the ROM.
             const bool stripUp = singleScreenFlag && (singleScreenFlag[1] == 1 || singleScreenFlag[1] == 2);
             if (!stripUp) { stripNav.clear(); stripPubSel = -1; }
+            // The Pokeathlon is played only by touch: there the stick touch cursor is on whatever
+            // the setting says (for a controller with no mouse or touch screen). The setting itself
+            // is not changed, so it is back as it was once the course ends.
+            const bool padTouchNow = cfg.padTouch || athlonNow;
             // (SWAP SCREENS given a button of its own in CONTROLS works without the touch cursor.)
-            if (!cfg.padTouch && cfg.controls.pad[Controls::SWAP] >= 0 && pressed(PAD_RS)) focus.manualFlip = !focus.manualFlip;
-            if (cfg.padTouch)
+            if (!padTouchNow && cfg.controls.pad[Controls::SWAP] >= 0 && pressed(PAD_RS)) focus.manualFlip = !focus.manualFlip;
+            if (padTouchNow)
             {
                 if (pressed(PAD_RS)) focus.manualFlip = !focus.manualFlip;
 #ifndef __SWITCH__
@@ -6596,7 +6761,21 @@ int main(int argc, char** argv)
         SDL_Rect rects[2];
         LayoutRects(layout, outW, outH, rects);
         const bool merged = layout.mode == LayoutMode::Merged;
+        {
+            static const float aspectValue[] = { 0.0f, 16.0f / 9, 16.0f / 10, 3.0f / 2, 4.0f / 3 };
+            g_mergedAspect = aspectValue[std::clamp(cfg.aspect, 0, 4)];
+        }
         const MergedView view = MergedMakeView(outW, outH);
+        // Ultrawide (wider than about 2.2:1: 21:9, 32:9): the world is drawn out to the edges, but
+        // the games never showed that far, so scenery can pop in or leave gaps at the far edges.
+        // Said once, the first time a game is played that wide.
+        if (merged && !opt.headless && !cfg.ultraNoticeSeen && frame > 300 && view.width > 2.2f * 192)
+        {
+            cfg.ultraNoticeSeen = true;
+            toast = "ULTRAWIDE: THE FAR EDGES MAY POP IN OR SHOW GAPS";
+            toastUntil = frame + 600;
+            cfg.Save(opt.config);
+        }
         // A single-screen build's visible screen is the touch screen: touches land on it directly.
         auto touchAt = [&](float bx, float by, int& tx, int& ty) {
             if (!singleView()) return MergedTouch(scene, bx, by, tx, ty);
@@ -6710,7 +6889,7 @@ int main(int argc, char** argv)
             if (funcWatchOn && (scene.wide || (fromMenu && lastWideScene && frame - lastWideScene < 300))) lastWideScene = frame;
             const bool bw2KeepWide = funcWatchOn && (scene.wide || (lastWideScene && frame - lastWideScene < 300) ||
                 funcWatch.Ran(bw2.battle, 2) || funcWatch.Ran(pt.battle, 2));
-            const bool wantWide = merged && cfg.wide && !opt.noWide && !opt.lockstep && view.width >= 300 && (funcWatchOn ? bw2KeepWide :
+            const bool wantWide = merged && cfg.wide && !opt.noWide && !opt.lockstep && view.width > 256.5f && (funcWatchOn ? bw2KeepWide :
                 (fieldActive() || menuReturn > 0 || scene.edgeFill || (singleView() && singleFieldFrame && rc_current_frame() - singleFieldFrame < 20)));
             melonDS::Wide.Owner = wantWide ? &nds->GPU.GPU3D : nullptr;
             melonDS::Wide.ViewWidth = view.width;
@@ -6807,7 +6986,9 @@ int main(int argc, char** argv)
         if (!paused)
         {
             static bool wasMouseDown = false;
-            if (!opt.headless && mouseDown)
+            const bool mouseNow = mouseDown || mouseTapHold > 0;
+            if (mouseTapHold > 0) mouseTapHold--;
+            if (!opt.headless && mouseNow)
             {
                 if (merged)
                 {
@@ -6827,7 +7008,7 @@ int main(int argc, char** argv)
                 }
                 else if (LayoutTouch(rects[1], mouseX, mouseY, touchX, touchY)) touching = true;
             }
-            wasMouseDown = !opt.headless && mouseDown;
+            wasMouseDown = !opt.headless && mouseNow;
             if (curDX != 0 || curDY != 0 || curPress)
             {
                 // Faster with a fuller stick deflection, for both precision and reach.
@@ -7380,6 +7561,22 @@ int main(int argc, char** argv)
         bool appBottom = false;
         for (const RcApp* app : focus.bottomApps)
             if (appActive(app->name)) appBottom = true;
+        {
+            bool athlon = false;
+            for (const RcApp* app : focus.athlonApps)
+                if (appActive(app->name)) athlon = true;
+            if (focus.AthlonBottom(athlon, top, bot)) appBottom = true;
+            athlonNow = athlon;
+            // The stick touch cursor came on for the course (the setting is off): say how it is used,
+            // where there is no touch screen to tap instead.
+            static bool prevAthlon = false;
+            if (athlon && !prevAthlon && !cfg.padTouch && SDL_GetNumTouchDevices() == 0)
+            {
+                toast = "RIGHT STICK: MOVE THE CURSOR / LEFT TRIGGER: TOUCH";
+                toastUntil = frame + 300;
+            }
+            prevAthlon = athlon;
+        }
         appBottomNow = appBottom;
         {
             const unsigned last = rc_probe_last_frame(probeFieldMap);
@@ -7652,10 +7849,21 @@ int main(int argc, char** argv)
         // normal speed while the picture runs ahead. The queue holds up to half a minute
         // of sound so a long fast forward cannot store the whole song. Past that, further
         // sound is left out; once what is queued has played, playback takes up from where
-        // the game is now. Letting go throws the queue away, so the music lines up with
-        // the game at once instead of lagging on. A battle has its own music: when one
+        // the game is now. Letting go drops that long backlog. Keep the short device queue
+        // (normally about 100 ms) playing so the next samples have time to arrive; clearing
+        // it here creates a hole in playback. A battle has its own music: when one
         // starts or ends, the queue is dropped so that track starts with the battle
         // instead of waiting behind whatever was playing before it.
+        const bool audioFastForward = speed > 1;
+        if (audioFastForward != audioWasFastForward)
+        {
+            // The fast-forward backlog and live audio are different timelines. Discard
+            // buffered overlap pieces and timing measurements when changing between them.
+            audioStretch.Reset();
+            audioSlow = 1.0;
+            audioTick = 0;
+            audioWasFastForward = audioFastForward;
+        }
         const bool inBattle = std::strncmp(scene.name, "battle", 6) == 0;
         if (speed > 1 && inBattle != ffInBattle && (ffAudioAt != 0 || !ffAudio.empty()))
         {
@@ -7699,7 +7907,6 @@ int main(int argc, char** argv)
             ffAudio.clear();
             ffAudioAt = 0;
             ffAudioFrac = 0;
-            if (audio) SDL_ClearQueuedAudio(audio);
         }
 
         if (audio && got > 0)
@@ -7717,13 +7924,14 @@ int main(int argc, char** argv)
                 if (dt < 0.25) audioSlow += (std::min(dt / frameTime, 4.0) - audioSlow) * 0.03;
             }
             audioTick = t;
-            double slowdown = speed == 1 ? audioSlow : 1.0;
-            if (audioStretch.Stretching() && speed == 1) slowdown *= 1.0 + 0.5 * (4800 - queued) / 4800.0;
+            const double slowdown = speed == 1 ? AudioQueueSlowdown(audioSlow, queued) : 1.0;
             audioOut.clear();
             audioStretch.Process(audioBuf.data(), got, slowdown, audioOut);
             // VOLUME: scaled here, after the game's own mixing (silence at OFF, still queued, so
             // the timing the queue gives stays the same).
-            if (cfg.volume < 100)
+            if (cfg.ffMute && speed > 1)
+                std::fill(audioOut.begin(), audioOut.end(), (int16_t)0); // (FAST FORWARD SOUND off)
+            else if (cfg.volume < 100)
                 for (int16_t& v : audioOut) v = (int16_t)(v * cfg.volume / 100);
             // Drop audio rather than let latency grow if the queue backs up.
             if (queued < 48000 / 4 && !audioOut.empty())
@@ -7902,8 +8110,11 @@ int main(int argc, char** argv)
             // 12% of the height) instead of under the L button.
             const bool controls = touchPadUsed && touchPad.visible;
             const int tx = controls ? (outW - tw) / 2 : 0, ty = controls ? outH * 13 / 100 : 0;
-            canvas.Fill(tx, ty, tw, 13 * sc, 0xC0000000);
-            canvas.Text(tx + 4 * sc, ty + 3 * sc, toast, sc, 0xFFFFFFFF);
+            // Fading out over its last second.
+            const uint32_t left = toastUntil - frame;
+            const uint32_t fade = left >= 60 ? 255 : left * 255 / 60;
+            canvas.Fill(tx, ty, tw, 13 * sc, ((0xC0 * fade / 255) << 24));
+            canvas.Text(tx + 4 * sc, ty + 3 * sc, toast, sc, (fade << 24) | 0xFFFFFF);
             overlayUsed = true;
         }
         if (menu.open)
@@ -7939,6 +8150,8 @@ int main(int argc, char** argv)
             if (selId == M_FFLOWRES) hint = "ON: MORE FPS IN FAST FORWARD";
 #endif
             if (selId == M_VOLUME) hint = "SOUND AND MUSIC: LEFT / RIGHT";
+            if (selId == M_ASPECT) hint = "NARROWER THAN THE SCREEN: BARS AT THE SIDES";
+            if (selId == M_FFMUTE) hint = "OFF: SILENT WHILE FAST FORWARDING";
             // (What START BUTTON does, while it is the one chosen.)
             if (selId == M_STARTBTN) hint = cfg.startMenu ? "START OPENS THIS MENU" : "START IS THE DS START";
             if (selId == M_CONTROLS) hint = "SAVE, LOAD, FAST FORWARD, SWAP";
@@ -8086,6 +8299,7 @@ int main(int argc, char** argv)
                     // the picture; the drawing job then shows the same.)
                     if (battleRenderLater && BattleRender(battleWide, wideImage, 0)) battleRenderLater = false;
                     MergedCompose(scene, screenImages, opt.composeW, opt.composeH, shot, cfg.smooth, &wideImage);
+                    MergedBlackBars(shot, opt.composeW, opt.composeH);
                 }
                 else Compose(layout, opt.composeW, opt.composeH, top, bot, shot);
                 BlendCanvas(canvas, shot);

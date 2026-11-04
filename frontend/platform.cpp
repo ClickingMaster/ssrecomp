@@ -16,6 +16,8 @@
 #include <dlfcn.h>
 #endif
 
+namespace Host { std::string FirmwarePath; }
+
 namespace melonDS::Platform
 {
 
@@ -178,7 +180,22 @@ void WriteNDSSave(const u8* savedata, u32 savelen, u32, u32, void*)
     Host::SaveDirty(savedata, savelen);
 }
 void WriteGBASave(const u8*, u32, u32, u32, void*) {}
-void WriteFirmware(const Firmware&, u32, u32, void*) {}
+// The firmware the game changed (the Nintendo Wi-Fi Connection settings, DNS among them): kept
+// in Host::FirmwarePath, written whole to a .tmp beside it and then put in its place.
+void WriteFirmware(const Firmware& fw, u32, u32, void*)
+{
+    if (Host::FirmwarePath.empty() || !fw.Buffer() || !fw.Length()) return;
+    const std::string tmp = Host::FirmwarePath + ".tmp";
+    FILE* f = fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    const bool ok = fwrite(fw.Buffer(), 1, fw.Length(), f) == fw.Length();
+    if (fclose(f) != 0 || !ok) { remove(tmp.c_str()); return; }
+    if (rename(tmp.c_str(), Host::FirmwarePath.c_str()) != 0)
+    {
+        remove(Host::FirmwarePath.c_str()); // (Windows: rename does not replace a file)
+        rename(tmp.c_str(), Host::FirmwarePath.c_str());
+    }
+}
 void WriteDateTime(int, int, int, int, int, int, void*) {}
 
 void MP_Begin(void*) {}

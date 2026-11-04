@@ -353,7 +353,7 @@ set(SSR_PC_ART "" CACHE PATH "a folder of pictures for the game list, built into
 if((SSR_PC_ALL_GAMES OR SSR_ALL_GAMES) AND SSR_PC_ART AND IS_DIRECTORY "${SSR_PC_ART}")
     set(_art_body "")
     set(_art_table "")
-    foreach(code IRBO IRAO IREO IRDO IPKE IPGE CPUE ECRA)
+    foreach(code IRBO IRAO IREO IRDO IPKE IPGE CPUE ADAE APAE ECRA)
         foreach(ext jpg png)
             if(EXISTS "${SSR_PC_ART}/${code}.${ext}")
                 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SSR_PC_ART}/${code}.${ext}")

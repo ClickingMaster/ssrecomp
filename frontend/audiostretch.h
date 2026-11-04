@@ -57,6 +57,16 @@ public:
         }
     }
 
+    // A speed/timeline change must not carry pieces of the previous stream into the new one.
+    void Reset()
+    {
+        Buf.clear();
+        Prev = 0;
+        Pos = 0;
+        Active = false;
+        CalmFrames = 0;
+    }
+
     bool Stretching() const { return Active; }
 
 private:
@@ -154,3 +164,11 @@ private:
         return best;
     }
 };
+
+// Queue feedback must also be able to START stretching. Applying it only once stretching
+// is active leaves a full-speed stream unable to recover from a short or empty queue.
+inline double AudioQueueSlowdown(double frameSlowdown, int queuedSamples)
+{
+    constexpr double target = 4800.0; // 100 ms at 48 kHz
+    return frameSlowdown * (1.0 + 0.5 * (target - std::max(0, queuedSamples)) / target);
+}
