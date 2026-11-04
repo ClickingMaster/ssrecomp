@@ -173,7 +173,7 @@ ZIP="$DIST/pokemon-ds-wide-pc-macos-$ARCH.zip"
 # Only the program, its tables, notes, licence and icon: never a ROM, save or game code.
 python3 - "$ZIP" <<'PY'
 import re, sys, zipfile
-regional_codes = '|'.join(p['code'] for p in __import__('json').loads(__import__('pathlib').Path('tools/regions/profiles.json').read_text())['profiles'] if p['kind']=='functions')
+regional_codes = '|'.join(p['code'] for p in __import__('json').loads(__import__('pathlib').Path('$HERE/tools/regions/profiles.json').read_text())['profiles'] if p['kind']=='functions')
 ok = re.compile(r'^Pokemon Fulldex\.app/(Contents/(Info\.plist|MacOS/(pokemon-ds-wide)?|_CodeSignature/(CodeResources)?|Resources/(AppIcon\.icns|README\.txt|LICENSE\.txt|LICENSE-mGBA\.txt|LICENSE-Noto\.txt|data/|data/funcs/|data/funcs/(?:IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|APAF|APAS|APAD|ADAD|ADAI|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF|' + regional_codes + r')\.txt)?)?)?$')
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 bad = [n for n in names if not ok.match(n)]
