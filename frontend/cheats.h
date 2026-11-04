@@ -8,6 +8,9 @@
 //   <game code>.mch   a melonDS cheat file (as melonDS saves them)
 //   usrcheat.dat      the R4 / DeSmuME cheat database: this game's codes are read from it
 //
+// Every DS game also comes with 15 popular codes built in (builtin_cheats.h), in the folder
+// POPULAR CHEATS: none is on until the player turns it on.
+//
 // Which are on is kept in <game code>-on.txt there (one name a line), so the game list's
 // other games and a new database keep theirs. CHEATS in the pause menu lists the database's
 // folders (a folder shows how many of its codes are on); opening one turns its codes on and off.
@@ -27,6 +30,7 @@
 #include "ARDatabaseDAT.h"
 #include "AREngine.h"
 #include "CRC32.h"
+#include "builtin_cheats.h"
 
 namespace Cheats
 {
@@ -210,6 +214,25 @@ struct List
         sources.clear();
         folder = cheatFolder;
         code = gameCode;
+        // Built in (builtin_cheats.h): 15 popular codes for this release, all off until turned on.
+        // First, so POPULAR CHEATS is the first folder.
+        if (const BuiltinCheats::Game* g = BuiltinCheats::Find(code.c_str()))
+        {
+            for (int i = 0; i < g->count; i++)
+            {
+                std::vector<melonDS::u32> lines;
+                for (const char* p = g->codes[i].lines; *p;)
+                {
+                    const char* e = std::strchr(p, '\n');
+                    const std::string l = e ? std::string(p, e - p) : std::string(p);
+                    CodeLine(l, lines);
+                    p = e ? e + 1 : p + l.size();
+                }
+                Add(g->codes[i].name, std::string("fulldex:") + g->codes[i].name, lines, -1, g->codes[i].note,
+                    "POPULAR CHEATS", "Built into Fulldex. All off until you turn one on. Save first.");
+            }
+            sources.push_back("built in (" + std::to_string(g->count) + " codes)");
+        }
         // Codes of one's own: a name line, then code lines.
         const std::string txt = folder + "/" + code + ".txt";
         if (FILE* f = fopen(txt.c_str(), "r"))

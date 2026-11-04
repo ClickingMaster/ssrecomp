@@ -169,6 +169,13 @@ in a `cheats` folder (make it if it isn't there):
 | iPhone and iPad | Files app: On My iPhone (or iPad) > Pokémon Fulldex > `cheats` |
 | Nintendo Switch | `/switch/pokemon-ds-wide/cheats/` on the SD card |
 
+- **Built in:** every DS game comes with 15 popular codes in the **POPULAR CHEATS** folder,
+  nothing to download: walk through walls, max money, all medicines (Rare Candy) and all
+  Poké Balls (Master Ball), wild shiny encounters, always catch, infinite HP and PP in
+  battle, double EXP, no wild encounters, fast egg hatching, all badges, all TMs, a complete
+  Pokédex and fly anywhere (or faster walking, in the versions with no fly code). Every
+  one is off until you turn it on, for your version of the game (US,
+  Europe, Spain, Germany, France or Italy); the note under a code says which buttons it uses.
 - **A cheat database:** `usrcheat.dat` holds codes for every game. CHEATS opens this
   game's folders (a folder with any on shows how many, or the one that is on). Open a
   folder for its codes. The database's note on the chosen code shows under the menu.
@@ -654,6 +661,8 @@ covers that project. Function names come from the
 symbol files), Platinum's from a build of
 [pret/pokeplatinum](https://github.com/pret/pokeplatinum); SoulSilver's and HeartGold's
 addresses come from ssrecomp's own SoulSilver layout. The DS is emulated by [melonDS](https://melonds.kuribo64.net).
+The built-in DS cheats come from DeadSkullzJr's cheat database, as carried in
+[libretro-database](https://github.com/libretro/libretro-database).
 The Switch's HOME MENU ICONS are made the way [sphaira](https://github.com/ITotalJustice/sphaira)
 makes its forwarders, with its homebrew loader (`tools/switch/forwarder`, GPL-3.0, based on
 nx-hbloader). The GBA games are played by Pokémon GBA Widescreen, built on

@@ -6,6 +6,7 @@
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
   diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.
+- Cheats built in for every DS game: 15 popular codes (walk through walls, max money, Rare Candies, Master Balls, shiny encounters, always catch, infinite HP and PP, double EXP and more) in a POPULAR CHEATS folder under CHEATS, for US, European, Spanish, German, French and Italian versions. All are off until turned on. From DeadSkullzJr's database via libretro-database (`tools/cheats/make_builtin_cheats.py`).
 
 - Windows: allow repeated saves of a custom touch layout while preserving the previous layout if replacement fails.
 
