@@ -3,6 +3,21 @@
 
 ## Unreleased
 
+- **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
+  switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
+  with the battle, and both answers sit at the end of the message bar (Black and White too).
+  (Thanks to ahrhamza, PR #35, and IamCarron, PR #70, for the other languages' addresses.)
+- **Black, White, Black 2 and White 2: the Bag shows both screens side by side** once an
+  item is chosen, as on the DS, so its messages are never covered and a TM's type, power,
+  accuracy and PP are all visible. (Thanks to ahrhamza, PR #35.)
+- **Fast forward: a quick tap moves a menu cursor once** (#73). The games repeat a held
+  direction after a few frames, so at 4x a tap moved it two or three places. A direction's
+  first quarter second now runs at normal speed; held longer, fast forward carries on.
+- **Switch: saves in a saves folder** beside the program; existing saves (and their save
+  states) move there the first time, none replaced. Only Fulldex's own folders: another app
+  that keeps saves beside its ROMs is left alone. Older versions do not look there.
+  (Thanks to nicolvus, PR #51.)
+
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
   diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.
@@ -127,15 +142,6 @@
 - French revision 0 ROMs of Black, White, Black 2, White 2, SoulSilver, HeartGold
   and Platinum, with separate French saves and regional widescreen map profiles.
 - Platinum: controller answers work with the French introduction's OUI/NON buttons.
-- **Black 2 and White 2: battle questions keep their buttons** until you answer, including
-  switching Pokémon between opponents and choosing whether to continue after fainting. The
-  question stays full size with the battle, and both answers sit in the message bar.
-  (Thanks to ahrhamza, PR #35.)
-
-- **Black, White, Black 2 and White 2: the Bag shows both screens side by side** once an
-  item is chosen, as on the DS, so its messages are never covered and a TM's type, power,
-  accuracy and PP are all visible. (Thanks to ahrhamza, PR #35.)
-
 - **A new address: github.com/mamesj/pokemon-fulldex** (the old pokemon-ds-widescreen address
   still leads there). The bug report link, the PC download's `README.txt` and the Linux
   AppImage's updates use it.
