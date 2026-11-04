@@ -6706,6 +6706,20 @@ int main(int argc, char** argv)
         // only shows fewer of them.
         if (!paused && (fastLock || kbFast || ps.rt > 0.5f))
             speed = ffFrameMs > 0 && !opt.headless ? std::clamp((int)(33.3 / ffFrameMs), 2, 4) : 4; // (tests: always 4)
+        // A direction just pressed runs at normal speed for its first quarter of a second. The
+        // games repeat a held direction in menus after a few frames: at 4x a quick tap lasted
+        // long enough to move the cursor two or three times (shops, the elevator, the Bag).
+        // A tap now moves it once; held longer (walking, scrolling), fast forward carries on.
+        {
+            constexpr uint32_t dirMask = (1u << KEY_RIGHT) | (1u << KEY_LEFT) | (1u << KEY_UP) | (1u << KEY_DOWN);
+            static uint32_t prevDirs = 0, dirSince = 0;
+            const uint32_t dirs = keys & dirMask;
+            // (Headless tests run as fast as they can: there, a frame counts as 1/60 s.)
+            const uint32_t now = opt.headless ? (uint32_t)(frame * 50 / 3) : SDL_GetTicks();
+            if (dirs & ~prevDirs) dirSince = now;
+            prevDirs = dirs;
+            if (speed > 1 && dirs && now - dirSince < 250) speed = 1;
+        }
         prevPad = ps;
 
         // A decompilation build with SINGLE_SCREEN puts everything on the engine of the touch
