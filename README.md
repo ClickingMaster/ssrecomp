@@ -176,6 +176,12 @@ in a `cheats` folder (make it if it isn't there):
   Pokédex and fly anywhere (or faster walking, in the versions with no fly code). Every
   one is off until you turn it on, for your version of the game (US,
   Europe, Spain, Germany, France or Italy); the note under a code says which buttons it uses.
+- **GBA games:** CHEATS in the GBA game's pause menu has 15 built in for Emerald, FireRed,
+  LeafGreen (1.0 and 1.1) and Ultra Violet: walk through walls (hold B), max money, 99 Rare
+  Candies, 99 Master Balls, wild shiny encounters, always catch, infinite HP and PP in battle,
+  double EXP, no wild encounters, fast egg hatch, all badges, all TMs and HMs, a complete
+  Pokédex and fly anywhere. Every one is off until you turn it on. They work on the game's
+  own memory (by pret's decompilations), not as codes, so nothing needs downloading.
 - **A cheat database:** `usrcheat.dat` holds codes for every game. CHEATS opens this
   game's folders (a folder with any on shows how many, or the one that is on). Open a
   folder for its codes. The database's note on the chosen code shows under the menu.

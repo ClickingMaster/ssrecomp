@@ -77,7 +77,13 @@ struct Host
         api.on = On;
         api.count = Count;
         api.at = At;
+#ifdef GBAW_HOST_HAS_CHEATS
+        api.cheats = CheatsOn;
+#endif
     }
+
+    // The GBA game's CHEATS (gba_cheats.h): achievements paused while any is on, as for the DS games.
+    static void CheatsOn(void*, int anyOn) { Achievements::SetCheats(anyOn != 0); }
 
     void Save() const
     {
