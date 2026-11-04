@@ -603,8 +603,28 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
 
 // The saves of the games in a folder go in its saves/ folder: those an older build left beside the
 // ROMs (game.sav, emerald.sav, and their .sav1, .bak...) are moved there, none replaced.
+// Whether a folder is Fulldex's own (its settings, or a Pokemon program in it). Another app's
+// folder (melonDS keeps its saves beside its ROMs) is left exactly as it is.
+static bool FulldexFolder(const std::string& folder)
+{
+    struct stat st;
+    if (stat((folder + "/settings.cfg").c_str(), &st) == 0 || stat((folder + "/ssrecomp.cfg").c_str(), &st) == 0) return true;
+    DIR* d = opendir(folder.c_str());
+    if (!d) return false;
+    bool own = false;
+    while (dirent* e = readdir(d))
+    {
+        std::string n = e->d_name;
+        for (char& c : n) c = (char)tolower((unsigned char)c);
+        if (n.size() > 4 && n.compare(n.size() - 4, 4, ".nro") == 0 && n.find("pokemon") != std::string::npos) { own = true; break; }
+    }
+    closedir(d);
+    return own;
+}
+
 static void MoveSavesIn(const std::string& folder)
 {
+    if (!FulldexFolder(folder)) return;
     DIR* d = opendir(folder.c_str());
     if (!d) return;
     std::vector<std::string> names;
@@ -630,6 +650,7 @@ static void MoveSavesIn(const std::string& folder)
 // Where a DS game's save is: the saves folder of the game's folder (MoveSavesIn), made when missing.
 static std::string SavePath(const Launcher::Game& g)
 {
+    if (!FulldexFolder(g.folder)) return g.folder + "/" + g.saveName; // (another app's folder: beside the ROM, as it was)
     mkdir((g.folder + "/saves").c_str(), 0777);
     return g.folder + "/saves/" + g.saveName;
 }
