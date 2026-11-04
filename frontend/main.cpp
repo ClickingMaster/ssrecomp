@@ -7047,10 +7047,19 @@ int main(int argc, char** argv)
             const bool cmd = merged && !strcmp(scene.name, "battle-cmd"), moves = merged && !strcmp(scene.name, "battle-moves");
             if (!paused && (cmd || moves))
             {
+                // The move list starts on the move chosen last in this battle, as the game's own
+                // cursor does (it forgot it: a player who used Flamethrower had to find it again).
+                // A new battle (no strip for 30 seconds) starts on the first move again.
+                static int lastMove = 0;
+                static uint32_t lastStripFrame = 0;
+                if (frame - lastStripFrame > 1800) lastMove = 0;
+                lastStripFrame = frame;
+                bool checkSel = false;
                 if (stripKind != scene.name)
                 {
                     stripKind = scene.name;
-                    battleSel = 0;
+                    battleSel = moves ? lastMove : 0;
+                    checkSel = moves;
                     prevStripKeys = keys; // a key still held from before does not count
                 }
                 const uint32_t edge = keys & ~prevStripKeys;
@@ -7073,6 +7082,7 @@ int main(int argc, char** argv)
                         }
                     return false;
                 };
+                if (checkSel && !usable(battleSel)) battleSel = 0;
                 if (singleView())
                 {
                     // (The single-screen build's strip: one row.)
@@ -7111,6 +7121,7 @@ int main(int argc, char** argv)
                     // strip of the single-screen build, which has its own cursor (stripSel).
                     // (Taking stripSel for the panel too pressed FIGHT whatever was chosen.)
                     const int pick = cmd && singleView() ? stripSel : battleSel;
+                    if (moves) lastMove = battleSel;
                     stripTouchX = cmd ? cmdX[pick] : movX[pick];
                     stripTouchY = cmd ? cmdY[pick] : movY[pick];
                 }
