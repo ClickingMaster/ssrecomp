@@ -1628,6 +1628,8 @@ struct Settings
             size_t eq = line.find('=');
             if (eq == std::string::npos) return;
             std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+            // A file saved with Windows line endings (or edited in Notepad) leaves a "\r" on every value.
+            while (!v.empty() && (v.back() == '\r' || v.back() == '\n')) v.pop_back();
             if (controls.Apply(k, v)) return;
             // "view" replaced the older "layout" key when the merged view became the default.
             if (k == "view") layout = v;
