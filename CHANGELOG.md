@@ -3,6 +3,19 @@
 
 ## Unreleased
 
+- **GBA games: the pause menu works like the DS games'.** On the Switch, + is the GBA's START and
+  + and - together open the pause menu (START BUTTON in CONTROLS swaps them); a lone + or - reaches
+  the game a moment later, so the pair is never taken for one of them. The menu has the DS games'
+  DISPLAY, SOUND and CONTROLS pages and CHEATS, and the settings the DS games share (ASPECT RATIO,
+  smooth scaling, VOLUME in tens, FAST FORWARD SOUND, FPS COUNTER, BORDERLESS FULLSCREEN) are the
+  same setting in both.
+- **GBA games: fast forward like the DS games'.** The music carries on at its normal speed while
+  the game runs ahead (FAST FORWARD SOUND off: silent), and a quick tap of a direction moves a menu
+  cursor once (#73).
+- **GBA games: new display options.** HD FILTER redraws the pixel art with smooth edges (xBRZ by
+  Zenju, GPLv3), LCD EFFECT adds a faint grid like a GBA's screen, and COLOUR CORRECTION shows the
+  colours as a GBA's screen did. SCALING keeps SHARP, SMOOTH and PIXEL PERFECT (whole-number zooms
+  only), now explained, and ASPECT RATIO (AUTO, 16:9, 16:10, 3:2, 4:3) replaces WIDESCREEN.
 - **Switch: the GBA games' sound is no longer crackly or sped up.** They asked the Switch for
   512-sample sound buffers, which ran dry between them: it played about 41,000 samples a second
   instead of 48,000, so sound piled up and was thrown away. Now 2048, as big as the DS games' and more.

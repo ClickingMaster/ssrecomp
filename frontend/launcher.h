@@ -514,12 +514,24 @@ inline void SyncGbaSettings(const std::string& cfg, const std::string& dataDir)
     const std::string ini = dataDir + "/gba-settings.ini";
     const std::string had = ConfigValue(ini, "scaling");
     set.push_back({ "scaling", ConfigValue(cfg, "smooth") == "1" ? "smooth" : had == "whole" ? "whole" : "sharp" });
+    // ASPECT RATIO, as the DS games have it (their AUTO, 16:9, 16:10, 3:2, 4:3).
+    {
+        const std::string a = ConfigValue(cfg, "aspect");
+        set.push_back({ "widescreen", a == "16:9" || a == "16:10" || a == "3:2" || a == "4:3" ? a : "auto" });
+    }
+#if !defined(__SWITCH__) && !defined(SSR_PHONE)
+    set.push_back({ "fullscreen", ConfigValue(cfg, "fullscreen") == "0" ? "0" : "1" });
+#endif
     set.push_back({ "show_fps", ConfigValue(cfg, "show_fps") == "1" ? "1" : "0" });
     const std::string vol = ConfigValue(cfg, "volume");
     set.push_back({ "volume", vol.empty() ? "100" : vol });
 #ifndef __SWITCH__
     set.push_back({ "buttons", ConfigValue(cfg, "buttons") == "positions" ? "positions" : "labels" });
 #endif
+    // FAST FORWARD SOUND as the DS games have it, and where the GBA games write back a setting
+    // changed in their pause menu that the DS games share (so they, and the next GBA game, have it).
+    set.push_back({ "ff_mute", ConfigValue(cfg, "ff_mute") == "1" ? "1" : "0" });
+    set.push_back({ "host_settings", cfg });
     std::vector<std::string> lines;
     if (FILE* f = fopen(ini.c_str(), "r"))
     {
