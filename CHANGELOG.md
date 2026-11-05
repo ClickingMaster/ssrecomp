@@ -26,6 +26,10 @@
 - **Settings file with Windows line endings** (edited in Notepad, or copied from Windows) is read
   properly: before, every on/off and view setting in it was ignored and the next save overwrote them.
 - **Setup program: an incomplete or wrong ROM gets a clear message** instead of a Python error, and `--rom` with a missing file or value stops with a usage line.
+- **Steadier frame times on screens that are not 60 Hz** (such as 144 Hz): each picture is now
+  handed over at its even time, instead of after the next frame's drawing, which took a
+  different time from one frame to the next. Measured on SoulSilver in the overworld at
+  144 Hz: the spread of the time between pictures fell from 0.6 ms to 0.03 ms.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
