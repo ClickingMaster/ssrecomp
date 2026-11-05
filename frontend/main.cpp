@@ -5137,6 +5137,7 @@ int main(int argc, char** argv)
     bool prevComboMenu = false;
     bool ctrlStart = false, touchStart = false, prevCtrlStart = false; // see cfg.startMenu
     bool swallowMenuButtons = false; // keeps the buttons that closed the menu from reaching the game
+    uint32_t kbKeysHeld = 0; // the keyboard's DS buttons held this frame
     const double frameTime = 1.0 / 59.8261;
     uint64_t perfFreq = opt.headless ? 1 : SDL_GetPerformanceFrequency();
     uint64_t nextTick = opt.headless ? 0 : SDL_GetPerformanceCounter();
@@ -6032,9 +6033,12 @@ int main(int argc, char** argv)
             }
 
             const Uint8* kb = SDL_GetKeyboardState(nullptr);
+            // (Read with the menu open too: the key that closes it must not reach the game until
+            // it is let go, as with a controller's buttons.)
+            kbKeysHeld = KeyboardKeys(cfg.controls);
             if (!menu.open)
             {
-                keys |= KeyboardKeys(cfg.controls);
+                if (!swallowMenuButtons) keys |= kbKeysHeld;
                 // (The touch cursor's keys, unless CONTROLS gave one of them to something.)
                 auto keyFree = [&](int s) { return kb[s] && cfg.controls.ActionOfKey(s) < 0; };
                 if (keyFree(SDL_SCANCODE_J)) curDX -= 1;
@@ -6699,6 +6703,7 @@ int main(int argc, char** argv)
 
         bool anyHeld = false;
         for (int i = 0; i < PAD_COUNT; i++) anyHeld |= ps.btn[i];
+        anyHeld |= kbKeysHeld != 0;
         if (swallowMenuButtons && !anyHeld) swallowMenuButtons = false;
 
         // RETROACHIEVEMENTS: the server's answers and what it has to say (one message at a time),
