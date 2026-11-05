@@ -89,7 +89,22 @@ public:
             {
                 SDL_SetRenderDrawBlendMode(R, el.alpha == 255 ? SDL_BLENDMODE_NONE : SDL_BLENDMODE_BLEND);
                 SDL_SetRenderDrawColor(R, (el.keys[0] >> 16) & 0xFF, (el.keys[0] >> 8) & 0xFF, el.keys[0] & 0xFF, el.alpha);
-                SDL_RenderFillRect(R, &dst);
+                if (el.borderRadius <= 0)
+                    SDL_RenderFillRect(R, &dst);
+                else
+                {
+                    // With its corners rounded like its outline (as MergedCompose draws it): filled
+                    // square, it covered the outline's corners.
+                    Spans.clear();
+                    const float r = el.borderRadius * v.unit;
+                    for (int y = dst.y; y < dst.y + dst.h; y++)
+                    {
+                        int xa = dst.x, xb = dst.x + dst.w;
+                        RoundedRowExtent(dst.x, dst.y, dst.w, dst.h, r, y, xa, xb);
+                        if (xb > xa) Spans.push_back({ xa, y, xb - xa, 1 });
+                    }
+                    SDL_RenderFillRects(R, Spans.data(), (int)Spans.size());
+                }
                 continue;
             }
             const ScreenImage& src = screens[el.screen];
