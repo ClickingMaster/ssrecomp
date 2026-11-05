@@ -5452,9 +5452,14 @@ int main(int argc, char** argv)
             if (now < nextTick)
             {
                 // Sleep for most of the wait and spin for the last part of a millisecond.
+                // (With the pipeline only the sleep, leaving the core to the widescreen thread.)
                 const double left = (double)(nextTick - now) / perfFreq;
-                if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
-                while (SDL_GetPerformanceCounter() < nextTick) {}
+                if (pipelined) std::this_thread::sleep_for(std::chrono::duration<double>(left));
+                else
+                {
+                    if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
+                    while (SDL_GetPerformanceCounter() < nextTick) {}
+                }
             }
             else
             {
