@@ -245,14 +245,6 @@ struct Menu
         // (Rows closer together if they would not all fit on the screen, down to 9 * scale.)
         // With no title the box starts with the first item.
         const bool hasTitle = !title.empty();
-        // (As many rows as fit at the smallest spacing; the rest scroll into view.)
-        const int fit = std::max(1, (c.h - 4 - 6 * scale) / ((UiLang::Tall() ? 14 : 9) * scale) - (hasTitle ? 3 : 2));
-        const int shown = std::min((int)items.size(), fit);
-        if (selected < scroll) scroll = selected;
-        if (selected >= scroll + shown) scroll = selected - shown + 1;
-        scroll = std::max(0, std::min(scroll, (int)items.size() - shown));
-        const int rows = shown + (hasTitle ? 3 : 2);
-        if (lineH * rows + 6 * scale > c.h - 4) lineH = std::max(UiLang::LineUnits() * scale, (c.h - 4 - 6 * scale) / rows);
         // (A value as drawn: translated before its arrows go round it, as the whole would not be
         // in the language's table.)
         auto shownValue = [](const MenuItem& item) { return item.info ? item.value : "< " + UiLang::Tr(item.value) + " >"; };
@@ -261,7 +253,6 @@ struct Menu
             for (const auto& item : items)
                 boxW = std::max(boxW, Canvas::TextWidth(item.label, scale) + (item.value.empty() ? 0 : Canvas::TextWidth(shownValue(item), scale)) + 20 * scale);
         if (boxW > c.w - 8) boxW = c.w - 8;
-        int boxH = lineH * rows + 6 * scale;
         // The note's lines (up to 4, the last cut short), and the box moved up to make room.
         std::vector<std::string> noteLines;
         if (!note.empty())
@@ -271,6 +262,17 @@ struct Menu
             if (noteLines.size() > 4) { noteLines.resize(4); noteLines[3] = UiLang::Elide(noteLines[3]+"...",maxW/scale); }
         }
         const int noteH = noteLines.empty() ? 0 : (int)noteLines.size() * UiLang::LineUnits() * scale + 6 * scale;
+        // (As many rows as fit at the smallest spacing; the rest scroll into view.)
+        const int fit = std::max(1, (c.h - 4 - 6 * scale - (noteH ? noteH + 3 * scale : 0)) / ((UiLang::Tall() ? 14 : 9) * scale) - (hasTitle ? 3 : 2));
+        const int shown = std::min((int)items.size(), fit);
+        if (selected < scroll) scroll = selected;
+        if (selected >= scroll + shown) scroll = selected - shown + 1;
+        scroll = std::max(0, std::min(scroll, (int)items.size() - shown));
+        // (The note's strip sits under the box, so the box leaves room for it: at 800x480 it was cut off.)
+        const int availH = c.h - 4 - (noteH ? noteH + 3 * scale : 0);
+        const int rows = shown + (hasTitle ? 3 : 2);
+        if (lineH * rows + 6 * scale > availH) lineH = std::max(UiLang::LineUnits() * scale, (availH - 6 * scale) / rows);
+        int boxH = lineH * rows + 6 * scale;
         int bx = (c.w - boxW) / 2, by = std::max(2, (c.h - boxH - noteH) / 2);
         // (Kept for ItemAt: where the rows were drawn.)
         drawnX = bx;

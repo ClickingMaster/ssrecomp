@@ -62,6 +62,9 @@
 - **SoulSilver and HeartGold: the Running Shoes button beside the X menu has a right edge.** The game
   draws the button past the edge of its screen, so the copy was cut off flat; its outline is now
   closed on the right as on the left.
+- **Cheats page: the details strip fits on small screens.** At 800x480 (Android handhelds) or
+  smaller the cheat list was as tall as the screen, so a cheat's full name and the database's
+  note under it were cut off the bottom. The list now leaves room for the strip.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
