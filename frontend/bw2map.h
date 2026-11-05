@@ -79,10 +79,13 @@ private:
     {
         static const Version versions[] = {
             { "IREO", 0x021ca01c, 0x0208ee68, 0x1a3e00, 29 }, // Black 2
+            { "IRES", 0x021c9fe0, 0x0208ee38, 0x1a3e00, 29 }, // Black 2 ES
             { "IRDO", 0x021ca050, 0x0208ee94, 0x1a3e00, 29 }, // White 2
+            { "IRDS", 0x021c9ff4, 0x0208ee64, 0x1a3e00, 29 }, // White 2 ES
             { "IREF", 0x021ca058, 0x0208ee78, 0x1a3e00, 29 }, // Black 2 FR
             { "IRDF", 0x021ca06c, 0x0208eea4, 0x1a3e00, 29 }, // White 2 FR
             { "IRBO", 0x021d3700, 0x0209d8b0, 0x199500, 21 }, // Black
+            { "IRBS", 0x021d36c4, 0x0209d880, 0x199500, 21 }, // Black ES
             { "IRAO", 0x021d3718, 0x0209d8c8, 0x199500, 21 }, // White
             // Other languages: the same table and heap setup found in their ROMs (by their contents).
             { "IRAS", 0x021d36bc, 0x0209d898, 0x199500, 21 }, // White (Spanish)

@@ -70,7 +70,7 @@ class RegionalMatchingTests(unittest.TestCase):
 
     def test_black_white_tables_have_the_weathers(self):
         # main.cpp looks these up by names it puts together (bw2.weatherObj).
-        for code in ('IRBF', 'IRAF', 'IREF', 'IRDF'):
+        for code in ('IRBF', 'IRAF', 'IREF', 'IRDF', 'IRBS', 'IRAS', 'IRES', 'IRDS'):
             names = {line.split()[-1] for line in (ROOT/'tools/regions'/(code + '.txt')).read_text().splitlines()
                      if line and not line.startswith('#')}
             self.assertEqual(module.COMPOSED - names, set(), code)

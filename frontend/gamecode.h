@@ -10,10 +10,10 @@
 inline std::string BaseGameCode(const std::string& code)
 {
     static const char* const aliases[][2] = {
-        { "IRAS", "IRAO" }, { "CPUS", "CPUE" }, { "IPGS", "IPGE" }, { "IPKS", "IPKE" },
-        { "ADAS", "ADAE" }, { "IRBF", "IRBO" }, { "IRAF", "IRAO" }, { "IREF", "IREO" },
-        { "IRDF", "IRDO" }, { "IPGF", "IPGE" }, { "IPKF", "IPKE" }, { "CPUF", "CPUE" },
-        { "IPKI", "IPKE" },
+        { "IRBS", "IRBO" }, { "IRAS", "IRAO" }, { "IRES", "IREO" }, { "IRDS", "IRDO" },
+        { "CPUS", "CPUE" }, { "IPGS", "IPGE" }, { "IPKS", "IPKE" }, { "ADAS", "ADAE" },
+        { "IRBF", "IRBO" }, { "IRAF", "IRAO" }, { "IREF", "IREO" }, { "IRDF", "IRDO" },
+        { "IPGF", "IPGE" }, { "IPKF", "IPKE" }, { "CPUF", "CPUE" }, { "IPKI", "IPKE" },
         { "APAF", "APAE" }, { "APAS", "APAE" }, { "APAD", "APAE" }, { "ADAD", "ADAE" }, { "ADAI", "ADAE" }
     };
     for (const auto& alias : aliases) if (code == alias[0]) return alias[1];

@@ -62,7 +62,7 @@ public:
             fclose(f);
         }
         on = IsGame(code, "IRBO") || IsGame(code, "IRAO");
-        regionalMenu = RegionalProfiles::Find(code) != nullptr;
+        regionalMenu = RegionalProfiles::Find(code) != nullptr || std::string(code) == "IRBS"; // (Spanish Black: as when it had a profile)
         if (!on) return;
         Fw = &fw;
         auto find = [&](const char* name) {

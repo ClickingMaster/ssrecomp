@@ -7,7 +7,6 @@
 namespace RegionalProfiles {
 struct Profile { const char *code, *base, *name, *save, *sha1; unsigned revision; size_t bytes; bool functions; uint32_t mapTable, heapSetup, heapUser, mapCount; };
 inline constexpr Profile profiles[] = {
-    {"IRBS", "IRBO", "Pokemon Black (ES, Beta)", "black-es.sav", "ba75914b99e1558f217ed082fbac9e86f2021a30", 0, 268435456u, true, 0x021d36c4u, 0x0209d880u, 0x199500u, 21},
     {"IRBJ", "IRBO", "Pokemon Black (JP, Beta)", "black-jp.sav", "4ce46933ab795fc8bfc94acb7a853206b0c20b60", 0, 268435456u, true, 0x021d3530u, 0x0209d7bcu, 0x199000u, 21},
     {"IRBK", "IRBO", "Pokemon Black (KO, Beta)", "black-ko.sav", "ca64de49a4429346ca578c2b21c16c8bcf1cf497", 0, 268435456u, true, 0x021d3decu, 0x0209df4cu, 0x199500u, 21},
     {"IRBD", "IRBO", "Pokemon Black (DE, Beta)", "black-de.sav", "f5688bd617be7e67a150732f42cfae6ae104b2cb", 0, 268435456u, true, 0x021d3638u, 0x0209d830u, 0x199500u, 21},
@@ -16,7 +15,6 @@ inline constexpr Profile profiles[] = {
     {"IREK", "IREO", "Pokemon Black 2 (KO, Beta)", "black2-ko.sav", "9815dd094eb86d46d2d20d2bb04b2ecfd73f8e35", 0, 536870912u, true, 0x021ca830u, 0x0208f554u, 0x1a3e00u, 29},
     {"IRED", "IREO", "Pokemon Black 2 (DE, Beta)", "black2-de.sav", "f43dd2e26f48163f11721bd1e3b2e6f9a73be636", 0, 536870912u, true, 0x021c9f88u, 0x0208ede8u, 0x1a3e00u, 29},
     {"IREI", "IREO", "Pokemon Black 2 (IT, Beta)", "black2-it.sav", "68ec308db75d470f3c1499cc04117fe68fb4e942", 0, 536870912u, true, 0x021c9f38u, 0x0208ede8u, 0x1a3e00u, 29},
-    {"IRES", "IREO", "Pokemon Black 2 (ES, Beta)", "black2-es.sav", "e5d4e2460a64f4786ed69ae33a43f29adc56ff5e", 0, 536870912u, true, 0x021c9fe0u, 0x0208ee38u, 0x1a3e00u, 29},
     {"IPKJ", "IPKE", "Pokemon HeartGold (JP, Beta)", "heartgold-jp.sav", "82451ee0ca9c3b768ba21367b92d8aa0e8defda7", 0, 134217728u, false, 0x00000000u, 0x00000000u, 0x0u, 0},
     {"IPKK", "IPKE", "Pokemon HeartGold (KO, Beta)", "heartgold-ko.sav", "52516d1690d01b59e03c7fe3b1259239f5daea38", 0, 134217728u, false, 0x00000000u, 0x00000000u, 0x0u, 0},
     {"IPKD", "IPKE", "Pokemon HeartGold (DE, Beta)", "heartgold-de.sav", "13b6853aa93121069df1d17446d3ecb36872aecf", 0, 134217728u, false, 0x00000000u, 0x00000000u, 0x0u, 0},
@@ -33,7 +31,6 @@ inline constexpr Profile profiles[] = {
     {"IRAD", "IRAO", "Pokemon White (DE, Beta)", "white-de.sav", "fb752b211351f8480e3e1949e11a1d7741f05f5a", 0, 268435456u, true, 0x021d3650u, 0x0209d848u, 0x199500u, 21},
     {"IRDJ", "IRDO", "Pokemon White 2 (JP, Beta)", "white2-jp.sav", "01666f87838c57dc0a65930a916982ad8941d8fb", 1, 536870912u, true, 0x021c977cu, 0x0208eb74u, 0x1a3800u, 29},
     {"IRDK", "IRDO", "Pokemon White 2 (KO, Beta)", "white2-ko.sav", "3bbb5ff5c443c776b1e59ba51e8b2cd118fb776b", 0, 536870912u, true, 0x021ca844u, 0x0208f580u, 0x1a3e00u, 29},
-    {"IRDS", "IRDO", "Pokemon White 2 (ES, Beta)", "white2-es.sav", "072749c9517f8d2a65f688b6f4ac5f30889fb559", 0, 536870912u, true, 0x021c9ff4u, 0x0208ee64u, 0x1a3e00u, 29},
     {"IRDI", "IRDO", "Pokemon White 2 (IT, Beta)", "white2-it.sav", "b787bdd69fa79d270d08f334b188a61e3454405e", 0, 536870912u, true, 0x021c9f6cu, 0x0208ee14u, 0x1a3e00u, 29},
     {"IRDD", "IRDO", "Pokemon White 2 (DE, Beta)", "white2-de.sav", "60665d23a12a0ad4fbff75a4d4f287a9cec73b40", 0, 536870912u, true, 0x021c9f9cu, 0x0208ee14u, 0x1a3e00u, 29},
     {"CPUK", "CPUE", "Pokemon Platinum (KO, Beta)", "platinum-ko.sav", "f811d9c7ab5262f593012da794c2fa81dbcdbcc1", 0, 134217728u, true, 0x00000000u, 0x00000000u, 0x0u, 0},

@@ -133,6 +133,8 @@ bw_tables() { # romfs-folder
     python3 tools/bw2/funcmap.py build-decomp-pokew2/config/w2_us/arm9 - "$1/funcs/IRDO.txt"
     python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv - "$1/funcs/IRBO.txt"
     python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv - "$1/funcs/IRAO.txt" --white
+    python3 tools/shift_table.py --all "$1/funcs"
+    cp tools/regions/*.txt "$1/funcs/"
 }
 
 case "$GAME" in

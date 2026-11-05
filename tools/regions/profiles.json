@@ -2,24 +2,6 @@
   "schema": 1,
   "profiles": [
     {
-      "code": "IRBS",
-      "base": "IRBO",
-      "name": "Pokemon Black (ES, Beta)",
-      "save": "black-es.sav",
-      "revision": 0,
-      "bytes": 268435456,
-      "sha1": "ba75914b99e1558f217ed082fbac9e86f2021a30",
-      "kind": "functions",
-      "source": "tools/regions/IRBS.txt",
-      "catalogue_verified": false,
-      "wide_map": {
-        "table": 35468996,
-        "heap_setup": 34199680,
-        "count": 21,
-        "heap_user": 1676544
-      }
-    },
-    {
       "code": "IRBJ",
       "base": "IRBO",
       "name": "Pokemon Black (JP, Beta)",
@@ -159,24 +141,6 @@
       "wide_map": {
         "table": 35430200,
         "heap_setup": 34139624,
-        "count": 29,
-        "heap_user": 1719808
-      }
-    },
-    {
-      "code": "IRES",
-      "base": "IREO",
-      "name": "Pokemon Black 2 (ES, Beta)",
-      "save": "black2-es.sav",
-      "revision": 0,
-      "bytes": 536870912,
-      "sha1": "e5d4e2460a64f4786ed69ae33a43f29adc56ff5e",
-      "kind": "functions",
-      "source": "tools/regions/IRES.txt",
-      "catalogue_verified": false,
-      "wide_map": {
-        "table": 35430368,
-        "heap_setup": 34139704,
         "count": 29,
         "heap_user": 1719808
       }
@@ -415,24 +379,6 @@
       "wide_map": {
         "table": 35432516,
         "heap_setup": 34141568,
-        "count": 29,
-        "heap_user": 1719808
-      }
-    },
-    {
-      "code": "IRDS",
-      "base": "IRDO",
-      "name": "Pokemon White 2 (ES, Beta)",
-      "save": "white2-es.sav",
-      "revision": 0,
-      "bytes": 536870912,
-      "sha1": "072749c9517f8d2a65f688b6f4ac5f30889fb559",
-      "kind": "functions",
-      "source": "tools/regions/IRDS.txt",
-      "catalogue_verified": true,
-      "wide_map": {
-        "table": 35430388,
-        "heap_setup": 34139748,
         "count": 29,
         "heap_user": 1719808
       }

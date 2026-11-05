@@ -17,6 +17,8 @@
   states) move there the first time, none replaced. Only Fulldex's own folders: another app
   that keeps saves beside its ROMs is left alone. Older versions do not look there.
   (Thanks to nicolvus, PR #51.)
+- **Spanish Black, Black 2 and White 2 fully supported**, like Spanish White: any copy of the
+  game works, not only the exact dump the beta profiles were made from. (Thanks to IamCarron, PR #71.)
 
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,

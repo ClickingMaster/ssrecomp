@@ -226,7 +226,7 @@ PY
 SSR_SRC="$HERE" python3 - "$APK" <<'PY'
 import re, sys, zipfile
 regional_codes = '|'.join(p['code'] for p in __import__('json').loads(__import__('pathlib').Path(__import__('os').environ['SSR_SRC'], 'tools/regions/profiles.json').read_text())['profiles'] if p['kind']=='functions')
-ok = re.compile(r'^(AndroidManifest\.xml|resources\.arsc|classes\.dex|res/.*\.png|res/mipmap-anydpi-v26/ic_launcher\.xml|lib/(arm64-v8a|x86_64)/lib(main|SDL2)\.so|assets/funcs/(?:IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|APAF|APAS|APAD|ADAD|ADAI|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF|' + regional_codes + r')\.txt|assets/LICENSE(-mGBA|-Noto)?\.txt)$')
+ok = re.compile(r'^(AndroidManifest\.xml|resources\.arsc|classes\.dex|res/.*\.png|res/mipmap-anydpi-v26/ic_launcher\.xml|lib/(arm64-v8a|x86_64)/lib(main|SDL2)\.so|assets/funcs/(?:IREO|IRDO|IRBO|IRAO|CPUE|ADAE|APAE|ADAS|APAF|APAS|APAD|ADAD|ADAI|IRAS|CPUS|IREF|IRDF|CPUF|IRBF|IRAF|IRBS|IRES|IRDS|' + regional_codes + r')\.txt|assets/LICENSE(-mGBA|-Noto)?\.txt)$')
 bad = [n for n in zipfile.ZipFile(sys.argv[1]).namelist() if not ok.match(n)]
 if bad: sys.exit('unexpected files in the APK: %s' % bad)
 PY

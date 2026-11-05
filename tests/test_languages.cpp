@@ -11,7 +11,7 @@ int main()
     UiLang::SetSystem("es"); UiLang::Set("auto"); assert(UiLang::lang == 1);
     UiLang::Set("it"); UiLang::SetSystem("en"); assert(UiLang::lang == 2);
     UiLang::Set("auto"); assert(UiLang::lang == 0);
-    const char* codes[] = {"IRBF","IRAF","IREF","IRDF","IPGF","IPKF","CPUF","IRAS","CPUS","IPGS","IPKS","ADAS","IPKI","APAF","APAS","APAD","ADAD","ADAI"};
+    const char* codes[] = {"IRBF","IRAF","IREF","IRDF","IPGF","IPKF","CPUF","IRBS","IRAS","IRES","IRDS","CPUS","IPGS","IPKS","ADAS","IPKI","APAF","APAS","APAD","ADAD","ADAI"};
     for (auto code : codes) { const auto* game = Launcher::Known(code); assert(game); assert(std::string(game->code) == code); }
     for (const auto& profile : RegionalProfiles::profiles) {
         const auto* game = Launcher::Known(profile.code); assert(game);
