@@ -200,7 +200,7 @@ void WideGpuDSRenderer::RenderFrame(GPU& gpu)
     List = gpu.GPU3D.RenderPolygonRAM;
     const u32 count = gpu.GPU3D.RenderNumPolygons;
     WideGpuSend(0, [this, &gpu, count] {
-        WideGpuBuild(gpu, List.data(), count, 256, 192, Frame, Backend->TakesAtlas(), true);
+        WideGpuBuild(gpu, List.data(), count, 256, 192, Frame, Backend->TakesAtlas());
         Frame.TexVersion = Version;
         Pending = Pixels && Backend->Submit(Frame, 0);
         // (Waited for and converted on the other sending thread: GetLine then only waits for that.)
@@ -438,7 +438,7 @@ void WideGpuNoteChanges(u64 version, const u64* tex, const u64* pal)
     memcpy(Changes.Pal[i], pal, sizeof(Changes.Pal[i]));
 }
 
-void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int W, int H, WideGpuFrame& f, bool atlas, bool edgeMarking)
+void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int W, int H, WideGpuFrame& f, bool atlas)
 {
     const GPU3D& g = gpu.GPU3D;
     f.W = W;
@@ -463,13 +463,6 @@ void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int W, int H,
     k.Fog[3] = ((dispCnt >> 7) & 1) | ((dispCnt & (1 << 6)) ? 0 : 2);
     for (int i = 0; i < 32; i++) k.Toon[i] = g.RenderToonTable[i];
     for (int i = 0; i < 36; i++) k.FogDensity[i] = i < 34 ? g.RenderFogDensityTable[i] : 0;
-    // Edge marking (DISP3DCNT bit 5) is the DS-resolution picture's only: the software renderer
-    // draws it there, while GPU3D_Wide.cpp's widescreen picture has none, so neither has this one.
-    for (int i = 0; i < 8; i++) k.Edge[i] = g.RenderEdgeTable[i];
-    k.Clear[0] = (g.RenderClearAttr1 >> 24) & 0x3F;
-    k.Clear[1] = ((g.RenderClearAttr2 & 0x7FFF) * 0x200) + 0x1FF;
-    k.Clear[2] = (edgeMarking && (dispCnt & (1 << 5))) ? 1 : 0;
-    k.Clear[3] = 0;
 
     // The rear plane, as GPU3D_Wide.cpp clears to it.
     const u32 a1 = g.RenderClearAttr1;

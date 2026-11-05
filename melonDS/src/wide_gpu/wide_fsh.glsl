@@ -303,9 +303,5 @@ void main()
 
     // (The depth tested is the graphics chip's, wide_vsh.glsl; this one is the fog's.)
     int z = (poly.flags & 1u) != 0u ? int(vZPersp) : int(vZLinear);
-    // (An opaque pixel's polygon ID and a mark that it is a polygon's, in the depth's top byte,
-    // for the final pass's edge marking.)
-    uint zid = uint(clamp(z, 0, 0xFFFFFF));
-    if (alpha == 31u) zid |= (((attr >> 24) & 0x3Fu) << 24) | (1u << 30);
-    oAttr = uvec2(zid, (attr >> 15) & 1u);
+    oAttr = uvec2(uint(max(z, 0)), (attr >> 15) & 1u);
 }

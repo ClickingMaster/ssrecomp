@@ -89,8 +89,6 @@ struct WideGpuFrameConstants
                           // bit 2 no textures: for measuring, see GPU3D_WideGpu_Deko.cpp)
     u32 Toon[32];
     u32 FogDensity[36];
-    u32 Edge[8];          // the edge marking colours by polygon ID / 8 (GPU3D::RenderEdgeTable)
-    u32 Clear[4];         // the rear plane's polygon ID and depth, edge marking on (the DS-resolution picture's)
 };
 
 enum class WideGpuStencil : u8 { Always, Equal, NotEqual };
@@ -158,7 +156,7 @@ public:
 
 // Works out what to draw for the polygons of a wide frame (as GPU3D_Wide.cpp's Draw sees
 // them), at w x h.
-void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int w, int h, WideGpuFrame& out, bool atlas = false, bool edgeMarking = false);
+void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int w, int h, WideGpuFrame& out, bool atlas = false);
 
 // The DS-resolution renderer's record of the texture and palette memory that changed with each
 // new version of it (WideGpuTexVersion): 512-byte blocks.
