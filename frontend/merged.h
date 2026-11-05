@@ -1252,7 +1252,14 @@ inline void MergedCompose(const Scene& scene, const ScreenImage screens[2], int 
                             MergedWideCovers(*wide, v, outW, outH, srcX, srcY))
                             continue;
                         uint32_t c = src.pixels[si];
-                        if (MergedKeyed(el, c & 0xFFFFFF)) continue;
+                        // (As in the nearest-pixel path and the GPU compose.)
+                        if (el.dropSpriteCorner > 0 && src.flags && LayerClass(src.flags[si]) == LAYER_OBJ &&
+                            std::min(srcX - el.sx, el.sx + el.sw - 1 - srcX) < el.dropSpriteCorner &&
+                            std::min(srcY - el.sy, el.sy + el.sh - 1 - srcY) < el.dropSpriteCorner)
+                            continue;
+                        if (MergedKeyed(el, c & 0xFFFFFF) &&
+                            (!el.keyRing || std::min({ srcX - el.sx, el.sx + el.sw - 1 - srcX, srcY - el.sy, el.sy + el.sh - 1 - srcY }) < el.keyRing))
+                            continue;
                         acc[0] += ((c >> 16) & 0xFF) * wt[k];
                         acc[1] += ((c >> 8) & 0xFF) * wt[k];
                         acc[2] += (c & 0xFF) * wt[k];
