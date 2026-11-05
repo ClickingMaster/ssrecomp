@@ -54,6 +54,10 @@
   Opened from the Bag, they were shown as a cropped start-menu panel (the Apricorn Box's message
   cut off and its CLOSE button missing, the Pal Pad's menu and the pots' row cut at the edge);
   they now show the touch screen like the other bottom-screen applications.
+- **HeartGold and SoulSilver: the Vs. Recorder is whole.** Used from the Bag's Key Items, its
+  "TOUCH HERE!" title and its menu (Battle Videos, Frontier Record) were shown as a cropped
+  start-menu panel beside a green top screen; they now show the touch screen like the other
+  bottom-screen applications.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
