@@ -59,6 +59,9 @@
   start-menu panel beside a green top screen; they now show the touch screen like the other
   bottom-screen applications.
 - **Widescreen overworld: the door wipe covers the whole view.** Coming out of a building the world's 4:3 middle showed at once while only the sides were wiped open; now the black rows of the wipe cross the full width.
+- **SoulSilver and HeartGold: the Running Shoes button beside the X menu has a right edge.** The game
+  draws the button past the edge of its screen, so the copy was cut off flat; its outline is now
+  closed on the right as on the left.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
