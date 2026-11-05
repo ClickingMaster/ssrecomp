@@ -70,6 +70,9 @@
   world showing beside it (its outermost column belongs to the world); it now goes on to both edges.
 - **Graphics-chip DS-resolution 3D picture: edge marking drawn**, so models and signs have the
   outlines the processor's picture has (Switch, and `--headless --wide-gpu` on a PC).
+- **Graphics-chip 3D at DS resolution (`--wide-gpu`, the Switch default): flat shapes keep their
+  top pixel row**, as the software renderer draws them (signs, buildings).
+
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
