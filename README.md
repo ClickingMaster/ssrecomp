@@ -10,17 +10,17 @@ widescreen, 60 fps, up to 4K on a PC and 720p on the Switch.** No more squinting
 
 | Where you play | Download | Install |
 |---|---|---|
-| **Windows** PC, and Windows handhelds (ROG Ally, Legion Go, MSI Claw) | [pokemon-ds-wide-pc-windows-x86_64.zip](../../releases/download/pc-v1/pokemon-ds-wide-pc-windows-x86_64.zip) | [PC](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
-| **Mac** with Apple silicon (M1 and newer) | [pokemon-ds-wide-pc-macos-arm64.zip](../../releases/download/pc-v1/pokemon-ds-wide-pc-macos-arm64.zip) | [Mac](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
-| **Mac** with an Intel processor | [pokemon-ds-wide-pc-macos-x86_64.zip](../../releases/download/pc-v1/pokemon-ds-wide-pc-macos-x86_64.zip) | [Mac](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
-| **Linux** (glibc 2.38+) and the **Steam Deck** | [pokemon-ds-wide-pc-linux-x86_64.tar.gz](../../releases/download/pc-v1/pokemon-ds-wide-pc-linux-x86_64.tar.gz), or as an [AppImage](../../releases/download/pc-v1/pokemon-ds-wide-pc-linux-x86_64.AppImage) (Gear Lever) | [PC](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
-| **Android** phone (64-bit, Android 7 or newer) | [pokemon-ds-wide-android.apk](../../releases/download/android-v1/pokemon-ds-wide-android.apk) | [Android](#on-android) |
-| **iPhone** and **iPad** (iOS 14 or newer, sideloaded) | [pokemon-ds-wide-ios.ipa](../../releases/download/ios-v1/pokemon-ds-wide-ios.ipa) | [iPhone](#on-an-iphone-or-ipad) |
-| **Nintendo Switch** (homebrew) | [pokemon-ds-wide-all-switch.zip](../../releases/download/all-games-v2/pokemon-ds-wide-all-switch.zip) | [Switch](#on-the-nintendo-switch) |
+| **Windows** PC, and Windows handhelds (ROG Ally, Legion Go, MSI Claw) | [pokemon-ds-wide-pc-windows-x86_64.zip](../../releases/latest/download/pokemon-ds-wide-pc-windows-x86_64.zip) | [PC](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
+| **Mac** with Apple silicon (M1 and newer) | [pokemon-ds-wide-pc-macos-arm64.zip](../../releases/latest/download/pokemon-ds-wide-pc-macos-arm64.zip) | [Mac](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
+| **Mac** with an Intel processor | [pokemon-ds-wide-pc-macos-x86_64.zip](../../releases/latest/download/pokemon-ds-wide-pc-macos-x86_64.zip) | [Mac](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
+| **Linux** (glibc 2.38+) and the **Steam Deck** | [pokemon-ds-wide-pc-linux-x86_64.tar.gz](../../releases/latest/download/pokemon-ds-wide-pc-linux-x86_64.tar.gz), or as an [AppImage](../../releases/latest/download/pokemon-ds-wide-pc-linux-x86_64.AppImage) (Gear Lever) | [PC](#on-a-pc-mac-steam-deck-or-handheld-windows-macos-and-linux) |
+| **Android** phone (64-bit, Android 7 or newer) | [pokemon-ds-wide-android.apk](../../releases/latest/download/pokemon-ds-wide-android.apk) | [Android](#on-android) |
+| **iPhone** and **iPad** (iOS 14 or newer, sideloaded) | [pokemon-ds-wide-ios.ipa](../../releases/latest/download/pokemon-ds-wide-ios.ipa) | [iPhone](#on-an-iphone-or-ipad) |
+| **Nintendo Switch** (homebrew) | [pokemon-ds-wide-all-switch.zip](../../releases/latest/download/pokemon-ds-wide-all-switch.zip) | [Switch](#on-the-nintendo-switch) |
 
 **All seven DS games in every download:** Pokémon Black 2, White 2, Black, White, SoulSilver,
 HeartGold and Platinum. **The GBA games too**, on Windows, Linux, Mac, Android, iPhone, iPad
-and the Switch: Pokémon Emerald, FireRed, LeafGreen and Ultra Violet ([below](#the-gba-games)). Pokémon Omega
+and the Switch: Pokémon Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet ([below](#the-gba-games)). Pokémon Omega
 Ruby is in the works, as its own project: it is in the game list's 3DS tab, COMING SOON.
 What's new in each: [Releases](../../releases).
 
@@ -577,14 +577,17 @@ Please tell us how it runs on yours, with your model (see [Reporting a bug](#rep
 | | |
 |---|---|
 | ![Emerald: walking across Pacifidlog Town's log bridges, the sea reaching both edges](docs/screenshots/gba-emerald-pacifidlog-walk.gif) | ![Emerald: Sootopolis City, inside the crater](docs/screenshots/gba-emerald-sootopolis.png) |
+| ![Ruby: Blaziken against Groudon in the Cave of Origin, the harsh sunlight across the whole width](docs/screenshots/gba-ruby-groudon-battle.png) | ![Sapphire: Swampert against Kyogre in the Cave of Origin](docs/screenshots/gba-sapphire-kyogre-battle.png) |
+| ![Ruby: Groudon wakes in its pool of magma at the bottom of the Cave of Origin](docs/screenshots/gba-ruby-cave-of-origin.png) | ![Ruby: Lilycove City, the Department Store at the top](docs/screenshots/gba-ruby-lilycove.png) |
 | ![FireRed: Charizard's Flamethrower at Mewtwo in Cerulean Cave](docs/screenshots/gba-firered-mewtwo-battle.png) | ![FireRed: Charizard against the Snorlax on Route 16](docs/screenshots/gba-firered-snorlax-battle.png) |
 | ![LeafGreen: Venusaur's Razor Leaf at Articuno in the Seafoam Islands](docs/screenshots/gba-leafgreen-articuno-battle.png) | ![LeafGreen: Lavender Town, with Pokémon Tower at the top](docs/screenshots/gba-leafgreen-lavender.png) |
 
-Pokémon Emerald, FireRed, LeafGreen and Ultra Violet (a FireRed hack) in widescreen at 60 fps,
+Pokémon Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet (a FireRed hack) in widescreen at 60 fps,
 from [Pokémon GBA Widescreen](#credits-and-licence), built in on Windows, Linux, Mac, Android,
 iPhone, iPad and the Switch.
 
-- **ROMs:** put them in the same `roms` folder as the DS games: Emerald, FireRed and LeafGreen
+- **ROMs:** put them in the same `roms` folder as the DS games: Emerald, Ruby and Sapphire (1.0, 1.1
+  or 1.2 in English; German, French, Spanish, Italian and Japanese too), FireRed and LeafGreen
   (version 1.0 or 1.1), and Ultra Violet as its `.gba` or as its `.ips` patch with a FireRed
   1.0 ROM beside it. A `GBA` folder inside `roms` works too.
 - **Saves:** with the others (`emerald.sav` ...), or in that `GBA` folder's own `saves`.
