@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- **HeartGold and SoulSilver: Fly no longer flashes both screens at 4:3 when you land.** For about
+  half a second after the flight the two screens were joined at 4:3 (the overworld above the start
+  menu) before the wide view came back; the world now stays up instead.
+
 - **GBA games: the pause menu works like the DS games'.** On the Switch, + is the GBA's START and
   + and - together open the pause menu (START BUTTON in CONTROLS swaps them); a lone + or - reaches
   the game a moment later, so the pair is never taken for one of them. The menu has the DS games'

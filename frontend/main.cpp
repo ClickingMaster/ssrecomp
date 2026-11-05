@@ -3665,7 +3665,14 @@ int main(int argc, char** argv)
         // not running during a door transition, so its condition has to hold for a while.
         static int spreadFrames = 0;
         const bool topFading = screens && screens[0].pixels && AutoFocus::Blank(screens[0].pixels);
-        if (std::any_of(std::begin(probeTouch), std::end(probeTouch), probeActive) && !fieldActive() && !topFading &&
+        // Fly lands with the X menu's task gone quiet and the field map not yet running for about a
+        // second, the world already drawn on the top screen: that is not a screen without a layout
+        // (the two screens joined at 4:3 flashed up for a second after every Fly).
+        static unsigned lastMenuTask = 0;
+        if (probeActive(probeStartMenu)) lastMenuTask = rc_current_frame();
+        const bool worldAfterMenu = lastMenuTask && rc_current_frame() - lastMenuTask < 900 && screens && screens[0].flags &&
+            LayerClass(screens[0].flags[60 * 256 + 128]) == LAYER_3D && LayerClass(screens[0].flags[100 * 256 + 20]) == LAYER_3D;
+        if (std::any_of(std::begin(probeTouch), std::end(probeTouch), probeActive) && !fieldActive() && !topFading && !worldAfterMenu &&
             !appActive("Battle") && !appActive("TitleScreen") && !appActive("IntroMovie") && !appActive("Credits"))
             spreadFrames++;
         else
