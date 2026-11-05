@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **Graphics-chip DS-resolution 3D picture: edge marking drawn**, so models and signs have the
+  outlines the processor's picture has (Switch, and `--headless --wide-gpu` on a PC).
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
