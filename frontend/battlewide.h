@@ -8,6 +8,7 @@
 // boxes, which belong to the edges of the screen, are moved out to the edges of the view.
 // Everything else is the screen exactly as the game drew it.
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -88,7 +89,7 @@ public:
     {
         using namespace melonDS;
         Capture& C = Cap;
-        GrabFrame = nds.NumFrames;
+        GrabFrame.store(nds.NumFrames, std::memory_order_relaxed);
         if (extend <= 0 || !top.flags) return false;
         const GPU2D::Unit& unit = unitNum == 0 ? nds.GPU.GPU2D_A : nds.GPU.GPU2D_B;
         const u32 dispcnt = unit.DispCnt;
@@ -599,7 +600,7 @@ public:
         // before: the grass sweeping past would be torn).
         // Counted in emulated frames, not in calls: how often this runs depends on which
         // frames are drawn (the display's rate, skipped frames, screenshots).
-        const unsigned now = GrabFrame;
+        const unsigned now = GrabFrame.load(std::memory_order_relaxed);
         const int steps = !Counted ? 1 : now < LastFrame ? 0 : (int)std::min<unsigned>(now - LastFrame, 60);
         Counted = true;
         LastFrame = now;
@@ -985,7 +986,8 @@ private:
     };
     Ghost Ghosts[2];
     int Calls = 0;
-    unsigned LastFrame = 0, GrabFrame = 0;
+    unsigned LastFrame = 0;
+    std::atomic<unsigned> GrabFrame { 0 };
     bool Counted = false;
     std::vector<int> Stack;
 };
