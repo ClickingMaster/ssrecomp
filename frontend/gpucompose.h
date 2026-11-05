@@ -301,14 +301,20 @@ private:
             // A 16-pixel-wide texture per side, repeated outwards from the screen's edge: a
             // row that goes on as a pattern has its 16 edge pixels in it, any other row its
             // one colour 16 times.
-            bool any = false;
+            bool any = false, anyInner = false;
             for (int y = 0; y < 192; y++)
             {
                 const EdgeContinuation c = MergedEdgeContinuation(scene, top, y, side);
                 any |= !c.none();
+                // (Continued from the next column in: the outermost column, the 3D world alone,
+                // is covered by the same, or a slit shows at the screen's edge. Elsewhere: left as it is.)
+                const bool inner = !c.none() && MergedEdgeColumn(top, y, side) != (side ? 255 : 0);
+                anyInner |= inner;
+                EdgeIn[y] = EdgeCustomFailed ? 0u : 0xFF000000u;
                 uint32_t* row = &Edge[y * 16];
                 if (c.pattern)
                 {
+                    if (inner) EdgeIn[y] = (EdgeCustomFailed ? 0xFF000000u : 0u) | (top.pixels[y * 256 + (side ? 239 : 16)] & 0xFFFFFF);
                     for (int k = 0; k < 16; k++)
                         row[k] = (EdgeCustomFailed ? 0xFF000000u : 0u) | (top.pixels[y * 256 + (side ? 240 : 0) + k] & 0xFFFFFF);
                     continue;
@@ -335,6 +341,7 @@ private:
                     px = (uint32_t)(a * 255 / 16) << 24 | r << 16 | g << 8 | b;
                 }
                 std::fill(row, row + 16, px);
+                if (inner) EdgeIn[y] = px;
             }
             if (!any) continue;
             const float barW = side == 0 ? (float)left : (float)(outW - right);
@@ -366,6 +373,15 @@ private:
                 const SDL_FRect dst = { x0, (float)y0, x1 - x0, (float)h };
                 SDL_RenderCopyF(R, e, &src, &dst);
             }
+            if (anyInner)
+                if (SDL_Texture* in = Make(EdgeInTex[side], 1, 192))
+                {
+                    SDL_SetTextureBlendMode(in, EdgeCustomFailed ? SDL_BLENDMODE_BLEND : EdgeMode);
+                    SDL_SetTextureScaleMode(in, SDL_ScaleModeNearest);
+                    SDL_UpdateTexture(in, nullptr, EdgeIn, 4);
+                    const SDL_FRect dst = { side ? v.originX + 255 * v.unit : v.originX, (float)y0, v.unit, (float)h };
+                    SDL_RenderCopyF(R, in, nullptr, &dst);
+                }
         }
         // The weather's particles beside the screen (Scene::weatherObj): the top screen's
         // sprites, drawn again one screen width to the left and to the right.
@@ -464,11 +480,12 @@ private:
     SDL_BlendMode Premultiplied;
     std::vector<Tex> Slots;
     std::vector<bool> CachedPremul; // (each slot's last blend mode, for a texture not uploaded again)
-    Tex WideTex, EdgeTex[2], FillTex[2], NarrowTex[2], WeatherTex[2];
+    Tex WideTex, EdgeTex[2], EdgeInTex[2], FillTex[2], NarrowTex[2], WeatherTex[2];
     uint32_t Fill[16 * 192];
     std::vector<SDL_Rect> Spans;
     std::vector<uint32_t> Buf, WideFilled;
     uint32_t Edge[16 * 192];
+    uint32_t EdgeIn[192]; // the screen's own outermost column, where a row is continued from the next one in
     uint32_t Weather[256 * 192];
     SDL_BlendMode EdgeMode = SDL_BLENDMODE_INVALID;
     bool EdgeCustomFailed = false;

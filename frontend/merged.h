@@ -1070,7 +1070,10 @@ inline void MergedCompose(const Scene& scene, const ScreenImage screens[2], int 
                         {
                             const EdgeContinuation c = MergedEdgeContinuation(scene, top, sy, side);
                             if (c.none()) continue;
-                            const int xa = side ? std::max(right, 0) : 0, xb = side ? outW : std::min(left, outW);
+                            // (Continued from the next column in, the outermost column, the 3D world
+                            // alone, is covered too: no slit at the screen's edge.)
+                            const int cover = MergedEdgeColumn(top, sy, side) != (side ? 255 : 0) ? (int)std::ceil(v.unit) : 0;
+                            const int xa = side ? std::max(right - cover, 0) : 0, xb = side ? outW : std::min(left + cover, outW);
                             if (c.pattern)
                             {
                                 for (int x = xa; x < xb; x++)
