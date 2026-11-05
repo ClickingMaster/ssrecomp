@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- **Pokémon summary view: the backing panel's corners are rounded in the window too.** The
+  graphics-card drawing filled the panel square over its rounded outline, so the corners showed
+  the panel's colour outside the curve; the headless pictures were right.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
