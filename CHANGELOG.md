@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- **Hybrid layout: a click on the small top-screen inset no longer touches the game.** With the
+  touch screen large and the top screen drawn over its corner (4:3 windows), clicking the inset
+  tapped the touch screen hidden under it.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).

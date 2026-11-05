@@ -6990,7 +6990,7 @@ int main(int argc, char** argv)
                         fprintf(stderr, "[touch] %d,%d: picture %.0f,%.0f, scene %s: %s %d,%d\n", mouseX, mouseY, bx, by,
                                 scene.name, touching ? "touch screen" : "nothing", touching ? touchX : -1, touching ? touchY : -1);
                 }
-                else if (LayoutTouch(rects[1], mouseX, mouseY, touchX, touchY)) touching = true;
+                else if (LayoutTouch(layout, rects, mouseX, mouseY, touchX, touchY)) touching = true;
             }
             wasMouseDown = !opt.headless && mouseNow;
             if (curDX != 0 || curDY != 0 || curPress)
