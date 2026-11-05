@@ -1,6 +1,6 @@
 # Pokémon Fulldex
 
-**Your favourite DS and GBA Pokémon games on a PC (Windows and Linux), a Mac, a Steam
+**All your favourite Pokémon games on a PC (Windows and Linux), a Mac, a Steam
 Deck or other handheld PC, an Android phone, an iPhone or iPad, or a modded Nintendo Switch: one screen,
 widescreen, 60 fps, up to 4K on a PC and 720p on the Switch.** No more squinting at two tiny stacked DS screens.
 
