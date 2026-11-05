@@ -47,9 +47,6 @@
 - **Forgetting a move (TM, level-up): the new move and the Cancel button show** on the
   widescreen summary. They were cut off below the moves list.
 
-- **HeartGold and SoulSilver: the Apricorn Box screen is whole again.** Opened from the Bag, it was
-  shown as a cropped start-menu panel (the message cut off, the CLOSE button missing); it now
-  shows the touch screen like the other bottom-screen applications.
 - **HeartGold and SoulSilver: the Apricorn Box, Pal Pad and Berry Pots screens are whole again.**
   Opened from the Bag, they were shown as a cropped start-menu panel (the Apricorn Box's message
   cut off and its CLOSE button missing, the Pal Pad's menu and the pots' row cut at the edge);
@@ -68,8 +65,6 @@
 - **HeartGold and SoulSilver: Fly's sky band fills the whole width.** The sky behind the player
   during the fly-away and landing stopped at the screen's right edge on a wide view, with the
   world showing beside it (its outermost column belongs to the world); it now goes on to both edges.
-- **Graphics-chip 3D at DS resolution (`--wide-gpu`, the Switch default): flat shapes keep their
-  top pixel row**, as the software renderer draws them (signs, buildings).
 - **Graphics-chip 3D at DS resolution (`--wide-gpu`, the Switch default): shapes and textures
   sit on the same pixels as the software renderer's** (signs keep their top row, floors no
   longer shift by a pixel).
