@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **Settings file with Windows line endings** (edited in Notepad, or copied from Windows) is read
+  properly: before, every on/off and view setting in it was ignored and the next save overwrote them.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
