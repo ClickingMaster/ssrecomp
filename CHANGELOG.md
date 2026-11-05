@@ -39,6 +39,9 @@
 - **Hybrid layout: a click on the small top-screen inset no longer touches the game.** With the
   touch screen large and the top screen drawn over its corner (4:3 windows), clicking the inset
   tapped the touch screen hidden under it.
+- **A save that cannot be read is no longer started over.** If the save file is there but unreadable
+  (wrong permissions, a failing drive), the game now stops with a message instead of starting a
+  new game and writing over it at the first in-game save.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).

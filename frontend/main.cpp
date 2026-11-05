@@ -1882,6 +1882,19 @@ int main(int argc, char** argv)
 
     std::vector<uint8_t> sav = ReadFile(opt.save);
     fprintf(stderr, "ROM %s: %zu bytes; save %s: %zu bytes\n", opt.rom.c_str(), rom.size(), opt.save.c_str(), sav.size());
+    // A save that is there but cannot be read (permissions, a failing drive) is not an empty one:
+    // starting fresh would write over it at the first in-game save, and the backup at start
+    // could not copy it either.
+    if (!opt.noSave && sav.empty())
+    {
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(std::filesystem::u8path(opt.save), ec);
+        if (!ec && size > 0)
+        {
+            fprintf(stderr, "cannot read the save %s (%ju bytes): not starting, so that it is not written over. Check its permissions.\n", opt.save.c_str(), (uintmax_t)size);
+            return 1;
+        }
+    }
     // (RETROACHIEVEMENTS from the settings file now: the console is made differently with it on.)
     if (!opt.headless && !opt.lockstep && Achievements::Available())
     {
