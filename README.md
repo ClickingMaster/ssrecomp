@@ -4,7 +4,12 @@
 Deck or other handheld PC, an Android phone, an iPhone or iPad, or a modded Nintendo Switch: one screen,
 widescreen, 60 fps, up to 4K on a PC and 720p on the Switch.** No more squinting at two tiny stacked DS screens.
 
-![Pokémon Fulldex: Black 2, White 2, Black, White, SoulSilver, HeartGold and Platinum, and the GBA games, in widescreen at 60 fps on a PC, a Mac, a Steam Deck, an Android phone and a Nintendo Switch; RetroAchievements, cheats, save states and your own colour and background built in](docs/screenshots/trailer-3.gif)
+**DS:** Black 2, White 2, Black, White, HeartGold, SoulSilver, Platinum, Diamond and Pearl.<br>
+**GBA:** Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet.<br>
+**3DS:** Omega Ruby, Alpha Sapphire, X, Y, Ultra Sun and Ultra Moon, coming soon.<br>
+Which languages: [Supported games](#supported-games).
+
+![Pokémon Fulldex: Black 2, White 2, Black, White, SoulSilver, HeartGold, Platinum, Diamond and Pearl, and the GBA games Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet, in widescreen at 60 fps on a PC, a Mac, a Steam Deck, an Android phone and a Nintendo Switch; RetroAchievements, cheats, save states and your own colour and background built in](docs/screenshots/trailer-3.gif)
 
 ## Downloads
 
@@ -49,7 +54,7 @@ DS game, presented the way it should look on a modern screen.
 | **Ruby / Sapphire** (GBA) | English (1.0, 1.1, 1.2), German, French, Spanish, Italian, Japanese | |
 | **FireRed / LeafGreen** (GBA) | English (1.0, 1.1) | |
 | **Ultra Violet** (GBA, a FireRed hack) | 1.22 | as its `.gba`, or its `.ips` patch beside a FireRed 1.0 ROM |
-| **Omega Ruby** (3DS) | | In the works, as its own project: COMING SOON in the 3DS tab |
+| **Omega Ruby / Alpha Sapphire, X / Y, Ultra Sun / Ultra Moon** (3DS) | | Coming soon |
 
 - **Beta** languages work with the exact ROM copies they were checked against, and complete
   playthroughs haven't been verified yet. Other GBA games play too, without widescreen.
@@ -626,7 +631,7 @@ OLED in handheld mode; a PC has room to spare, and draws the same picture up to
 
 ## What's next
 
-- **Pokémon Omega Ruby**: in the works, as its own project.
+- **The 3DS games**: Omega Ruby, Alpha Sapphire, X, Y, Ultra Sun and Ultra Moon, in the works.
 - **Native ports**: the dream, hopefully for all of them. Optimistic, but we're
   aiming for it.
 
