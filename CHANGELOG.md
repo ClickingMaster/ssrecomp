@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- **SoulSilver and HeartGold: the Running Shoes button beside the X menu has a right edge.** The game
+  draws the button past the edge of its screen, so the copy was cut off flat; its outline is now
+  closed on the right as on the left.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).

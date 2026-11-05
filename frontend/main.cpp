@@ -7149,6 +7149,10 @@ int main(int argc, char** argv)
             {
                 for (int y = 0; y < SHOES_H; y++)
                     for (int x = 0; x < SHOES_W; x++) shoesPix[y * SHOES_W + x] = tb[(SHOES_Y + y) * 256 + SHOES_X + x] | 0xFF000000u;
+                // (The game draws the button off the right edge of the screen, so its right side is cut flat:
+                // the left side's outline, rim and corners mirrored over it, to close it.)
+                for (int y = 0; y < SHOES_H; y++)
+                    for (int k = 0; k < 3; k++) shoesPix[y * SHOES_W + SHOES_W - 1 - k] = shoesPix[y * SHOES_W + 2 + k];
                 if (!shoesSeen) fprintf(stderr, "[shoes] frame %u: the Running Shoes button seen\n", frame);
                 shoesSeen = true;
                 shoesOn = nearC(200, 120, 0xBA6910); // (off: the shoes grey on the orange)
