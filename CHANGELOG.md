@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- **Smooth scaling: the Summary screen's lower half no longer loses its EXP bar** (and other
+  trimmed rims): the filtered compose now honours the same rim and corner-sprite trimming as the
+  sharp one and the GPU path.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
