@@ -47,6 +47,9 @@
 - **Forgetting a move (TM, level-up): the new move and the Cancel button show** on the
   widescreen summary. They were cut off below the moves list.
 
+- **HeartGold and SoulSilver: the Apricorn Box screen is whole again.** Opened from the Bag, it was
+  shown as a cropped start-menu panel (the message cut off, the CLOSE button missing); it now
+  shows the touch screen like the other bottom-screen applications.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
