@@ -2541,6 +2541,11 @@ int main(int argc, char** argv)
     // running (see where it is counted).
     std::vector<int> appOwnSection(rc_num_apps, -1);
     std::vector<unsigned> sectionStreak(rc_num_sections, 0);
+    // The last frame overlay 8 (the in-battle Bag and party screens) ran without overlay 6 (the
+    // battle's own effects). Some battle effects (a wild Pokemon breaking out of a ball, an
+    // enemy's Vine Whip) call into overlay 8 in passing, and the Bag layout flashed up at 4:3
+    // for about ten frames each time.
+    unsigned battleSubmenuLast = 0;
     for (unsigned i = 0; i < rc_num_apps; i++)
     {
         if (!strcmp(rc_apps[i].section, "main") || !strcmp(rc_apps[i].section, "field")) continue;
@@ -4453,11 +4458,11 @@ int main(int argc, char** argv)
         }
         else if (focus.wantBottom || appBottomNow)
             only("bottom", 1);
-        else if (sectionActive("OVY_8") ||
+        else if ((battleSubmenuLast && battleSubmenuLast + 3 >= rc_current_frame()) ||
                  // (Opening, the Bag or the party pauses for about 5 frames after it has started,
                  // with neither it nor the battle running: without this the battle would flash
                  // up at 4:3 in between.)
-                 (sectionWithin("OVY_8", 12) && !sectionActive("OVY_12")))
+                 (battleSubmenuLast && battleSubmenuLast + 12 >= rc_current_frame() && !sectionActive("OVY_12")))
             // In-battle bag and party screens (overlay 8) fill the bottom screen.
             only("battle-submenu", 1);
         else if (probeActive(probeBattleInput) ||
@@ -7676,6 +7681,8 @@ int main(int argc, char** argv)
             if (!last || last + 3 < rc_current_frame()) sectionStreak[sec] = 0;
             else if (last == rc_current_frame()) sectionStreak[sec]++;
         }
+        if (sectionWithin("OVY_8", 0) && !sectionWithin("OVY_6", 0))
+            battleSubmenuLast = rc_current_frame();
         if (top && bot && !paused) focus.Update(top, bot, fieldNow, appBottom);
         sceneMark(0);
         layout.swapped = focus.Swapped();

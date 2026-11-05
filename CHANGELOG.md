@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- **SoulSilver and HeartGold battles: no more flash of the touch screen in the middle of a battle.** A wild
+  Pokemon breaking out of a Poke Ball, or an enemy's Vine Whip, briefly ran code of the Bag and
+  party overlay, and the view jumped to the 4:3 touch-screen picture (a Poke Ball background) for
+  about ten frames. The Bag and party screens are now told apart by overlay 6 not running with them.
 - **GBA games: the pause menu works like the DS games'.** On the Switch, + is the GBA's START and
   + and - together open the pause menu (START BUTTON in CONTROLS swaps them); a lone + or - reaches
   the game a moment later, so the pair is never taken for one of them. The menu has the DS games'
