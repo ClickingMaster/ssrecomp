@@ -28,3 +28,5 @@ FieldMap_Main
 # Writing the save to flash: the screen does not change meanwhile, so the layout is held.
 HandleWriteSaveAsync_NormalData
 HandleWriteSaveAsync_PCBoxes
+# The evolution scene (a Bag Rare Candy or a level-up: it runs in the main binary, no overlay of its own).
+EvolutionScene_Task

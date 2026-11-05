@@ -2471,6 +2471,7 @@ int main(int argc, char** argv)
         focusProbe("TouchscreenHitbox_FindHitboxAtTouchNew"), focusProbe("TouchscreenHitbox_FindHitboxAtTouchHeld"),
         focusProbe("TouchscreenHitbox_TouchHeldIsIn"), focusProbe("TouchscreenHitbox_TouchNewIsIn") };
     const int probeFieldMap = focusProbe("FieldMap_Main");
+    const int probeEvolution = focusProbe("EvolutionScene_Task");
     // Writing the save: for the seconds this takes the game sits in its flash write loop
     // and the code of the screen it shows (the save question, the overworld) runs only now
     // and then, so nothing on screen changes but the probes go quiet.
@@ -4492,6 +4493,10 @@ int main(int argc, char** argv)
                 sc.name = "battle";
                 sc.edgeFill = true;
             }
+            else if (probeActive(probeEvolution))
+                // An evolution (from a Rare Candy in the Bag it runs with no battle overlay):
+                // its bars are the scene's colours too.
+                sc.edgeFill = true;
         }
         // The overworld is drawn across the whole wide view by the widescreen 3D renderer.
         sc.wide = viewWidth > 256.5f && (fieldActive() || menuReturn > 0) && !sc.items.empty() && sc.items[0].screen == 0 &&
