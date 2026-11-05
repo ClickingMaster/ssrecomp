@@ -134,3 +134,13 @@ inline bool LayoutTouch(const SDL_Rect& bottom, int mx, int my, int& tx, int& ty
     ty = (my - bottom.y) * 192 / bottom.h;
     return true;
 }
+
+// The same for a whole layout: in Hybrid with the bottom screen large, the top screen's inset may
+// be drawn over its corner (LayoutDrawFirst), and a click on the inset is on the top screen.
+inline bool LayoutTouch(const Layout& l, const SDL_Rect rects[2], int mx, int my, int& tx, int& ty)
+{
+    const SDL_Rect& top = rects[0];
+    if (l.mode == LayoutMode::Hybrid && l.swapped && mx >= top.x && my >= top.y && mx < top.x + top.w && my < top.y + top.h)
+        return false;
+    return LayoutTouch(rects[1], mx, my, tx, ty);
+}
