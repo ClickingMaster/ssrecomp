@@ -5305,6 +5305,8 @@ int main(int argc, char** argv)
     }
 
     uint64_t lastShownAt = 0, shownGaps = 0, shownGapsLong = 0;
+    uint64_t lastPresentRet = 0; // when the last SDL_RenderPresent returned (what a frame-time graph sees)
+    std::vector<double> presentIntervals; // ms between returns, for the perf line
     // Showing a frame in two steps: drawn (renderFrame), then handed to the screen
     // (presentFrame), which with `ahead` happens at the frame's own time, a while after.
     auto renderFrame = [&](DrawJob& j) {
@@ -5423,6 +5425,33 @@ int main(int argc, char** argv)
                 while (SDL_GetPerformanceCounter() < nextTick) {}
             }
         }
+        // At their own times (no vsync): the wait that keeps frames 1/60 s apart comes before
+        // handing the picture over, so the pictures leave at even times. (After it, they left
+        // when the next frame's drawing was done, and that takes a different time from one
+        // frame to the next, the in-between frames' scenes costing more than the others: the
+        // frame-time graph of a 144 Hz screen alternated 16.1 and 17.2 ms.)
+        if (pace && !syncToDisplay)
+        {
+            uint64_t now = SDL_GetPerformanceCounter();
+            if (now < nextTick)
+            {
+                // Sleep for most of the wait and spin for the last part of a millisecond.
+                const double left = (double)(nextTick - now) / perfFreq;
+                if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
+                while (SDL_GetPerformanceCounter() < nextTick) {}
+            }
+            else
+            {
+                // Never faster than the DS (59.8 frames a second). A frame that ran late may take
+                // up to a quarter of a frame back from the next one, so that frames a little late
+                // and a little early in turn still average out to full speed, but a longer stall
+                // is not won back.
+                const uint64_t carry = (uint64_t)(frameTime * perfFreq / 4);
+                if (now - nextTick > carry) nextTick = now - carry;
+            }
+            nextTick += (uint64_t)(frameTime * perfFreq);
+            perfMark(4);
+        }
         // How evenly the frames are handed to the screen, for the timing lines: gaps between
         // them of more than 17.5 ms (a frame takes 16.7). (Taken before presenting: how long
         // that takes depends on the screen's own refresh.)
@@ -5436,6 +5465,12 @@ int main(int argc, char** argv)
             lastShownAt = t;
         }
         SDL_RenderPresent(renderer);
+        if (perfOn)
+        {
+            const uint64_t r = SDL_GetPerformanceCounter();
+            if (lastPresentRet && !j.wantShot) presentIntervals.push_back((double)(r - lastPresentRet) * 1000.0 / perfFreq);
+            lastPresentRet = r;
+        }
         perfMark(4);
         // Frames shown in the last whole second, for the FPS counter.
         presented++;
@@ -5483,32 +5518,6 @@ int main(int argc, char** argv)
             nextTick = returned + (uint64_t)(untilNext * (double)perfFreq);
             perfMark(5);
             return;
-        }
-        nextTick += (uint64_t)(frameTime * perfFreq);
-        uint64_t now = SDL_GetPerformanceCounter();
-        if (now < nextTick)
-        {
-            // Sleep for most of the wait and spin for the last part of a millisecond:
-            // frames then start within a few microseconds of an even 16.7 ms apart.
-            double left = (double)(nextTick - now) / perfFreq;
-            // (With the pipeline the start of the next emulation does not depend on this
-            // to the microsecond: only the sleep, leaving the core to the widescreen thread.)
-            if (pipelined) std::this_thread::sleep_for(std::chrono::duration<double>(left));
-            else
-            {
-                if (left > 0.0008) std::this_thread::sleep_for(std::chrono::duration<double>(left - 0.0006));
-                while (SDL_GetPerformanceCounter() < nextTick) {}
-            }
-        }
-        else
-        {
-            // Never faster than the DS (59.8 frames a second). A frame that ran late may take
-            // up to a quarter of a frame back from the next one, so that frames a little late
-            // and a little early in turn still average out to full speed, but a longer stall
-            // is not won back: up to 250 ms used to be, as frames run back to back, and the
-            // game and its music sped up for a moment after every stall.
-            const uint64_t carry = (uint64_t)(frameTime * perfFreq / 4);
-            if (now - nextTick > carry) nextTick = now - carry;
         }
         perfMark(5);
     };
@@ -5660,6 +5669,19 @@ int main(int argc, char** argv)
                     snprintf(extra, sizeof(extra), "; pipeline: waited for the emulation %.2f ms", perfAcc[1] / perfN);
                     tail += extra;
                 }
+                if (presentIntervals.size() > 10)
+                {
+                    std::sort(presentIntervals.begin(), presentIntervals.end());
+                    double sum = 0, sq = 0;
+                    for (double v : presentIntervals) sum += v;
+                    const double mean = sum / presentIntervals.size();
+                    for (double v : presentIntervals) sq += (v - mean) * (v - mean);
+                    snprintf(extra, sizeof(extra), "; present interval mean %.3f sd %.3f p99 %.2f max %.2f ms",
+                        mean, std::sqrt(sq / presentIntervals.size()),
+                        presentIntervals[presentIntervals.size() * 99 / 100], presentIntervals.back());
+                    tail += extra;
+                }
+                presentIntervals.clear();
                 if (shownGaps)
                 {
                     snprintf(extra, sizeof(extra), "; shown over 17.5 ms after the last: %llu of %llu",
