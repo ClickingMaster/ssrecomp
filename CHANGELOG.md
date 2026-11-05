@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- **SoulSilver: the wild Pokémon's slide to the right of a wide battle follows the game's frames.** It was
+  timed by how many pictures were drawn, so the display rate, skipped frames or screenshots changed
+  when (and whether) it happened.
 - **GBA games: the pause menu works like the DS games'.** On the Switch, + is the GBA's START and
   + and - together open the pause menu (START BUTTON in CONTROLS swaps them); a lone + or - reaches
   the game a moment later, so the pair is never taken for one of them. The menu has the DS games'
