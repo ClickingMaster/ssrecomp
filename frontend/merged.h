@@ -343,9 +343,23 @@ inline void MergedPrepareEdgeWindows(Scene& scene, const ScreenImage* screens)
     }
 }
 
+// The column whose colour goes on beside the screen: the outermost one, or the next in when the
+// outermost is the 3D world alone and the 2D layer is flat from there (a background scrolled by
+// one pixel, as in the Fly animation's sky). The same choice as the one in GPU2D_Soft.cpp.
+inline int MergedEdgeColumn(const ScreenImage& top, int sy, int side)
+{
+    const int x = side ? 255 : 0, dir = side ? -1 : 1;
+    if (!top.flags || LayerClass(top.flags[sy * 256 + x]) != LAYER_3D) return x;
+    const uint8_t flag = top.flags[sy * 256 + x + dir];
+    if (LayerClass(flag) == LAYER_3D) return x;
+    for (int k = 2; k < 9; k++)
+        if (top.flags[sy * 256 + x + dir * k] != flag) return x;
+    return x + dir;
+}
+
 inline EdgeContinuation MergedEdgeContinuation(const Scene& scene, const ScreenImage& top, int sy, int side)
 {
-    const int sx = side ? 255 : 0;
+    const int sx = MergedEdgeColumn(top, sy, side);
     const EdgeContinuation none = { 0, 0, 16 };
     // (Nor where the piece leaves the screen out: that part is drawn elsewhere.)
     if (scene.items[0].Skips(sx, sy) || scene.edgeWindow[side][sy]) return none;

@@ -1222,7 +1222,7 @@ index 2f8afcb..64d4393 100644
  {
      u32 coloreffect = 0;
      u32 eva, evb;
-@@ -102,6 +110,136 @@ u32 SoftRenderer::ColorComposite(int i, u32 val1, u32 val2) const
+@@ -102,6 +110,147 @@ u32 SoftRenderer::ColorComposite(int i, u32 val1, u32 val2) const
      return val1;
  }
  
@@ -1238,7 +1238,18 @@ index 2f8afcb..64d4393 100644
 +    const u32 blendCnt = CurUnit->BlendCnt;
 +    for (int side = 0; side < 2; side++)
 +    {
-+        const int i = side ? 255 : 0;
++        int i = side ? 255 : 0;
++        const int dir = side ? -1 : 1;
++        {
++            // The outermost column is the 3D world alone, with a flat 2D layer from the next
++            // column in (a background scrolled by one pixel: the sky of the Fly animation):
++            // the 2D layer is what the view continues beside the screen. (See MergedEdgeColumn.)
++            auto is3D = [&](int x) { return (BGOBJLine[x] >> 24 & 0xC0) == 0x40; };
++            bool inner = is3D(i) && !is3D(i + dir);
++            for (int k = 2; k < 9 && inner; k++)
++                inner = (BGOBJLine[i + dir * k] >> 24) == (BGOBJLine[i + dir] >> 24);
++            if (inner) i += dir;
++        }
 +        const u32 val1 = BGOBJLine[i], val2 = BGOBJLine[256 + i];
 +        const u32 flag1 = val1 >> 24, flag2 = val2 >> 24;
 +        u32 eva = 16, evb = 0; // shows as it is
@@ -1285,7 +1296,7 @@ index 2f8afcb..64d4393 100644
 +        bool flat = true;
 +        for (int k = 1; k < 8 && flat; k++)
 +        {
-+            const u32 v = BGOBJLine[side ? 255 - k : k];
++            const u32 v = BGOBJLine[i + dir * k];
 +            flat = (v & 0x3F3F3F) == (val1 & 0x3F3F3F) && (v >> 24) == flag1;
 +        }
 +        // A bitmap background: where the game shows a captured picture of the screen
@@ -1359,7 +1370,7 @@ index 2f8afcb..64d4393 100644
  void SoftRenderer::DrawScanline(u32 line, Unit* unit)
  {
      CurUnit = unit;
-@@ -115,20 +253,22 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
+@@ -115,20 +264,22 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
      if (CurUnit->Num == 0)
      {
          auto bgDirty = GPU.VRAMDirty_ABG.DeriveState(GPU.VRAMMap_ABG, GPU);
@@ -1388,7 +1399,7 @@ index 2f8afcb..64d4393 100644
      }
  
      bool forceblank = false;
-@@ -147,7 +287,10 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
+@@ -147,7 +298,10 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
      if (CurUnit->Num == 0)
      {
          if (!GPU.GPU3D.IsRendererAccelerated())
@@ -1399,7 +1410,7 @@ index 2f8afcb..64d4393 100644
          else if (CurUnit->CaptureLatch && (((CurUnit->CaptureCnt >> 29) & 0x3) != 1))
          {
              _3DLine = GPU.GPU3D.GetLine(n3dline);
-@@ -170,8 +313,56 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
+@@ -170,8 +324,56 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
      u32 dispmode = CurUnit->DispCnt >> 16;
      dispmode &= (CurUnit->Num ? 0x1 : 0x3);
  
@@ -1456,7 +1467,7 @@ index 2f8afcb..64d4393 100644
      CurUnit->UpdateMosaicCounters(line);
  
      switch (dispmode)
-@@ -303,6 +494,12 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
+@@ -303,6 +505,12 @@ void SoftRenderer::DrawScanline(u32 line, Unit* unit)
  
          *(u64*)&dst[i] = c | ((c & 0x00C0C0C000C0C0C0) >> 6) | 0xFF000000FF000000;
      }
@@ -1469,7 +1480,7 @@ index 2f8afcb..64d4393 100644
  }
  
  void SoftRenderer::VBlankEnd(Unit* unitA, Unit* unitB)
-@@ -576,7 +773,7 @@ void SoftRenderer::DoCapture(u32 line, u32 width)
+@@ -576,7 +784,7 @@ void SoftRenderer::DoCapture(u32 line, u32 width)
  template<u32 bgmode>
  void SoftRenderer::DrawScanlineBGMode(u32 line)
  {
@@ -1478,7 +1489,7 @@ index 2f8afcb..64d4393 100644
      u16* bgCnt = CurUnit->BGCnt;
      for (int i = 3; i >= 0; i--)
      {
-@@ -631,7 +828,7 @@ void SoftRenderer::DrawScanlineBGMode(u32 line)
+@@ -631,7 +839,7 @@ void SoftRenderer::DrawScanlineBGMode(u32 line)
  
  void SoftRenderer::DrawScanlineBGMode6(u32 line)
  {
@@ -1487,7 +1498,7 @@ index 2f8afcb..64d4393 100644
      u16* bgCnt = CurUnit->BGCnt;
      for (int i = 3; i >= 0; i--)
      {
-@@ -659,7 +856,7 @@ void SoftRenderer::DrawScanlineBGMode6(u32 line)
+@@ -659,7 +867,7 @@ void SoftRenderer::DrawScanlineBGMode6(u32 line)
  
  void SoftRenderer::DrawScanlineBGMode7(u32 line)
  {
@@ -1496,7 +1507,7 @@ index 2f8afcb..64d4393 100644
      u16* bgCnt = CurUnit->BGCnt;
      // mode 7 only has text-mode BG0 and BG1
  
-@@ -691,11 +888,29 @@ void SoftRenderer::DrawScanlineBGMode7(u32 line)
+@@ -691,11 +899,29 @@ void SoftRenderer::DrawScanlineBGMode7(u32 line)
  
  void SoftRenderer::DrawScanline_BGOBJ(u32 line)
  {
@@ -1526,7 +1537,7 @@ index 2f8afcb..64d4393 100644
  
          return;
      }
-@@ -741,11 +956,17 @@ void SoftRenderer::DrawScanline_BGOBJ(u32 line)
+@@ -741,11 +967,17 @@ void SoftRenderer::DrawScanline_BGOBJ(u32 line)
  
      if (!GPU.GPU3D.IsRendererAccelerated())
      {
@@ -1544,7 +1555,7 @@ index 2f8afcb..64d4393 100644
              BGOBJLine[i] = ColorComposite(i, val1, val2);
          }
      }
-@@ -859,16 +1080,6 @@ void SoftRenderer::DrawScanline_BGOBJ(u32 line)
+@@ -859,16 +1091,6 @@ void SoftRenderer::DrawScanline_BGOBJ(u32 line)
  }
  
  
@@ -1561,7 +1572,7 @@ index 2f8afcb..64d4393 100644
  
  void SoftRenderer::DrawPixel_Accel(u32* dst, u16 color, u32 flag)
  {
-@@ -965,6 +1176,57 @@ void SoftRenderer::DrawBG_Text(u32 line, u32 bgnum)
+@@ -965,6 +1187,57 @@ void SoftRenderer::DrawBG_Text(u32 line, u32 bgnum)
      else
          tilemapaddr += ((yoff & 0xF8) << 3);
  
@@ -1619,7 +1630,7 @@ index 2f8afcb..64d4393 100644
      u16 curtile;
      u16* curpal;
      u32 pixelsaddr;
-@@ -1599,19 +1861,60 @@ void SoftRenderer::DrawSprites(u32 line, Unit* unit)
+@@ -1599,19 +1872,60 @@ void SoftRenderer::DrawSprites(u32 line, Unit* unit)
  
          CurUnit->OBJMosaicY = 0;
          CurUnit->OBJMosaicYCount = 0;
@@ -1683,7 +1694,7 @@ index 2f8afcb..64d4393 100644
      NumSprites[CurUnit->Num] = 0;
      memset(OBJLine[CurUnit->Num], 0, 256*4);
      memset(OBJWindow[CurUnit->Num], 0, 256);
-@@ -1634,15 +1937,29 @@ void SoftRenderer::DrawSprites(u32 line, Unit* unit)
+@@ -1634,15 +1948,29 @@ void SoftRenderer::DrawSprites(u32 line, Unit* unit)
          64, 32, 64, 8
      };
  

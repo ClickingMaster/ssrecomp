@@ -122,7 +122,18 @@ void SoftRenderer::RecordEdges(u32 line)
     const u32 blendCnt = CurUnit->BlendCnt;
     for (int side = 0; side < 2; side++)
     {
-        const int i = side ? 255 : 0;
+        int i = side ? 255 : 0;
+        const int dir = side ? -1 : 1;
+        {
+            // The outermost column is the 3D world alone, with a flat 2D layer from the next
+            // column in (a background scrolled by one pixel: the sky of the Fly animation):
+            // the 2D layer is what the view continues beside the screen. (See MergedEdgeColumn.)
+            auto is3D = [&](int x) { return (BGOBJLine[x] >> 24 & 0xC0) == 0x40; };
+            bool inner = is3D(i) && !is3D(i + dir);
+            for (int k = 2; k < 9 && inner; k++)
+                inner = (BGOBJLine[i + dir * k] >> 24) == (BGOBJLine[i + dir] >> 24);
+            if (inner) i += dir;
+        }
         const u32 val1 = BGOBJLine[i], val2 = BGOBJLine[256 + i];
         const u32 flag1 = val1 >> 24, flag2 = val2 >> 24;
         u32 eva = 16, evb = 0; // shows as it is
@@ -169,7 +180,7 @@ void SoftRenderer::RecordEdges(u32 line)
         bool flat = true;
         for (int k = 1; k < 8 && flat; k++)
         {
-            const u32 v = BGOBJLine[side ? 255 - k : k];
+            const u32 v = BGOBJLine[i + dir * k];
             flat = (v & 0x3F3F3F) == (val1 & 0x3F3F3F) && (v >> 24) == flag1;
         }
         // A bitmap background: where the game shows a captured picture of the screen
