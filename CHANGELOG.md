@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+- **Keyboard: the key that closes the pause menu no longer reaches the game.** Choosing RESUME
+  with the A key (or backing out with B, or START's Enter) passed that key on to the game for
+  as long as it was held, as a controller's buttons already did not.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
