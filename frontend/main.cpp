@@ -3723,8 +3723,15 @@ int main(int argc, char** argv)
             const uint32_t* lpx = screens[1].pixels;
             const bool moveDetails = (lpx[5 * 256 + 140] & 0xFFFFFF) == frame &&
                 (lpx[6 * 256 + 200] & 0xFFFFFF) == frame && (lpx[161 * 256 + 140] & 0xFFFFFF) == frame;
+            // Choosing a move to forget for a new one (a TM, a level-up): the new move has a
+            // panel of its own below the list and the details have a Cancel button under them,
+            // both beyond the card's usual bottom edge.
+            const bool learning = moveDetails && (lpx[185 * 256 + 60] & 0xFFFFFF) == frame &&
+                (lpx[185 * 256 + 10] & 0xFFFFFF) == frame;
             if (moveDetails)
                 lower.sw = 130; // the list and its right edge, not the details beside it
+            if (learning)
+                lower.sh = 190;
             const float pad = 4, gap = 6, margin = 6, h = 189;
             const int cardW = upper.sw;
             const float card = cardW + 2 * pad;
@@ -3876,7 +3883,7 @@ int main(int argc, char** argv)
                 back.borderColor = frame;
                 back.borderRadius = 3;
                 sc.items.push_back(back);
-                Element details = Crop(1, 128, 5, 128, 158);
+                Element details = Crop(1, 128, 5, 128, learning ? 186 : 158);
                 details.scale = scale;
                 details.dx = x + (pad + (cardW - details.sw - 2) / 2.0f) * scale;
                 details.dy = y + (h - details.sh) / 2.0f * scale;
