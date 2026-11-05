@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **SoulSilver/HeartGold: the Poke Mart's item panel no longer shows a sliver of the map above it.** The
+  description strip taken from the top screen started a row too high.
 - **GBA games: the pause menu works like the DS games'.** On the Switch, + is the GBA's START and
   + and - together open the pause menu (START BUTTON in CONTROLS swaps them); a lone + or - reaches
   the game a moment later, so the pair is never taken for one of them. The menu has the DS games'

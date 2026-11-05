@@ -4397,7 +4397,7 @@ int main(int argc, char** argv)
         else if (probeActive(probeMart))
             // Poke Mart: the item's description from the other screen above the list of goods.
         {
-            sc = Stack("mart", { Crop(0, 0, 140, 256, 52), Crop(1, 0, 0, 256, 192) }, false, viewWidth);
+            sc = Stack("mart", { Crop(0, 0, 141, 256, 51), Crop(1, 0, 0, 256, 192) }, false, viewWidth);
             sc.bgScreen = 1;
             sc.bgX = 6;
             sc.bgY = 100;
