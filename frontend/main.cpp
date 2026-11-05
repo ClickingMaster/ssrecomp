@@ -7556,6 +7556,9 @@ int main(int argc, char** argv)
         bool appBottom = false;
         for (const RcApp* app : focus.bottomApps)
             if (appActive(app->name)) appBottom = true;
+        // The Vs. Recorder (overlay 40, not in the applications table): its title and menus are
+        // all on the touch screen.
+        if (sectionActive("OVY_40")) appBottom = true;
         {
             bool athlon = false;
             for (const RcApp* app : focus.athlonApps)
