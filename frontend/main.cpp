@@ -5916,6 +5916,16 @@ int main(int argc, char** argv)
                 // A quick click can go down and up between two frames, and the game, which reads the
                 // touch screen once a frame, never saw it (the Pokeathlon's START did nothing): a
                 // click lasts at least 4 frames.
+                // A mouse click in the pause menu is a tap on it (a finger's is taken above; SDL's
+                // mouse events made from a finger are skipped so a tap is not used twice).
+                else if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT && menu.open &&
+                         ev.button.which != SDL_TOUCH_MOUSEID)
+                {
+                    int ow = 0, oh = 0, ww = 0, wh = 0;
+                    SDL_GetRendererOutputSize(renderer, &ow, &oh);
+                    SDL_GetWindowSize(window, &ww, &wh);
+                    if (ww > 0 && wh > 0) menuTap(float(ev.button.x) * ow / ww, float(ev.button.y) * oh / wh);
+                }
                 else if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) { mouseDown = true; mouseTapHold = 4; }
                 else if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) mouseDown = false;
                 // (Every joystick is announced by SDL_JOYDEVICEADDED, game controllers also

@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **Pause menu: the mouse can click its rows** (PC), as a finger taps them on a touch screen;
+  clicking beside the box closes it.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
