@@ -22,6 +22,7 @@ import queue
 import re
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
 import threading
@@ -486,6 +487,10 @@ def run_steps(rom, jobs, log, progress, android=False):
         except SystemExit as e:
             if e.code not in (0, None):
                 raise RuntimeError(str(e.code))
+        except (struct.error, IndexError, OverflowError, MemoryError) as e:
+            # A file that is not a complete Nintendo DS ROM (cut short, another system's).
+            raise RuntimeError('That file could not be read as a Nintendo DS ROM (%s). It may be '
+                               'incomplete or not a SoulSilver (US) ROM; use a complete dump.' % e)
         finally:
             sys.argv = saved
 
@@ -1011,11 +1016,16 @@ def main():
         print('Updated: %s. Run it again with --rom to rebuild the game.' % path)
         return
     if '--rom' in args:
-        rom = args[args.index('--rom') + 1]
-        jobs = int(args[args.index('--jobs') + 1]) if '--jobs' in args else default_jobs()
+        try:
+            rom = args[args.index('--rom') + 1]
+            jobs = int(args[args.index('--jobs') + 1]) if '--jobs' in args else default_jobs()
+        except (IndexError, ValueError):
+            sys.exit('Usage: ssrecomp_setup.py --rom <your ROM file> [--jobs <number>] [--android]')
         problem = check_rom(rom)
         if problem:
             print(problem)
+        if not os.path.isfile(rom):
+            sys.exit(1)
         android = '--android' in args
         missing = [t for t in ('cmake', 'ninja') if not shutil.which(t)] if android else missing_tools()
         if missing:
