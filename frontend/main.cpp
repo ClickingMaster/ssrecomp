@@ -1884,7 +1884,10 @@ int main(int argc, char** argv)
         const auto size = std::filesystem::file_size(std::filesystem::u8path(opt.save), ec);
         if (!ec && size > 0)
         {
-            fprintf(stderr, "cannot read the save %s (%ju bytes): not starting, so that it is not written over. Check its permissions.\n", opt.save.c_str(), (uintmax_t)size);
+            char msg[1024];
+            snprintf(msg, sizeof msg, "The save %s (%ju bytes) cannot be read, so the game was not started: a new game would write over it. Check the file's permissions.", opt.save.c_str(), (uintmax_t)size);
+            fprintf(stderr, "%s\n", msg);
+            if (!opt.headless && !opt.testRun) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Save could not be read", msg, nullptr);
             return 1;
         }
     }
