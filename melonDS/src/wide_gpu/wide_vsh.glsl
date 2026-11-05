@@ -10,7 +10,7 @@ struct WideVertex
     float r, g, b, s;
     float t;
     uint poly;
-    uint pad0, pad1;
+    uint edge, pad1; // edge: a float, the distance from the edge opposite this corner
 };
 
 layout (std430, binding = 0) readonly buffer Vertices
@@ -50,6 +50,9 @@ out vec3 vColor;
 out vec2 vTex;
 noperspective out float vZLinear;
 out float vZPersp;
+// Distances to the three edges of the triangle, in pixels as an edge passes through them; an
+// edge that is not one of the polygon's own (a fan's diagonal) is far away.
+noperspective out vec3 vEdge;
 
 void main()
 {
@@ -77,4 +80,6 @@ void main()
     // which perspective-correct interpolation gives (the vertices carry it scaled alike).
     vZLinear = v.z;
     vZPersp = v.z;
+    vEdge = vec3(0.0);
+    vEdge[gl_VertexID % 3] = uintBitsToFloat(v.edge);
 }

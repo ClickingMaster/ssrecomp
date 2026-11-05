@@ -65,6 +65,10 @@
 - **HeartGold and SoulSilver: Fly's sky band fills the whole width.** The sky behind the player
   during the fly-away and landing stopped at the screen's right edge on a wide view, with the
   world showing beside it (its outermost column belongs to the world); it now goes on to both edges.
+- **Graphics-chip DS-resolution 3D picture: edge marking drawn** (Switch, and `--headless
+  --wide-gpu` on a PC), so models and signs have the outlines the processor's picture has. Only
+  the pixels on a polygon's own edges are outlined, as the DS does, so the holes in textures (the
+  dotted lines on HeartGold's cave floors in an earlier attempt) are not.
 - **Graphics-chip 3D at DS resolution (`--wide-gpu`, the Switch default): shapes and textures
   sit on the same pixels as the software renderer's** (signs keep their top row, floors no
   longer shift by a pixel).

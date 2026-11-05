@@ -46,7 +46,7 @@ struct WideGpuVertex
     float R, G, B, S;   // colour (6 bits a channel); texture coordinates in 1/16 texel
     float T;
     u32 Poly;           // index into the polygon table
-    u32 Pad0, Pad1;
+    u32 Pad0, Pad1;     // Pad0: a float, the corner's distance from the edge opposite it (edge marking)
 };
 static_assert(sizeof(WideGpuVertex) == 48, "matches wide_vsh.glsl");
 
@@ -89,6 +89,8 @@ struct WideGpuFrameConstants
                           // bit 2 no textures: for measuring, see GPU3D_WideGpu_Deko.cpp)
     u32 Toon[32];
     u32 FogDensity[36];
+    u32 Edge[8];          // the edge marking colours by polygon ID / 8 (GPU3D::RenderEdgeTable)
+    u32 Clear[4];         // the rear plane's polygon ID and depth, edge marking on (the DS-resolution picture's)
 };
 
 enum class WideGpuStencil : u8 { Always, Equal, NotEqual };
@@ -156,7 +158,7 @@ public:
 
 // Works out what to draw for the polygons of a wide frame (as GPU3D_Wide.cpp's Draw sees
 // them), at w x h.
-void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int w, int h, WideGpuFrame& out, bool atlas = false);
+void WideGpuBuild(const GPU& gpu, Polygon* const* list, u32 count, int w, int h, WideGpuFrame& out, bool atlas = false, bool edgeMarking = false);
 
 // The DS-resolution renderer's record of the texture and palette memory that changed with each
 // new version of it (WideGpuTexVersion): 512-byte blocks.

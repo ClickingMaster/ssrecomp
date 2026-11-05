@@ -65,6 +65,7 @@ in vec3 vColor;
 in vec2 vTex;
 noperspective in float vZLinear;
 in float vZPersp;
+noperspective in vec3 vEdge;
 
 layout (location = 0) out vec4 oColor;
 layout (location = 1) out uvec2 oAttr;
@@ -303,5 +304,14 @@ void main()
 
     // (The depth tested is the graphics chip's, wide_vsh.glsl; this one is the fog's.)
     int z = (poly.flags & 1u) != 0u ? int(vZPersp) : int(vZLinear);
-    oAttr = uvec2(uint(max(z, 0)), (attr >> 15) & 1u);
+    // (An opaque pixel's polygon ID and a mark that it is a polygon's, in the depth's top byte,
+    // for the final pass's edge marking; bit 31 if it is on one of the polygon's own edges, as
+    // the software renderer's edge flags are, and not beside a hole in a texture.)
+    uint zid = uint(clamp(z, 0, 0xFFFFFF));
+    if (alpha == 31u)
+    {
+        zid |= (((attr >> 24) & 0x3Fu) << 24) | (1u << 30);
+        if (min(vEdge.x, min(vEdge.y, vEdge.z)) < 1.0) zid |= 1u << 31;
+    }
+    oAttr = uvec2(zid, (attr >> 15) & 1u);
 }
