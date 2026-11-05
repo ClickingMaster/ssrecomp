@@ -307,5 +307,18 @@ class AssemblyFormatTests(unittest.TestCase):
                                capture_output=True)
 
 
+class SetupRomErrorTests(unittest.TestCase):
+    def test_truncated_rom_gives_a_user_message(self):
+        with tempfile.TemporaryDirectory() as d:
+            rom = os.path.join(d, 'cut short (x).nds')
+            with open(rom, 'wb') as f:
+                f.write(os.urandom(4096))
+            with patch.object(setup, 'LAYOUT', str(ROOT / 'layouts' / 'soulsilver-us.json')), \
+                 patch.object(setup, 'GEN', os.path.join(d, 'gen')):
+                with self.assertRaises(RuntimeError) as cm:
+                    setup.run_steps(rom, 1, lambda t: None, lambda f, l: None)
+            self.assertIn('Nintendo DS ROM', str(cm.exception))
+
+
 if __name__ == '__main__':
     unittest.main()

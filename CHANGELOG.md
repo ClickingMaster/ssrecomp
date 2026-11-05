@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- **Setup program: an incomplete or wrong ROM gets a clear message** instead of a Python error, and `--rom` with a missing file or value stops with a usage line.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
