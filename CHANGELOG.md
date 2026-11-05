@@ -3,8 +3,9 @@
 
 ## Unreleased
 
-- **Graphics-chip 3D at DS resolution (`--wide-gpu`, the Switch default): flat shapes keep their
-  top pixel row**, as the software renderer draws them (signs, buildings).
+- **Graphics-chip 3D at DS resolution (`--wide-gpu`, the Switch default): shapes and textures
+  sit on the same pixels as the software renderer's** (signs keep their top row, floors no
+  longer shift by a pixel).
 
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
