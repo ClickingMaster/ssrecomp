@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- **LOAD STATE: a damaged state is refused, not half-loaded.** A state that fails partway
+  (corrupt or from another version) used to report "STATE LOADED" over a half-restored
+  console. It now says so, keeps your save as it was, and restarts the game on it.
+  (Follow-up to #34.)
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).

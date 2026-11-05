@@ -1779,12 +1779,17 @@ static bool WriteSnapshot(NDS& nds, const std::string& path, uint32_t frame)
 }
 
 // Snapshot file: 4-byte frame number, then the core's savestate.
-static bool ReadSnapshot(NDS& nds, const std::string& path, uint32_t* frame)
+// *touched is set once the core has started to take the state in: a failure after that
+// leaves the console half-loaded (and its save replaced by the state's).
+static bool ReadSnapshot(NDS& nds, const std::string& path, uint32_t* frame, bool* touched = nullptr)
 {
+    if (touched) *touched = false;
     std::vector<uint8_t> blob = ReadFile(path);
     if (blob.size() <= 4) return false;
     Savestate st(blob.data() + 4, (u32)blob.size() - 4, false);
-    if (st.Error || !nds.DoSavestate(&st)) return false;
+    if (st.Error) return false;
+    if (touched) *touched = true;
+    if (!nds.DoSavestate(&st) || st.Error) return false;
     if (frame) memcpy(frame, blob.data(), 4);
     rc_reset();
     return true;
@@ -5038,6 +5043,10 @@ int main(int argc, char** argv)
     auto saveQuick = [&]() {
         say(WriteSnapshot(*nds, quickState, frame) ? "STATE SAVED" : "SAVE STATE FAILED");
     };
+    auto resetGame = [&]() {
+        nds->Reset(); nds->SetupDirectBoot("game.nds"); nds->Start();
+        rc_reset(); Achievements::Reset(); SetClock(*nds, false);
+    };
     auto loadQuickNow = [&]() {
         // LOAD STATE: back where the state was made, the in-game save kept as it is. A state
         // carries the save as it was then, which would otherwise replace the newer one on the
@@ -5045,9 +5054,18 @@ int main(int argc, char** argv)
         std::vector<u8> keep;
         if (const u8* cur = nds->GetNDSSave(); cur && nds->GetNDSSaveLength())
             keep.assign(cur, cur + nds->GetNDSSaveLength());
-        if (!ReadSnapshot(*nds, quickState, nullptr))
+        bool touched = false;
+        if (!ReadSnapshot(*nds, quickState, nullptr, &touched))
         {
-            say("NO STATE TO LOAD");
+            if (touched)
+            {
+                // The state may have put its older save in, and a half-loaded console is not
+                // one to carry on with: the save stays, and the game restarts on it.
+                if (!keep.empty()) nds->SetNDSSave(keep.data(), (u32)keep.size());
+                resetGame();
+                say("STATE COULD NOT BE LOADED");
+            }
+            else say("NO STATE TO LOAD");
             return;
         }
         if (!keep.empty()) nds->SetNDSSave(keep.data(), (u32)keep.size());
@@ -5058,10 +5076,6 @@ int main(int argc, char** argv)
     auto loadQuick = [&]() {
         menu.open = true;
         goPage(PAGE_LOAD_CONFIRM, M_BACK);
-    };
-    auto resetGame = [&]() {
-        nds->Reset(); nds->SetupDirectBoot("game.nds"); nds->Start();
-        rc_reset(); Achievements::Reset(); SetClock(*nds, false);
     };
 #if defined(__ANDROID__) && !defined(SSR_PC_LAUNCHER)
     bool updateSaid = false;
