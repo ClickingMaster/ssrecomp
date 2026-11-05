@@ -9,6 +9,8 @@ layout (std140, binding = 0) uniform Frame
     uvec4 uFog;           // fog colour, offset, shift, flags (bit 0 fog on, bit 1 fog colours)
     uvec4 uToon[8];
     uvec4 uFogDensity[9];
+    uvec4 uEdge[2];       // the edge marking colours, four to an entry
+    uvec4 uClear;         // the rear plane's polygon ID and depth, edge marking on
 };
 
 layout (binding = 0) uniform sampler2D uColor;
@@ -62,9 +64,54 @@ void main()
     uint a8 = (a << 3) | (a >> 2);
 
     uvec2 attr = texelFetch(uAttr, p, 0).xy;
+    if (uClear.z != 0u && (attr.x & (1u << 30)) != 0u)
+    {
+        // Edge marking, as the software renderer does it: an opaque polygon's pixel beside one of
+        // another polygon ID that is further away (the picture's border is the rear plane).
+        uint z = attr.x & 0xFFFFFFu, id = (attr.x >> 24) & 0x3Fu;
+        ivec2 last = ivec2(uSize.xy) - 1;
+        bool edge = false, inside = false;
+        vec4 under = vec4(0.0);
+        for (int i = 0; i < 4 && !edge; i++)
+        {
+            ivec2 q = p + (i == 0 ? ivec2(-1, 0) : i == 1 ? ivec2(1, 0) : i == 2 ? ivec2(0, -1) : ivec2(0, 1));
+            uint nz = uClear.y, nid = uClear.x;
+            if (q.x >= 0 && q.y >= 0 && q.x <= last.x && q.y <= last.y)
+            {
+                uint n = texelFetch(uAttr, q, 0).x;
+                nz = n & 0xFFFFFFu;
+                if ((n & (1u << 30)) != 0u) nid = (n >> 24) & 0x3Fu;
+                under = texelFetch(uColor, q, 0);
+                inside = true;
+            }
+            else
+                inside = false;
+            edge = nid != id && z < nz;
+        }
+        if (edge)
+        {
+            uint k = id >> 3;
+            uvec4 e4 = uEdge[k >> 2];
+            uint e = (k & 3u) == 0u ? e4.x : (k & 3u) == 1u ? e4.y : (k & 3u) == 2u ? e4.z : e4.w;
+            uvec3 e6 = uvec3((e << 1) & 0x3Eu, (e >> 4) & 0x3Eu, (e >> 9) & 0x3Eu);
+            e6 += uvec3(notEqual(e6, uvec3(0u)));
+            rgb = (e6 << 2) | (e6 >> 4);
+            if ((uSize.z & (1u << 4)) != 0u)
+            {
+                // With anti-aliasing the software renderer gives an edge pixel a coverage of 17/32,
+                // the rest from the pixel beneath it: here the neighbour that made it an edge (the
+                // picture's border has nothing, which leaves it that much less opaque).
+                if (inside && under.a > 0.0)
+                    rgb = (rgb * 17u + uvec3(under.rgb * 255.0 + 0.5) * 15u) >> 5;
+                uint ua = inside && under.a > 0.0 ? uint(under.a * 32.0 + 0.5) - 1u : 0u;
+                a = (a * 17u + ua * 15u) >> 5;
+                a8 = (a << 3) | (a >> 2);
+            }
+        }
+    }
     if ((uFog.w & 3u) == 3u && attr.y != 0u)
     {
-        uint z = attr.x, id, frac;
+        uint z = attr.x & 0xFFFFFFu, id, frac;
         if (z < uFog.y)
         {
             id = 0u;
