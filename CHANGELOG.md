@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- **Widescreen overworld: the door wipe covers the whole view.** Coming out of a building the world's 4:3 middle showed at once while only the sides were wiped open; now the black rows of the wipe cross the full width.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).

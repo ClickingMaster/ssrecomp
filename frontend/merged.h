@@ -396,6 +396,18 @@ inline EdgeContinuation MergedEdgeContinuation(const Scene& scene, const ScreenI
     return { top.edge[sy * 2 + side] & 0xFFFFFF, eva, evb };
 }
 
+// Whether row sy of the top screen is nothing but black backdrop across its whole width: the 3D
+// layer is switched off there, as a door's wipe does while it opens or closes. The widescreen
+// world, which knows nothing of that, would show through the whole row (the 4:3 middle appeared
+// at once while the sides were still being wiped), so the row is black across the view.
+inline bool MergedBlankRow(const ScreenImage& top, int sy)
+{
+    if (!top.flags || !top.pixels || sy < 0 || sy >= 192) return false;
+    for (int x = 0; x < 256; x++)
+        if (LayerClass(top.flags[sy * 256 + x]) != LAYER_BACKDROP || (top.pixels[sy * 256 + x] & 0xFFFFFF)) return false;
+    return true;
+}
+
 // Whether the weather's particles are repeated beside the top screen in row sy (see
 // Scene::weatherObj): only where neither side continues 2D.
 inline bool MergedWeatherRow(const Scene& scene, const ScreenImage& top, int sy)
@@ -1038,6 +1050,7 @@ inline void MergedCompose(const Scene& scene, const ScreenImage screens[2], int 
                     int sy = (int)((y - v.originY) / v.unit);
                     if (sy >= 0 && sy < 192)
                     {
+                        if (MergedBlankRow(top, sy)) std::fill(dst, dst + outW, 0xFF000000);
                         const int left = (int)v.originX, right = (int)(v.originX + 256 * v.unit);
                         for (int side = 0; side < 2; side++)
                         {

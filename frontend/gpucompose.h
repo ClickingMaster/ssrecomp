@@ -276,6 +276,20 @@ private:
         if (!top.flags) return;
         const int left = (int)v.originX, right = (int)(v.originX + 256 * v.unit);
         const int y0 = (int)v.originY, h = (int)(192 * v.unit + 0.5f);
+        // Rows of the top screen that are only black backdrop (a door's wipe): black across the view.
+        {
+            SDL_SetRenderDrawBlendMode(R, SDL_BLENDMODE_NONE);
+            SDL_SetRenderDrawColor(R, 0, 0, 0, 255);
+            for (int y = 0; y < 192;)
+            {
+                if (!MergedBlankRow(top, y)) { y++; continue; }
+                int e = y;
+                while (e < 192 && MergedBlankRow(top, e)) e++;
+                const SDL_Rect r = { 0, y0 + (int)(y * v.unit), outW, (int)(e * v.unit + 0.5f) - (int)(y * v.unit) };
+                SDL_RenderFillRect(R, &r);
+                y = e;
+            }
+        }
         // Each row's continuation is rgb * eva / 16 + world * evb / 16 (see EdgeContinuation):
         // drawn premultiplied, with evb / 16 as the alpha that the world below is multiplied
         // by. Where the renderer can't blend that way, the usual blending comes close.
