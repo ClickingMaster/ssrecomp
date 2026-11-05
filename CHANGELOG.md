@@ -19,6 +19,10 @@
 - **Switch: the GBA games' sound is no longer crackly or sped up.** They asked the Switch for
   512-sample sound buffers, which ran dry between them: it played about 41,000 samples a second
   instead of 48,000, so sound piled up and was thrown away. Now 2048, as big as the DS games' and more.
+- **LOAD STATE: a damaged state is refused, not half-loaded.** A state that fails partway
+  (corrupt or from another version) used to report "STATE LOADED" over a half-restored
+  console. It now says so, keeps your save as it was, and restarts the game on it.
+  (Follow-up to #34.)
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
