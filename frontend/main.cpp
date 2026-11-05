@@ -1157,7 +1157,7 @@ struct AutoFocus
             "Bag", "PartyMenu", "NamingScreen", "Pokegear", "GearConfigure", "GearMap", "GearPhone", "GearRadio",
             "TownMap", "PCBox", "EasyChat", "VoltorbFlip", "Pokedex", "ScratchOffCards", "AlphPuzzle",
             "TrainerCard", "TrainerCardSignature", "BugContestSwapMon", "WirelessTradeSelectMon", "OptionsMenu",
-            "MainMenu", "CheckSave", "DeleteSave",
+            "MainMenu", "CheckSave", "DeleteSave", "ApricornBox",
         };
         for (unsigned i = 0; i < rc_num_apps; i++)
             for (const char* n : names)
