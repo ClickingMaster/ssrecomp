@@ -342,11 +342,44 @@ bool IsGbaRomName(const std::string& name)
     return EndsWithCi(base, ".gba") || EndsWithCi(base, ".agb") || EndsWithCi(base, ".ips");
 }
 
+bool SameContents(const std::filesystem::path& a, const std::filesystem::path& b)
+{
+    std::error_code ec;
+    if (std::filesystem::file_size(a, ec) != std::filesystem::file_size(b, ec) || ec) return false;
+    FILE* fa = fopen(a.string().c_str(), "rb");
+    FILE* fb = fopen(b.string().c_str(), "rb");
+    bool same = fa && fb;
+    char x[4096], y[4096];
+    while (same)
+    {
+        const size_t n = fread(x, 1, sizeof x, fa);
+        if (fread(y, 1, n, fb) != n || memcmp(x, y, n)) same = false;
+        else if (n == 0) break;
+    }
+    if (fa) fclose(fa);
+    if (fb) fclose(fb);
+    return same;
+}
+
 // Copies a ROM or save into the app's roms or saves folder. A file already there is left as it is.
 bool ImportFile(const Folders& fo, const std::string& path)
 {
     std::string from = path;
-    if (from.compare(0, 7, "file://") == 0) from = from.substr(7);
+    if (from.compare(0, 7, "file://") == 0)
+    {
+        // A URI: its %20 and the like are the characters themselves.
+        std::string plain;
+        for (size_t i = 7; i < from.size(); i++)
+        {
+            if (from[i] == '%' && i + 2 < from.size() && isxdigit((unsigned char)from[i + 1]) && isxdigit((unsigned char)from[i + 2]))
+            {
+                plain += (char)std::stoi(from.substr(i + 1, 2), nullptr, 16);
+                i += 2;
+            }
+            else plain += from[i];
+        }
+        from = plain;
+    }
     const std::string base = from.substr(from.find_last_of("/\\") + 1);
     if (base.empty() || base[0] == '.') return false;
     std::string destDir;
@@ -358,6 +391,16 @@ bool ImportFile(const Folders& fo, const std::string& path)
     std::error_code ec;
     if (std::filesystem::exists(src, ec) && std::filesystem::exists(dst, ec) && std::filesystem::equivalent(src, dst, ec))
         return true;
+    // A save already there is the player's progress: keep it beside the new one.
+    if (EndsWithCi(base, ".sav") && std::filesystem::exists(dst, ec) && !SameContents(src, dst))
+    {
+        std::filesystem::copy_file(dst, dst.string() + ".before-import.bak", std::filesystem::copy_options::overwrite_existing, ec);
+        if (ec)
+        {
+            fprintf(stderr, "[launcher] could not back up %s: %s\n", dst.string().c_str(), ec.message().c_str());
+            return false;
+        }
+    }
     std::filesystem::copy_file(src, dst, std::filesystem::copy_options::overwrite_existing, ec);
     if (ec)
     {
@@ -1858,7 +1901,7 @@ bool Start(int& argc, char**& argv)
 
 #ifdef SSR_GBA
     for (int i = 1; i < argc; i++)
-        if (argv[i] && IsGbaRomName(argv[i])) ImportFile(fo, argv[i]);
+        if (argv[i] && IsGbaRomName(argv[i]) && directRom != argv[i]) ImportFile(fo, argv[i]);
     if (!directRom.empty() && IsGbaRomName(directRom)) ImportFile(fo, directRom);
 #endif
 

@@ -33,6 +33,9 @@
 - **Keyboard: the key that closes the pause menu no longer reaches the game.** Choosing RESUME
   with the A key (or backing out with B, or START's Enter) passed that key on to the game for
   as long as it was held, as a controller's buttons already did not.
+- **Game list: importing a save no longer destroys the one already there.** A dropped `.sav`
+  with the name of an existing save now keeps the old one as `<name>.sav.before-import.bak`;
+  `file://` paths with `%20` and the like import, and `--rom x.gba` is imported once, not twice.
 - **Black 2 and White 2: battle questions keep their buttons** until you answer ("Will you
   switch your Pokémon?", "Use next Pokémon?"), in every language. The question stays full size
   with the battle, and both answers sit at the end of the message bar (Black and White too).
